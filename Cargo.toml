@@ -1,0 +1,10 @@
+[package]
+name = "dominator"
+version = "0.1.0"
+authors = ["Pauan <pcxunlimited@gmail.com>"]
+
+[dependencies]
+stdweb = { path = "../stdweb" }
+stdweb-derive = { path = "../stdweb/stdweb-derive" }
+futures = "0.1.18"
+lazy_static = "1.0.0"

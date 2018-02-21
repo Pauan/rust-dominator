@@ -1,0 +1,8 @@
+[package]
+name = "todomvc"
+version = "0.1.0"
+authors = ["Pauan <pcxunlimited@gmail.com>"]
+
+[dependencies]
+stdweb = { path = "../../../stdweb" }
+dominator = { path = "../.." }
