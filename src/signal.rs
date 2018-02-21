@@ -70,9 +70,10 @@ pub trait Signal {
         self.map(callback).flatten()
     }
 
+    // TODO file Rust bug about bad error message when `callback` isn't marked as `mut`
     // TODO make this more efficient
-    fn for_each<A>(self, callback: A) -> DropHandle
-        where A: Fn(Self::Value) + 'static,
+    fn for_each<A>(self, mut callback: A) -> DropHandle
+        where A: FnMut(Self::Value) + 'static,
               Self: Sized + 'static {
 
         let (handle, stream) = drop_handle(self.to_stream());

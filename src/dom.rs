@@ -102,7 +102,7 @@ pub mod dom_operations {
     use std;
     use stdweb::unstable::{TryFrom, TryInto};
     use stdweb::{Value, Reference};
-    use stdweb::web::{TextNode, IHtmlElement, IElement};
+    use stdweb::web::{TextNode, INode, IHtmlElement, IElement};
 
 
     #[inline]
@@ -198,6 +198,16 @@ pub mod dom_operations {
             @{obj.as_ref()}[@{name}] = @{value};
         }
     }
+
+
+    // TODO make this work on Nodes, not just Elements
+    // TODO is this the most efficient way to remove all children ?
+    #[inline]
+    pub fn remove_all_children<A: INode>(element: &A) {
+        js! { @(no_return)
+            @{element.as_ref()}.innerHTML = "";
+        }
+    }
 }
 
 
@@ -235,7 +245,20 @@ pub mod internal {
 
     pub struct RemoveCallback(Box<IRemoveCallback>);
 
+    impl std::fmt::Debug for InsertCallback {
+        fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(formatter, "InsertCallback")
+        }
+    }
 
+    impl std::fmt::Debug for RemoveCallback {
+        fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(formatter, "RemoveCallback")
+        }
+    }
+
+
+    #[derive(Debug)]
     pub struct Callbacks {
         pub after_insert: Vec<InsertCallback>,
         pub after_remove: Vec<RemoveCallback>,
@@ -336,6 +359,7 @@ impl DomBuilder for TextBuilder {
 }
 
 
+#[derive(Debug)]
 pub struct Dom {
     element: Node,
     callbacks: Callbacks,
@@ -586,7 +610,8 @@ impl DomFocused for bool {
 }
 
 // TODO figure out how to make this owned rather than &mut
-impl<'a, A: IntoIterator<Item = &'a mut Dom>> DomChildren for A {
+// TODO impl<'a, A: IntoIterator<Item = &'a mut Dom>> DomChildren for A {
+impl<'a> DomChildren for &'a mut [Dom] {
     #[inline]
     fn insert_children<B: INode, C: DomBuilder<Value = B>>(self, builder: &mut C) {
         for dom in self.into_iter() {
@@ -683,6 +708,30 @@ impl<S: Signal<Value = bool> + 'static> DomFocused for S {
             // TODO verify that this is correct under all circumstances
             callbacks.after_remove(move || handle.stop());
         });
+    }
+}
+
+impl<A: IntoIterator<Item = Dom>, S: Signal<Value = A> + 'static> DomChildren for S {
+    // TODO inline this ?
+    fn insert_children<B: INode + Clone + 'static, C: DomBuilder<Value = B>>(self, builder: &mut C) {
+        let element = builder.value().clone();
+
+        let mut old_children: Vec<Dom> = vec![];
+
+        let handle = self.for_each(move |value| {
+            dom_operations::remove_all_children(&element);
+
+            old_children = value.into_iter().map(|mut dom| {
+                element.append_child(&dom.element);
+
+                // TODO don't trigger this if the parent isn't inserted into the DOM
+                dom.callbacks.trigger_after_insert();
+
+                dom
+            }).collect();
+        });
+
+        builder.callbacks().after_remove(move || handle.stop());
     }
 }
 
