@@ -352,9 +352,11 @@ impl<A, B, C> Signal for FilterMap<A, B>
                         self.first = false;
                         return State::Changed(Some(value));
                     },
-                    None => if self.first {
-                        self.first = false;
-                        return State::Changed(None);
+                    None => {
+                        if self.first {
+                            self.first = false;
+                            return State::Changed(None);
+                        }
                     },
                 },
                 State::NotChanged => return State::NotChanged,

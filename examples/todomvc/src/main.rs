@@ -40,9 +40,6 @@ fn main() {
     let (sender2, receiver2) = signal::unsync::mutable(vec![width]);
     let (sender3, receiver3) = signal::unsync::mutable(vec![width]);
 
-
-    trace_macros!(true);
-
     /*let style_width = receiver1.switch(move |x| {
         receiver2.clone().switch(move |y| {
             receiver3.clone().map(move |z| {
@@ -54,11 +51,9 @@ fn main() {
     let style_width = map_rc! {
         let x: Rc<u32> = receiver1,
         let y: Rc<Vec<u32>> = receiver2,
-        let _z: Rc<Vec<u32>> = receiver3 =>
-        Some(format!("{}px", *x + y[0]))
+        let z: Rc<Vec<u32>> = receiver3 =>
+        Some(format!("{}px", *x + y[0] + z[0]))
     };
-
-    trace_macros!(false);
 
 
     html!("div", {
