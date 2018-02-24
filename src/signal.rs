@@ -514,36 +514,27 @@ macro_rules! __internal_map_rc_new {
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! __internal_map1 {
-    ($value:expr, $f:expr) => {
-        $crate::signal::Signal::map($value, $f)
-    };
-}
-
-#[doc(hidden)]
-#[macro_export]
 macro_rules! __internal_map2 {
-    ($old_expr:expr, $old_pair:pat, $name:ident, $value:expr, $f:expr) => {
+    ($f:expr, $old_pair:pat, $old_expr:expr, { $($lets:stmt);* }, let $name:ident: $t:ty = $value:expr;) => {
         $crate::signal::Signal::map2(
             $old_expr,
             __internal_map_rc_new!($value),
-            |&mut $old_pair, ref mut $name| $f
+            |&mut $old_pair, $name| {
+                $($lets;)*
+                let $name: $t = __internal_map_clone!($name);
+                $f
+            }
         )
     };
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __internal_map2_pair {
-    ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, $name:ident, $t:ty, $value:expr, $($args:tt)+) => {
-        __internal_map_args!(
+    ($f:expr, $old_pair:pat, $old_expr:expr, { $($lets:stmt);* }, let $name:ident: $t:ty = $value:expr; $($args:tt)+) => {
+        __internal_map2!(
             $f,
+            ($old_pair, ref mut $name),
             $crate::signal::Signal::map2(
                 $old_expr,
                 __internal_map_rc_new!($value),
                 $crate::signal::pair_clone
             ),
-            ($old_pair, ref mut $name),
             { $($lets;)* let $name: $t = __internal_map_clone!($name) },
             $($args)+
         )
@@ -552,13 +543,31 @@ macro_rules! __internal_map2_pair {
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! __internal_map_args_start {
-    ($f:expr, $name:ident, $value:expr, { $($lets:stmt);* }, $($args:tt)+) => {
-        __internal_map_args!(
+macro_rules! __internal_map {
+    ($f:expr, let $name:ident: $t:ty = $value:expr;) => {
+        $crate::signal::Signal::map($value, |$name| {
+            let $name: $t = ::std::rc::Rc::new($name);
+            $f
+        })
+    };
+    ($f:expr, let $name1:ident: $t1:ty = $value1:expr;
+              let $name2:ident: $t2:ty = $value2:expr;) => {
+        $crate::signal::Signal::map2(
+            __internal_map_rc_new!($value1),
+            __internal_map_rc_new!($value2),
+            |$name1, $name2| {
+                let $name1: $t1 = __internal_map_clone!($name1);
+                let $name2: $t2 = __internal_map_clone!($name2);
+                $f
+            }
+        )
+    };
+    ($f:expr, let $name:ident: $t:ty = $value:expr; $($args:tt)+) => {
+        __internal_map2!(
             $f,
-            __internal_map_rc_new!($value),
             ref mut $name,
-            { $($lets);* },
+            __internal_map_rc_new!($value),
+            { let $name: $t = __internal_map_clone!($name) },
             $($args)+
         )
     };
@@ -566,55 +575,27 @@ macro_rules! __internal_map_args_start {
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! __internal_map_args {
-    ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, let $name:ident: $t:ty = $value:expr) => {
-        __internal_map2!($old_expr, $old_pair, $name, $value, { $($lets;)* let $name: $t = __internal_map_clone!($name); $f })
+macro_rules! __internal_map_lets {
+    ($f:expr, { $($lets:tt)* },) => {
+        __internal_map!($f, $($lets)*)
     };
-    ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, let $name:ident = $value:expr) => {
-        __internal_map2!($old_expr, $old_pair, $name, $value, { $($lets;)* let $name: ::std::rc::Rc<_> = __internal_map_clone!($name); $f })
+    ($f:expr, { $($lets:tt)* }, let $name:ident: $t:ty = $value:expr, $($args:tt)*) => {
+        __internal_map_lets!($f, { $($lets)* let $name: $t = $value; }, $($args)*)
     };
-    ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, $name:ident) => {
-        __internal_map2!($old_expr, $old_pair, $name, $name, { $($lets;)* let $name: ::std::rc::Rc<_> = __internal_map_clone!($name); $f })
+    ($f:expr, { $($lets:tt)* }, let $name:ident = $value:expr, $($args:tt)*) => {
+        __internal_map_lets!($f, { $($lets)* let $name: ::std::rc::Rc<_> = $value; }, $($args)*)
     };
-    ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, let $name:ident: $t:ty = $value:expr, $($args:tt)+) => {
-        __internal_map2_pair!($f, $old_expr, $old_pair, { $($lets);* }, $name, $t, $value, $($args)+)
-    };
-    ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, let $name:ident = $value:expr, $($args:tt)+) => {
-        __internal_map2_pair!($f, $old_expr, $old_pair, { $($lets);* }, $name, ::std::rc::Rc<_>, $value, $($args)+)
-    };
-    ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, $name:ident, $($args:tt)+) => {
-        __internal_map2_pair!($f, $old_expr, $old_pair, { $($lets);* }, $name, ::std::rc::Rc<_>, $name, $($args)+)
+    ($f:expr, { $($lets:tt)* }, $name:ident, $($args:tt)*) => {
+        __internal_map_lets!($f, { $($lets)* let $name: ::std::rc::Rc<_> = $name; }, $($args)*)
     };
 }
 
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __internal_map {
-    ($f:expr, let $name:ident: $t:ty = $value:expr) => {
-        __internal_map1!($value, |$name| { let $name: $t = ::std::rc::Rc::new($name); $f })
-    };
-    ($f:expr, let $name:ident = $value:expr) => {
-        __internal_map1!($value, |$name| { let $name: ::std::rc::Rc<_> = ::std::rc::Rc::new($name); $f })
-    };
-    ($f:expr, $name:ident) => {
-        __internal_map1!($name, |$name| { let $name: ::std::rc::Rc<_> = ::std::rc::Rc::new($name); $f })
-    };
-    ($f:expr, let $name:ident: $t:ty = $value:expr, $($args:tt)+) => {
-        __internal_map_args_start!($f, $name, $value, { let $name: $t = __internal_map_clone!($name) }, $($args)+)
-    };
-    ($f:expr, let $name:ident = $value:expr, $($args:tt)+) => {
-        __internal_map_args_start!($f, $name, $value, { let $name: ::std::rc::Rc<_> = __internal_map_clone!($name) }, $($args)+)
-    };
-    ($f:expr, $name:ident, $($args:tt)+) => {
-        __internal_map_args_start!($f, $name, $name, { let $name: ::std::rc::Rc<_> = __internal_map_clone!($name) }, $($args)+)
-    };
-}
-
+// TODO this is pretty inefficient, it iterates over the token tree one token at a time
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __internal_map_split {
     (($($before:tt)*), => $f:expr) => {
-        __internal_map!($f, $($before)*)
+        __internal_map_lets!($f, {}, $($before)*,)
     };
     (($($before:tt)*), $t:tt $($after:tt)*) => {
         __internal_map_split!(($($before)* $t), $($after)*)
@@ -709,6 +690,198 @@ mod tests {
             let e: ::std::rc::Rc<u32> = e;
             *a + *b + *c + *d + *e
         });
+
+        assert_eq!(super::Signal::poll(&mut s), super::State::Changed(15));
+        assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
+    }
+
+
+    #[test]
+    fn map_macro_let_1() {
+        let a2 = super::always(1);
+
+        let mut s = map_rc!(let a = a2 => {
+            let a: ::std::rc::Rc<u32> = a;
+            *a + 1
+        });
+
+        assert_eq!(super::Signal::poll(&mut s), super::State::Changed(2));
+        assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
+    }
+
+    #[test]
+    fn map_macro_let_2() {
+        let a2 = super::always(1);
+        let b2 = super::always(2);
+
+        let mut s = map_rc!(let a = a2, let b = b2 => {
+            let a: ::std::rc::Rc<u32> = a;
+            let b: ::std::rc::Rc<u32> = b;
+            *a + *b
+        });
+
+        assert_eq!(super::Signal::poll(&mut s), super::State::Changed(3));
+        assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
+    }
+
+    #[test]
+    fn map_macro_let_3() {
+        let a2 = super::always(1);
+        let b2 = super::always(2);
+        let c2 = super::always(3);
+
+        let mut s = map_rc!(let a = a2, let b = b2, let c = c2 => {
+            let a: ::std::rc::Rc<u32> = a;
+            let b: ::std::rc::Rc<u32> = b;
+            let c: ::std::rc::Rc<u32> = c;
+            *a + *b + *c
+        });
+
+        assert_eq!(super::Signal::poll(&mut s), super::State::Changed(6));
+        assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
+    }
+
+    #[test]
+    fn map_macro_let_4() {
+        let a2 = super::always(1);
+        let b2 = super::always(2);
+        let c2 = super::always(3);
+        let d2 = super::always(4);
+
+        let mut s = map_rc!(let a = a2, let b = b2, let c = c2, let d = d2 => {
+            let a: ::std::rc::Rc<u32> = a;
+            let b: ::std::rc::Rc<u32> = b;
+            let c: ::std::rc::Rc<u32> = c;
+            let d: ::std::rc::Rc<u32> = d;
+            *a + *b + *c + *d
+        });
+
+        assert_eq!(super::Signal::poll(&mut s), super::State::Changed(10));
+        assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
+    }
+
+    #[test]
+    fn map_macro_let_5() {
+        let a2 = super::always(1);
+        let b2 = super::always(2);
+        let c2 = super::always(3);
+        let d2 = super::always(4);
+        let e2 = super::always(5);
+
+        let mut s = map_rc!(let a = a2, let b = b2, let c = c2, let d = d2, let e = e2 => {
+            let a: ::std::rc::Rc<u32> = a;
+            let b: ::std::rc::Rc<u32> = b;
+            let c: ::std::rc::Rc<u32> = c;
+            let d: ::std::rc::Rc<u32> = d;
+            let e: ::std::rc::Rc<u32> = e;
+            *a + *b + *c + *d + *e
+        });
+
+        assert_eq!(super::Signal::poll(&mut s), super::State::Changed(15));
+        assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
+    }
+
+
+    #[test]
+    fn map_macro_let_type_1() {
+        let a2 = super::always(1);
+
+        let mut s = map_rc! {
+            let a: ::std::rc::Rc<u32> = a2 => {
+                let a: ::std::rc::Rc<u32> = a;
+                *a + 1
+            }
+        };
+
+        assert_eq!(super::Signal::poll(&mut s), super::State::Changed(2));
+        assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
+    }
+
+    #[test]
+    fn map_macro_let_type_2() {
+        let a2 = super::always(1);
+        let b2 = super::always(2);
+
+        let mut s = map_rc! {
+            let a: ::std::rc::Rc<u32> = a2,
+            let b: ::std::rc::Rc<u32> = b2 => {
+                let a: ::std::rc::Rc<u32> = a;
+                let b: ::std::rc::Rc<u32> = b;
+                *a + *b
+            }
+        };
+
+        assert_eq!(super::Signal::poll(&mut s), super::State::Changed(3));
+        assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
+    }
+
+    #[test]
+    fn map_macro_let_type_3() {
+        let a2 = super::always(1);
+        let b2 = super::always(2);
+        let c2 = super::always(3);
+
+        let mut s = map_rc! {
+            let a: ::std::rc::Rc<u32> = a2,
+            let b: ::std::rc::Rc<u32> = b2,
+            let c: ::std::rc::Rc<u32> = c2 => {
+                let a: ::std::rc::Rc<u32> = a;
+                let b: ::std::rc::Rc<u32> = b;
+                let c: ::std::rc::Rc<u32> = c;
+                *a + *b + *c
+            }
+        };
+
+        assert_eq!(super::Signal::poll(&mut s), super::State::Changed(6));
+        assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
+    }
+
+    #[test]
+    fn map_macro_let_type_4() {
+        let a2 = super::always(1);
+        let b2 = super::always(2);
+        let c2 = super::always(3);
+        let d2 = super::always(4);
+
+        let mut s = map_rc! {
+            let a: ::std::rc::Rc<u32> = a2,
+            let b: ::std::rc::Rc<u32> = b2,
+            let c: ::std::rc::Rc<u32> = c2,
+            let d: ::std::rc::Rc<u32> = d2 => {
+                let a: ::std::rc::Rc<u32> = a;
+                let b: ::std::rc::Rc<u32> = b;
+                let c: ::std::rc::Rc<u32> = c;
+                let d: ::std::rc::Rc<u32> = d;
+                *a + *b + *c + *d
+            }
+        };
+
+        assert_eq!(super::Signal::poll(&mut s), super::State::Changed(10));
+        assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
+    }
+
+    #[test]
+    fn map_macro_let_type_5() {
+        let a2 = super::always(1);
+        let b2 = super::always(2);
+        let c2 = super::always(3);
+        let d2 = super::always(4);
+        let e2 = super::always(5);
+
+        let mut s = map_rc! {
+            let a: ::std::rc::Rc<u32> = a2,
+            let b: ::std::rc::Rc<u32> = b2,
+            let c: ::std::rc::Rc<u32> = c2,
+            let d: ::std::rc::Rc<u32> = d2,
+            let e: ::std::rc::Rc<u32> = e2 => {
+                let a: ::std::rc::Rc<u32> = a;
+                let b: ::std::rc::Rc<u32> = b;
+                let c: ::std::rc::Rc<u32> = c;
+                let d: ::std::rc::Rc<u32> = d;
+                let e: ::std::rc::Rc<u32> = e;
+                *a + *b + *c + *d + *e
+            }
+        };
 
         assert_eq!(super::Signal::poll(&mut s), super::State::Changed(15));
         assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
