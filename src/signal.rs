@@ -3,7 +3,6 @@ use std::cell::Cell;
 use futures::{Async, Poll};
 use futures::future::ok;
 use futures::stream::Stream;
-use stdweb::PromiseFuture;
 
 
 // TODO add in Done to allow the Signal to end ?
@@ -101,22 +100,18 @@ pub trait Signal {
         self.map(callback).flatten()
     }
 
+    #[inline]
     // TODO file Rust bug about bad error message when `callback` isn't marked as `mut`
     // TODO make this more efficient
-    fn for_each<A>(self, mut callback: A) -> DropHandle
+    fn for_each<A, B>(self, mut callback: A) -> B
         where A: FnMut(Self::Item) + 'static,
+              B: Future<Item = (), Error = ()>,
               Self: Sized + 'static {
 
-        let (handle, stream) = drop_handle(self.to_stream());
-
-        PromiseFuture::spawn(
-            stream.for_each(move |value| {
-                callback(value);
-                ok(())
-            })
-        );
-
-        handle
+        self.to_stream().for_each(move |value| {
+            callback(value);
+            ok(())
+        })
     }
 
     #[inline]
@@ -150,57 +145,86 @@ pub fn always<A>(value: A) -> Always<A> {
 }
 
 
-// TODO figure out a more efficient way to implement this
-#[inline]
-fn drop_handle<A: Stream>(stream: A) -> (DropHandle, DropStream<A>) {
-    let done: Rc<Cell<bool>> = Rc::new(Cell::new(false));
-
-    let drop_handle = DropHandle {
-        done: done.clone(),
-    };
-
-    let drop_stream = DropStream {
-        done,
-        stream,
-    };
-
-    (drop_handle, drop_stream)
+struct CancelableFutureState {
+    is_cancelled: bool,
+    task: Option<Task>,
 }
 
 
-// TODO rename this to something else ?
-#[must_use]
-pub struct DropHandle {
-    done: Rc<Cell<bool>>,
+pub struct CancelableFutureHandle {
+    state: Weak<RefCell<CancelableFutureState>>,
 }
 
-// TODO change this to use Drop, but it requires some changes to the after_remove callback system
-impl DropHandle {
-    #[inline]
-    pub fn stop(self) {
-        self.done.set(true);
+impl Cancel for CancelableFutureHandle {
+    fn cancel(&mut self) {
+        if let Some(state) = self.state.upgrade() {
+            let borrow = state.borrow_mut();
+
+            borrow.is_cancelled = true;
+
+            if let Some(task) = borrow.task.take() {
+                drop(borrow);
+                task.notify();
+            }
+        }
     }
 }
 
 
-struct DropStream<A> {
-    done: Rc<Cell<bool>>,
-    stream: A,
+pub struct CancelableFuture<A, B> {
+    state: Rc<RefCell<CancelableFutureState>>,
+    future: A,
+    when_cancelled: B,
 }
 
-impl<A: Stream> Stream for DropStream<A> {
+impl<A, B> Future for CancelableFuture<A, B>
+    where A: Future,
+          B: FnOnce() -> A::Item {
+
     type Item = A::Item;
     type Error = A::Error;
 
+    // TODO should this inline ?
     #[inline]
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        if self.done.get() {
-            Ok(Async::Ready(None))
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        let borrow = self.state.borrow_mut();
+
+        if borrow.is_cancelled {
+            Ok(Async::Ready(self.when_cancelled()))
 
         } else {
-            self.stream.poll()
+            // TODO does it need to drop borrow before calling poll ?
+            match self.future.poll() {
+                Ok(Async::NotReady) => {
+                    borrow.task = Some(task::current());
+                    Ok(Async::NotReady)
+                },
+                a => a,
+            }
         }
     }
+}
+
+
+// TODO figure out a more efficient way to implement this
+// TODO this should be implemented in the futures crate
+#[inline]
+pub fn cancelable_future<A, B>(future: A, when_cancelled: B) -> (CancelOnDrop<CancelableFutureHandle>, CancelableFuture<A, B>)
+    where A: Future,
+          B: FnOnce() -> A::Item {
+
+    let state = Rc::new(RefCell::new(CancelableFutureState {
+        is_cancelled: false,
+        task: None,
+    }));
+
+    let cancel_handle = CancelOnDrop::new(CancelableFutureHandle {
+        state: Rc::downgrade(&state),
+    });
+
+    let cancel_future = CancelableFuture { state, future, when_cancelled };
+
+    (cancel_handle, cancel_future)
 }
 
 
@@ -476,20 +500,6 @@ pub mod unsync {
 }
 
 
-/*map! {
-    let foo = 1,
-    let bar = 2,
-    let qux = 3 => {
-        let corge = 4;
-    }
-}*/
-
-
-/*
-map!(x, y => x + y)
-*/
-
-
 // TODO should this be hidden from the docs ?
 #[doc(hidden)]
 #[inline]
@@ -608,6 +618,7 @@ macro_rules! __internal_map_split {
 macro_rules! map_rc {
     ($($input:tt)*) => { __internal_map_split!((), $($input)*) };
 }
+
 
 
 #[cfg(test)]
