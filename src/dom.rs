@@ -625,7 +625,7 @@ impl<'a> DomChildren for &'a mut [Dom] {
 }
 
 
-impl<S: Signal<Value = String> + 'static> DomProperty for S {
+impl<S: Signal<Item = String> + 'static> DomProperty for S {
     // TODO inline this ?
     fn set_property<A: AsRef<Reference> + Clone + 'static, B: DomBuilder<Value = A>>(self, builder: &mut B, name: &str) {
         let element = builder.value().clone();
@@ -639,7 +639,7 @@ impl<S: Signal<Value = String> + 'static> DomProperty for S {
     }
 }
 
-impl<S: Signal<Value = Option<String>> + 'static> DomAttribute for S {
+impl<S: Signal<Item = Option<String>> + 'static> DomAttribute for S {
     // TODO inline this ?
     fn set_attribute<A: IElement + Clone + 'static, B: DomBuilder<Value = A>>(self, builder: &mut B, name: &str, namespace: Option<&str>) {
         let element = builder.value().clone();
@@ -660,7 +660,7 @@ impl<S: Signal<Value = Option<String>> + 'static> DomAttribute for S {
     }
 }
 
-impl<S: Signal<Value = bool> + 'static> DomClass for S {
+impl<S: Signal<Item = bool> + 'static> DomClass for S {
     // TODO inline this ?
     fn toggle_class<A: IElement + Clone + 'static, B: DomBuilder<Value = A>>(self, builder: &mut B, name: &str) {
         let element = builder.value().clone();
@@ -674,7 +674,7 @@ impl<S: Signal<Value = bool> + 'static> DomClass for S {
     }
 }
 
-impl<S: Signal<Value = Option<String>> + 'static> DomStyle for S {
+impl<S: Signal<Item = Option<String>> + 'static> DomStyle for S {
     // TODO inline this ?
     fn set_style<A: IStyle + Clone + 'static, B: DomBuilder<Value = A>>(self, builder: &mut B, name: &str, important: bool) {
         let element = builder.value().clone();
@@ -691,7 +691,7 @@ impl<S: Signal<Value = Option<String>> + 'static> DomStyle for S {
     }
 }
 
-impl<S: Signal<Value = bool> + 'static> DomFocused for S {
+impl<S: Signal<Item = bool> + 'static> DomFocused for S {
     // TODO inline this ?
     fn set_focused<A: IHtmlElement + Clone + 'static, B: DomBuilder<Value = A>>(self, builder: &mut B) {
         let element = builder.value().clone();
@@ -709,7 +709,7 @@ impl<S: Signal<Value = bool> + 'static> DomFocused for S {
     }
 }
 
-impl<A: IntoIterator<Item = Dom>, S: Signal<Value = A> + 'static> DomChildren for S {
+impl<A: IntoIterator<Item = Dom>, S: Signal<Item = A> + 'static> DomChildren for S {
     // TODO inline this ?
     fn insert_children<B: INode + Clone + 'static, C: DomBuilder<Value = B>>(self, builder: &mut C) {
         let element = builder.value().clone();

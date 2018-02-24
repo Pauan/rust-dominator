@@ -6,11 +6,28 @@ use futures::stream::Stream;
 use stdweb::PromiseFuture;
 
 
-pub trait Signal {
-    type Value;
+// TODO add in Done to allow the Signal to end ?
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum State<A> {
+    Changed(A),
+    NotChanged,
+}
 
-    // TODO use Async<Option<Self::Value>> to allow the Signal to end ?
-    fn poll(&mut self) -> Async<Self::Value>;
+impl<A> State<A> {
+    #[inline]
+    pub fn map<B, F>(self, f: F) -> State<B> where F: FnOnce(A) -> B {
+        match self {
+            State::Changed(value) => State::Changed(f(value)),
+            State::NotChanged => State::NotChanged,
+        }
+    }
+}
+
+
+pub trait Signal {
+    type Item;
+
+    fn poll(&mut self) -> State<Self::Item>;
 
     #[inline]
     fn to_stream(self) -> SignalStream<Self>
@@ -22,7 +39,7 @@ pub trait Signal {
 
     #[inline]
     fn map<A, B>(self, callback: A) -> Map<Self, A>
-        where A: FnMut(Self::Value) -> B,
+        where A: FnMut(Self::Item) -> B,
               Self: Sized {
         Map {
             signal: self,
@@ -33,7 +50,7 @@ pub trait Signal {
     #[inline]
     fn map2<A, B, C>(self, other: A, callback: B) -> Map2<Self, A, B>
         where A: Signal,
-              B: FnMut(&mut Self::Value, &mut A::Value) -> C,
+              B: FnMut(&mut Self::Item, &mut A::Item) -> C,
               Self: Sized {
         Map2 {
             signal1: self,
@@ -46,7 +63,7 @@ pub trait Signal {
 
     #[inline]
     fn map_dedupe<A, B>(self, callback: A) -> MapDedupe<Self, A>
-        where A: FnMut(&mut Self::Value) -> B,
+        where A: FnMut(&mut Self::Item) -> B,
               Self: Sized {
         MapDedupe {
             old_value: None,
@@ -57,7 +74,7 @@ pub trait Signal {
 
     #[inline]
     fn filter_map<A, B>(self, callback: A) -> FilterMap<Self, A>
-        where A: FnMut(Self::Value) -> Option<B>,
+        where A: FnMut(Self::Item) -> Option<B>,
               Self: Sized {
         FilterMap {
             signal: self,
@@ -68,7 +85,7 @@ pub trait Signal {
 
     #[inline]
     fn flatten(self) -> Flatten<Self>
-        where Self::Value: Signal,
+        where Self::Item: Signal,
               Self: Sized {
         Flatten {
             signal: self,
@@ -78,7 +95,7 @@ pub trait Signal {
 
     #[inline]
     fn switch<A, B>(self, callback: A) -> Flatten<Map<Self, A>>
-        where A: FnMut(Self::Value) -> B,
+        where A: FnMut(Self::Item) -> B,
               B: Signal,
               Self: Sized {
         self.map(callback).flatten()
@@ -87,7 +104,7 @@ pub trait Signal {
     // TODO file Rust bug about bad error message when `callback` isn't marked as `mut`
     // TODO make this more efficient
     fn for_each<A>(self, mut callback: A) -> DropHandle
-        where A: FnMut(Self::Value) + 'static,
+        where A: FnMut(Self::Item) + 'static,
               Self: Sized + 'static {
 
         let (handle, stream) = drop_handle(self.to_stream());
@@ -114,11 +131,14 @@ pub struct Always<A> {
 }
 
 impl<A> Signal for Always<A> {
-    type Value = A;
+    type Item = A;
 
     #[inline]
-    fn poll(&mut self) -> Async<Self::Value> {
-        self.value.take().map(Async::Ready).unwrap_or(Async::NotReady)
+    fn poll(&mut self) -> State<Self::Item> {
+        match self.value.take() {
+            Some(value) => State::Changed(value),
+            None => State::NotChanged,
+        }
     }
 }
 
@@ -189,13 +209,16 @@ pub struct SignalStream<A> {
 }
 
 impl<A: Signal> Stream for SignalStream<A> {
-    type Item = A::Value;
+    type Item = A::Item;
     // TODO use Void instead ?
     type Error = ();
 
     #[inline]
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        Ok(self.signal.poll().map(Some))
+        Ok(match self.signal.poll() {
+            State::Changed(value) => Async::Ready(Some(value)),
+            State::NotChanged => Async::NotReady,
+        })
     }
 }
 
@@ -207,11 +230,11 @@ pub struct Map<A, B> {
 
 impl<A, B, C> Signal for Map<A, B>
     where A: Signal,
-          B: FnMut(A::Value) -> C {
-    type Value = C;
+          B: FnMut(A::Item) -> C {
+    type Item = C;
 
     #[inline]
-    fn poll(&mut self) -> Async<Self::Value> {
+    fn poll(&mut self) -> State<Self::Item> {
         self.signal.poll().map(|value| (self.callback)(value))
     }
 }
@@ -221,30 +244,30 @@ pub struct Map2<A: Signal, B: Signal, C> {
     signal1: A,
     signal2: B,
     callback: C,
-    left: Option<A::Value>,
-    right: Option<B::Value>,
+    left: Option<A::Item>,
+    right: Option<B::Item>,
 }
 
 impl<A, B, C, D> Signal for Map2<A, B, C>
     where A: Signal,
           B: Signal,
-          C: FnMut(&mut A::Value, &mut B::Value) -> D {
-    type Value = D;
+          C: FnMut(&mut A::Item, &mut B::Item) -> D {
+    type Item = D;
 
     // TODO inline this ?
-    fn poll(&mut self) -> Async<Self::Value> {
+    fn poll(&mut self) -> State<Self::Item> {
         match self.signal1.poll() {
-            Async::Ready(mut left) => {
+            State::Changed(mut left) => {
                 let output = match self.signal2.poll() {
-                    Async::Ready(mut right) => {
-                        let output = Async::Ready((self.callback)(&mut left, &mut right));
+                    State::Changed(mut right) => {
+                        let output = State::Changed((self.callback)(&mut left, &mut right));
                         self.right = Some(right);
                         output
                     },
 
-                    Async::NotReady => match self.right {
-                        Some(ref mut right) => Async::Ready((self.callback)(&mut left, right)),
-                        None => Async::NotReady,
+                    State::NotChanged => match self.right {
+                        Some(ref mut right) => State::Changed((self.callback)(&mut left, right)),
+                        None => State::NotChanged,
                     },
                 };
 
@@ -253,18 +276,18 @@ impl<A, B, C, D> Signal for Map2<A, B, C>
                 output
             },
 
-            Async::NotReady => match self.left {
+            State::NotChanged => match self.left {
                 Some(ref mut left) => match self.signal2.poll() {
-                    Async::Ready(mut right) => {
-                        let output = Async::Ready((self.callback)(left, &mut right));
+                    State::Changed(mut right) => {
+                        let output = State::Changed((self.callback)(left, &mut right));
                         self.right = Some(right);
                         output
                     },
 
-                    Async::NotReady => Async::NotReady,
+                    State::NotChanged => State::NotChanged,
                 },
 
-                None => Async::NotReady,
+                None => State::NotChanged,
             },
         }
     }
@@ -272,24 +295,24 @@ impl<A, B, C, D> Signal for Map2<A, B, C>
 
 
 pub struct MapDedupe<A: Signal, B> {
-    old_value: Option<A::Value>,
+    old_value: Option<A::Item>,
     signal: A,
     callback: B,
 }
 
 impl<A, B, C> Signal for MapDedupe<A, B>
     where A: Signal,
-          A::Value: PartialEq,
+          A::Item: PartialEq,
           // TODO should this use Fn instead ?
-          B: FnMut(&A::Value) -> C {
+          B: FnMut(&A::Item) -> C {
 
-    type Value = C;
+    type Item = C;
 
     // TODO should this use #[inline] ?
-    fn poll(&mut self) -> Async<Self::Value> {
+    fn poll(&mut self) -> State<Self::Item> {
         loop {
             match self.signal.poll() {
-                Async::Ready(mut value) => {
+                State::Changed(mut value) => {
                     let has_changed = match self.old_value {
                         Some(ref old_value) => *old_value != value,
                         None => true,
@@ -298,10 +321,10 @@ impl<A, B, C> Signal for MapDedupe<A, B>
                     if has_changed {
                         let output = (self.callback)(&mut value);
                         self.old_value = Some(value);
-                        return Async::Ready(output);
+                        return State::Changed(output);
                     }
                 },
-                Async::NotReady => return Async::NotReady,
+                State::NotChanged => return State::NotChanged,
             }
         }
     }
@@ -316,25 +339,25 @@ pub struct FilterMap<A, B> {
 
 impl<A, B, C> Signal for FilterMap<A, B>
     where A: Signal,
-          B: FnMut(A::Value) -> Option<C> {
-    type Value = Option<C>;
+          B: FnMut(A::Item) -> Option<C> {
+    type Item = Option<C>;
 
     // TODO should this use #[inline] ?
     #[inline]
-    fn poll(&mut self) -> Async<Self::Value> {
+    fn poll(&mut self) -> State<Self::Item> {
         loop {
             match self.signal.poll() {
-                Async::Ready(value) => match (self.callback)(value) {
+                State::Changed(value) => match (self.callback)(value) {
                     Some(value) => {
                         self.first = false;
-                        return Async::Ready(Some(value));
+                        return State::Changed(Some(value));
                     },
                     None => if self.first {
                         self.first = false;
-                        return Async::Ready(None);
+                        return State::Changed(None);
                     },
                 },
-                Async::NotReady => return Async::NotReady,
+                State::NotChanged => return State::NotChanged,
             }
         }
     }
@@ -343,26 +366,26 @@ impl<A, B, C> Signal for FilterMap<A, B>
 
 pub struct Flatten<A: Signal> {
     signal: A,
-    inner: Option<A::Value>,
+    inner: Option<A::Item>,
 }
 
 impl<A> Signal for Flatten<A>
     where A: Signal,
-          A::Value: Signal {
-    type Value = <<A as Signal>::Value as Signal>::Value;
+          A::Item: Signal {
+    type Item = <<A as Signal>::Item as Signal>::Item;
 
     #[inline]
-    fn poll(&mut self) -> Async<Self::Value> {
+    fn poll(&mut self) -> State<Self::Item> {
         match self.signal.poll() {
-            Async::Ready(mut inner) => {
+            State::Changed(mut inner) => {
                 let poll = inner.poll();
                 self.inner = Some(inner);
                 poll
             },
 
-            Async::NotReady => match self.inner {
+            State::NotChanged => match self.inner {
                 Some(ref mut inner) => inner.poll(),
-                None => Async::NotReady,
+                None => State::NotChanged,
             },
         }
     }
@@ -371,10 +394,9 @@ impl<A> Signal for Flatten<A>
 
 // TODO verify that this is correct
 pub mod unsync {
-    use super::Signal;
+    use super::{Signal, State};
     use std::rc::{Rc, Weak};
     use std::cell::RefCell;
-    use futures::Async;
     use futures::task;
 
 
@@ -415,18 +437,18 @@ pub mod unsync {
     }
 
     impl<A> Signal for Receiver<A> {
-        type Value = A;
+        type Item = A;
 
         #[inline]
-        fn poll(&mut self) -> Async<Self::Value> {
+        fn poll(&mut self) -> State<Self::Item> {
             let mut inner = self.inner.borrow_mut();
 
             // TODO is this correct ?
             match inner.value.take() {
-                Some(value) => Async::Ready(value),
+                Some(value) => State::Changed(value),
                 None => {
                     inner.task = Some(task::current());
-                    Async::NotReady
+                    State::NotChanged
                 },
             }
         }
@@ -469,7 +491,7 @@ map!(x, y => x + y)
 // TODO should this be hidden from the docs ?
 #[doc(hidden)]
 #[inline]
-pub fn pair_rc<'a, 'b, A, B>(left: &'a mut Rc<A>, right: &'b mut Rc<B>) -> (Rc<A>, Rc<B>) {
+pub fn pair_clone<'a, 'b, A: Clone, B: Clone>(left: &'a mut A, right: &'b mut B) -> (A, B) {
     (left.clone(), right.clone())
 }
 
@@ -493,11 +515,8 @@ macro_rules! __internal_map_rc_new {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __internal_map1 {
-    ($name:ident, $value:expr, $f:expr) => {
-        $crate::signal::Signal::map(
-            __internal_map_rc_new!($value),
-            |ref mut $name| $f
-        )
+    ($value:expr, $f:expr) => {
+        $crate::signal::Signal::map($value, $f)
     };
 }
 
@@ -508,7 +527,7 @@ macro_rules! __internal_map2 {
         $crate::signal::Signal::map2(
             $old_expr,
             __internal_map_rc_new!($value),
-            |$old_pair, ref mut $name| $f
+            |&mut $old_pair, ref mut $name| $f
         )
     };
 }
@@ -522,9 +541,9 @@ macro_rules! __internal_map2_pair {
             $crate::signal::Signal::map2(
                 $old_expr,
                 __internal_map_rc_new!($value),
-                $crate::signal::pair_rc
+                $crate::signal::pair_clone
             ),
-            &mut ($old_pair, ref mut $name),
+            ($old_pair, ref mut $name),
             { $($lets;)* let $name: $t = __internal_map_clone!($name) },
             $($args)+
         )
@@ -552,19 +571,19 @@ macro_rules! __internal_map_args {
         __internal_map2!($old_expr, $old_pair, $name, $value, { $($lets;)* let $name: $t = __internal_map_clone!($name); $f })
     };
     ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, let $name:ident = $value:expr) => {
-        __internal_map2!($old_expr, $old_pair, $name, $value, { $($lets;)* let $name: Rc<_> = __internal_map_clone!($name); $f })
+        __internal_map2!($old_expr, $old_pair, $name, $value, { $($lets;)* let $name: ::std::rc::Rc<_> = __internal_map_clone!($name); $f })
     };
     ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, $name:ident) => {
-        __internal_map2!($old_expr, $old_pair, $name, $name, { $($lets;)* let $name: Rc<_> = __internal_map_clone!($name); $f })
+        __internal_map2!($old_expr, $old_pair, $name, $name, { $($lets;)* let $name: ::std::rc::Rc<_> = __internal_map_clone!($name); $f })
     };
     ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, let $name:ident: $t:ty = $value:expr, $($args:tt)+) => {
         __internal_map2_pair!($f, $old_expr, $old_pair, { $($lets);* }, $name, $t, $value, $($args)+)
     };
     ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, let $name:ident = $value:expr, $($args:tt)+) => {
-        __internal_map2_pair!($f, $old_expr, $old_pair, { $($lets);* }, $name, Rc<_>, $value, $($args)+)
+        __internal_map2_pair!($f, $old_expr, $old_pair, { $($lets);* }, $name, ::std::rc::Rc<_>, $value, $($args)+)
     };
     ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, $name:ident, $($args:tt)+) => {
-        __internal_map2_pair!($f, $old_expr, $old_pair, { $($lets);* }, $name, Rc<_>, $name, $($args)+)
+        __internal_map2_pair!($f, $old_expr, $old_pair, { $($lets);* }, $name, ::std::rc::Rc<_>, $name, $($args)+)
     };
 }
 
@@ -572,22 +591,22 @@ macro_rules! __internal_map_args {
 #[macro_export]
 macro_rules! __internal_map {
     ($f:expr, let $name:ident: $t:ty = $value:expr) => {
-        __internal_map1!($name, $value, { let $name: $t = __internal_map_clone!($name); $f })
+        __internal_map1!($value, |$name| { let $name: $t = ::std::rc::Rc::new($name); $f })
     };
     ($f:expr, let $name:ident = $value:expr) => {
-        __internal_map1!($name, $value, { let $name: Rc<_> = __internal_map_clone!($name); $f })
+        __internal_map1!($value, |$name| { let $name: ::std::rc::Rc<_> = ::std::rc::Rc::new($name); $f })
     };
     ($f:expr, $name:ident) => {
-        __internal_map1!($name, $name, { let $name: Rc<_> = __internal_map_clone!($name); $f })
+        __internal_map1!($name, |$name| { let $name: ::std::rc::Rc<_> = ::std::rc::Rc::new($name); $f })
     };
     ($f:expr, let $name:ident: $t:ty = $value:expr, $($args:tt)+) => {
         __internal_map_args_start!($f, $name, $value, { let $name: $t = __internal_map_clone!($name) }, $($args)+)
     };
     ($f:expr, let $name:ident = $value:expr, $($args:tt)+) => {
-        __internal_map_args_start!($f, $name, $value, { let $name: Rc<_> = __internal_map_clone!($name) }, $($args)+)
+        __internal_map_args_start!($f, $name, $value, { let $name: ::std::rc::Rc<_> = __internal_map_clone!($name) }, $($args)+)
     };
     ($f:expr, $name:ident, $($args:tt)+) => {
-        __internal_map_args_start!($f, $name, $name, { let $name: Rc<_> = __internal_map_clone!($name) }, $($args)+)
+        __internal_map_args_start!($f, $name, $name, { let $name: ::std::rc::Rc<_> = __internal_map_clone!($name) }, $($args)+)
     };
 }
 
@@ -610,44 +629,88 @@ macro_rules! map_rc {
 
 #[cfg(test)]
 mod tests {
-    use futures::Async;
-    use super::{Signal, always};
-
     #[test]
     fn map_macro_ident_1() {
-        let a = always(1);
-        let mut s = map_rc!(a => a + 1);
-        assert_eq!(s.poll(), Async::Ready(2));
-        assert_eq!(s.poll(), Async::NotReady);
+        let a = super::always(1);
+
+        let mut s = map_rc!(a => {
+            let a: ::std::rc::Rc<u32> = a;
+            *a + 1
+        });
+
+        assert_eq!(super::Signal::poll(&mut s), super::State::Changed(2));
+        assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
     }
 
     #[test]
     fn map_macro_ident_2() {
-        let a = always(1);
-        let b = always(2);
-        let mut s = map_rc!(a, b => *a + *b);
-        assert_eq!(s.poll(), Async::Ready(3));
-        assert_eq!(s.poll(), Async::NotReady);
+        let a = super::always(1);
+        let b = super::always(2);
+
+        let mut s = map_rc!(a, b => {
+            let a: ::std::rc::Rc<u32> = a;
+            let b: ::std::rc::Rc<u32> = b;
+            *a + *b
+        });
+
+        assert_eq!(super::Signal::poll(&mut s), super::State::Changed(3));
+        assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
     }
 
     #[test]
     fn map_macro_ident_3() {
-        let a = always(1);
-        let b = always(2);
-        let c = always(3);
-        let mut s = map_rc!(a, b, c => *a + *b + *c);
-        assert_eq!(s.poll(), Async::Ready(6));
-        assert_eq!(s.poll(), Async::NotReady);
+        let a = super::always(1);
+        let b = super::always(2);
+        let c = super::always(3);
+
+        let mut s = map_rc!(a, b, c => {
+            let a: ::std::rc::Rc<u32> = a;
+            let b: ::std::rc::Rc<u32> = b;
+            let c: ::std::rc::Rc<u32> = c;
+            *a + *b + *c
+        });
+
+        assert_eq!(super::Signal::poll(&mut s), super::State::Changed(6));
+        assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
     }
 
     #[test]
     fn map_macro_ident_4() {
-        let a = always(1);
-        let b = always(2);
-        let c = always(3);
-        let d = always(4);
-        let mut s = map_rc!(a, b, c, d => *a + *b + *c + *d);
-        assert_eq!(s.poll(), Async::Ready(10));
-        assert_eq!(s.poll(), Async::NotReady);
+        let a = super::always(1);
+        let b = super::always(2);
+        let c = super::always(3);
+        let d = super::always(4);
+
+        let mut s = map_rc!(a, b, c, d => {
+            let a: ::std::rc::Rc<u32> = a;
+            let b: ::std::rc::Rc<u32> = b;
+            let c: ::std::rc::Rc<u32> = c;
+            let d: ::std::rc::Rc<u32> = d;
+            *a + *b + *c + *d
+        });
+
+        assert_eq!(super::Signal::poll(&mut s), super::State::Changed(10));
+        assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
+    }
+
+    #[test]
+    fn map_macro_ident_5() {
+        let a = super::always(1);
+        let b = super::always(2);
+        let c = super::always(3);
+        let d = super::always(4);
+        let e = super::always(5);
+
+        let mut s = map_rc!(a, b, c, d, e => {
+            let a: ::std::rc::Rc<u32> = a;
+            let b: ::std::rc::Rc<u32> = b;
+            let c: ::std::rc::Rc<u32> = c;
+            let d: ::std::rc::Rc<u32> = d;
+            let e: ::std::rc::Rc<u32> = e;
+            *a + *b + *c + *d + *e
+        });
+
+        assert_eq!(super::Signal::poll(&mut s), super::State::Changed(15));
+        assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
     }
 }
