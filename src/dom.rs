@@ -1,12 +1,10 @@
 use std;
-use std::rc::Rc;
-use std::cell::RefCell;
 use std::sync::Mutex;
 use stdweb::{Reference, Value, ReferenceType};
 use stdweb::unstable::{TryFrom, TryInto};
 use stdweb::web::{IEventTarget, INode, IElement, IHtmlElement, Node, TextNode};
 use stdweb::web::event::ConcreteEvent;
-use signal::{Signal, DropHandle};
+use signal::Signal;
 
 
 // TODO this should be in stdweb

@@ -31,8 +31,22 @@ pub trait Signal {
     }
 
     #[inline]
+    fn map2<A, B, C>(self, other: A, callback: B) -> Map2<Self, A, B>
+        where A: Signal,
+              B: FnMut(&mut Self::Value, &mut A::Value) -> C,
+              Self: Sized {
+        Map2 {
+            signal1: self,
+            signal2: other,
+            callback,
+            left: None,
+            right: None,
+        }
+    }
+
+    #[inline]
     fn map_dedupe<A, B>(self, callback: A) -> MapDedupe<Self, A>
-        where A: FnMut(&Self::Value) -> B,
+        where A: FnMut(&mut Self::Value) -> B,
               Self: Sized {
         MapDedupe {
             old_value: None,
@@ -63,7 +77,7 @@ pub trait Signal {
     }
 
     #[inline]
-    fn and_then<A, B>(self, callback: A) -> Flatten<Map<Self, A>>
+    fn switch<A, B>(self, callback: A) -> Flatten<Map<Self, A>>
         where A: FnMut(Self::Value) -> B,
               B: Signal,
               Self: Sized {
@@ -86,6 +100,32 @@ pub trait Signal {
         );
 
         handle
+    }
+
+    #[inline]
+    fn as_mut(&mut self) -> &mut Self {
+        self
+    }
+}
+
+
+pub struct Always<A> {
+    value: Option<A>,
+}
+
+impl<A> Signal for Always<A> {
+    type Value = A;
+
+    #[inline]
+    fn poll(&mut self) -> Async<Self::Value> {
+        self.value.take().map(Async::Ready).unwrap_or(Async::NotReady)
+    }
+}
+
+#[inline]
+pub fn always<A>(value: A) -> Always<A> {
+    Always {
+        value: Some(value),
     }
 }
 
@@ -177,6 +217,60 @@ impl<A, B, C> Signal for Map<A, B>
 }
 
 
+pub struct Map2<A: Signal, B: Signal, C> {
+    signal1: A,
+    signal2: B,
+    callback: C,
+    left: Option<A::Value>,
+    right: Option<B::Value>,
+}
+
+impl<A, B, C, D> Signal for Map2<A, B, C>
+    where A: Signal,
+          B: Signal,
+          C: FnMut(&mut A::Value, &mut B::Value) -> D {
+    type Value = D;
+
+    // TODO inline this ?
+    fn poll(&mut self) -> Async<Self::Value> {
+        match self.signal1.poll() {
+            Async::Ready(mut left) => {
+                let output = match self.signal2.poll() {
+                    Async::Ready(mut right) => {
+                        let output = Async::Ready((self.callback)(&mut left, &mut right));
+                        self.right = Some(right);
+                        output
+                    },
+
+                    Async::NotReady => match self.right {
+                        Some(ref mut right) => Async::Ready((self.callback)(&mut left, right)),
+                        None => Async::NotReady,
+                    },
+                };
+
+                self.left = Some(left);
+
+                output
+            },
+
+            Async::NotReady => match self.left {
+                Some(ref mut left) => match self.signal2.poll() {
+                    Async::Ready(mut right) => {
+                        let output = Async::Ready((self.callback)(left, &mut right));
+                        self.right = Some(right);
+                        output
+                    },
+
+                    Async::NotReady => Async::NotReady,
+                },
+
+                None => Async::NotReady,
+            },
+        }
+    }
+}
+
+
 pub struct MapDedupe<A: Signal, B> {
     old_value: Option<A::Value>,
     signal: A,
@@ -195,14 +289,14 @@ impl<A, B, C> Signal for MapDedupe<A, B>
     fn poll(&mut self) -> Async<Self::Value> {
         loop {
             match self.signal.poll() {
-                Async::Ready(value) => {
+                Async::Ready(mut value) => {
                     let has_changed = match self.old_value {
                         Some(ref old_value) => *old_value != value,
                         None => true,
                     };
 
                     if has_changed {
-                        let output = (self.callback)(&value);
+                        let output = (self.callback)(&mut value);
                         self.old_value = Some(value);
                         return Async::Ready(output);
                     }
@@ -315,6 +409,7 @@ pub mod unsync {
     }
 
 
+    #[derive(Clone)]
     pub struct Receiver<A> {
         inner: Rc<RefCell<Inner<A>>>,
     }
@@ -353,5 +448,206 @@ pub mod unsync {
         };
 
         (sender, receiver)
+    }
+}
+
+
+/*map! {
+    let foo = 1,
+    let bar = 2,
+    let qux = 3 => {
+        let corge = 4;
+    }
+}*/
+
+
+/*
+map!(x, y => x + y)
+*/
+
+
+// TODO should this be hidden from the docs ?
+#[doc(hidden)]
+#[inline]
+pub fn pair_rc<'a, 'b, A, B>(left: &'a mut Rc<A>, right: &'b mut Rc<B>) -> (Rc<A>, Rc<B>) {
+    (left.clone(), right.clone())
+}
+
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __internal_map_clone {
+    ($name:ident) => {
+        ::std::clone::Clone::clone($name)
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __internal_map_rc_new {
+    ($value:expr) => {
+        $crate::signal::Signal::map($value, ::std::rc::Rc::new)
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __internal_map1 {
+    ($name:ident, $value:expr, $f:expr) => {
+        $crate::signal::Signal::map(
+            __internal_map_rc_new!($value),
+            |ref mut $name| $f
+        )
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __internal_map2 {
+    ($old_expr:expr, $old_pair:pat, $name:ident, $value:expr, $f:expr) => {
+        $crate::signal::Signal::map2(
+            $old_expr,
+            __internal_map_rc_new!($value),
+            |$old_pair, ref mut $name| $f
+        )
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __internal_map2_pair {
+    ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, $name:ident, $t:ty, $value:expr, $($args:tt)+) => {
+        __internal_map_args!(
+            $f,
+            $crate::signal::Signal::map2(
+                $old_expr,
+                __internal_map_rc_new!($value),
+                $crate::signal::pair_rc
+            ),
+            &mut ($old_pair, ref mut $name),
+            { $($lets;)* let $name: $t = __internal_map_clone!($name) },
+            $($args)+
+        )
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __internal_map_args_start {
+    ($f:expr, $name:ident, $value:expr, { $($lets:stmt);* }, $($args:tt)+) => {
+        __internal_map_args!(
+            $f,
+            __internal_map_rc_new!($value),
+            ref mut $name,
+            { $($lets);* },
+            $($args)+
+        )
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __internal_map_args {
+    ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, let $name:ident: $t:ty = $value:expr) => {
+        __internal_map2!($old_expr, $old_pair, $name, $value, { $($lets;)* let $name: $t = __internal_map_clone!($name); $f })
+    };
+    ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, let $name:ident = $value:expr) => {
+        __internal_map2!($old_expr, $old_pair, $name, $value, { $($lets;)* let $name: Rc<_> = __internal_map_clone!($name); $f })
+    };
+    ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, $name:ident) => {
+        __internal_map2!($old_expr, $old_pair, $name, $name, { $($lets;)* let $name: Rc<_> = __internal_map_clone!($name); $f })
+    };
+    ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, let $name:ident: $t:ty = $value:expr, $($args:tt)+) => {
+        __internal_map2_pair!($f, $old_expr, $old_pair, { $($lets);* }, $name, $t, $value, $($args)+)
+    };
+    ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, let $name:ident = $value:expr, $($args:tt)+) => {
+        __internal_map2_pair!($f, $old_expr, $old_pair, { $($lets);* }, $name, Rc<_>, $value, $($args)+)
+    };
+    ($f:expr, $old_expr:expr, $old_pair:pat, { $($lets:stmt);* }, $name:ident, $($args:tt)+) => {
+        __internal_map2_pair!($f, $old_expr, $old_pair, { $($lets);* }, $name, Rc<_>, $name, $($args)+)
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __internal_map {
+    ($f:expr, let $name:ident: $t:ty = $value:expr) => {
+        __internal_map1!($name, $value, { let $name: $t = __internal_map_clone!($name); $f })
+    };
+    ($f:expr, let $name:ident = $value:expr) => {
+        __internal_map1!($name, $value, { let $name: Rc<_> = __internal_map_clone!($name); $f })
+    };
+    ($f:expr, $name:ident) => {
+        __internal_map1!($name, $name, { let $name: Rc<_> = __internal_map_clone!($name); $f })
+    };
+    ($f:expr, let $name:ident: $t:ty = $value:expr, $($args:tt)+) => {
+        __internal_map_args_start!($f, $name, $value, { let $name: $t = __internal_map_clone!($name) }, $($args)+)
+    };
+    ($f:expr, let $name:ident = $value:expr, $($args:tt)+) => {
+        __internal_map_args_start!($f, $name, $value, { let $name: Rc<_> = __internal_map_clone!($name) }, $($args)+)
+    };
+    ($f:expr, $name:ident, $($args:tt)+) => {
+        __internal_map_args_start!($f, $name, $name, { let $name: Rc<_> = __internal_map_clone!($name) }, $($args)+)
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __internal_map_split {
+    (($($before:tt)*), => $f:expr) => {
+        __internal_map!($f, $($before)*)
+    };
+    (($($before:tt)*), $t:tt $($after:tt)*) => {
+        __internal_map_split!(($($before)* $t), $($after)*)
+    };
+}
+
+#[macro_export]
+macro_rules! map_rc {
+    ($($input:tt)*) => { __internal_map_split!((), $($input)*) };
+}
+
+
+#[cfg(test)]
+mod tests {
+    use futures::Async;
+    use super::{Signal, always};
+
+    #[test]
+    fn map_macro_ident_1() {
+        let a = always(1);
+        let mut s = map_rc!(a => a + 1);
+        assert_eq!(s.poll(), Async::Ready(2));
+        assert_eq!(s.poll(), Async::NotReady);
+    }
+
+    #[test]
+    fn map_macro_ident_2() {
+        let a = always(1);
+        let b = always(2);
+        let mut s = map_rc!(a, b => *a + *b);
+        assert_eq!(s.poll(), Async::Ready(3));
+        assert_eq!(s.poll(), Async::NotReady);
+    }
+
+    #[test]
+    fn map_macro_ident_3() {
+        let a = always(1);
+        let b = always(2);
+        let c = always(3);
+        let mut s = map_rc!(a, b, c => *a + *b + *c);
+        assert_eq!(s.poll(), Async::Ready(6));
+        assert_eq!(s.poll(), Async::NotReady);
+    }
+
+    #[test]
+    fn map_macro_ident_4() {
+        let a = always(1);
+        let b = always(2);
+        let c = always(3);
+        let d = always(4);
+        let mut s = map_rc!(a, b, c, d => *a + *b + *c + *d);
+        assert_eq!(s.poll(), Async::Ready(10));
+        assert_eq!(s.poll(), Async::NotReady);
     }
 }

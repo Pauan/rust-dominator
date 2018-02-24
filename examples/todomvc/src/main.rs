@@ -1,3 +1,6 @@
+#![feature(trace_macros)]
+#![feature(log_syntax)]
+
 #[macro_use]
 extern crate stdweb;
 
@@ -31,25 +34,49 @@ fn main() {
     let (sender_elements, receiver_elements) = signal::unsync::mutable(count);
 
 
-    let mut width = 100;
+    let mut width: u32 = 10;
 
-    let (sender, receiver) = signal::unsync::mutable(width);
+    let (sender1, receiver1) = signal::unsync::mutable(width);
+    let (sender2, receiver2) = signal::unsync::mutable(vec![width]);
+    let (sender3, receiver3) = signal::unsync::mutable(vec![width]);
+
+
+    trace_macros!(true);
+
+    /*let style_width = receiver1.switch(move |x| {
+        receiver2.clone().switch(move |y| {
+            receiver3.clone().map(move |z| {
+                Some(format!("{}px", x + y[0] + z[0]))
+            })
+        })
+    });*/
+
+    let style_width = map_rc! {
+        let x: Rc<u32> = receiver1,
+        let y: Rc<Vec<u32>> = receiver2,
+        let _z: Rc<Vec<u32>> = receiver3 =>
+        Some(format!("{}px", *x + y[0]))
+    };
+
+    trace_macros!(false);
 
 
     html!("div", {
         style("border", "10px solid blue");
         children([
             html!("div", {
-                style("width", receiver.map(|x| Some(format!("{}px", x))));
+                style("width", style_width);
                 style("height", "50px");
                 style("background-color", "green");
                 event(move |event: ClickEvent| {
                     count += 1;
-                    width += 100;
+                    width += 5;
 
                     console!(log, &event);
 
-                    sender.set(width).unwrap();
+                    sender1.set(width).unwrap();
+                    sender2.set(vec![width]).unwrap();
+                    sender3.set(vec![width]).unwrap();
                     sender_elements.set(count).unwrap();
                 });
                 children(receiver_elements.map(|count| {

@@ -4,7 +4,10 @@ version = "0.1.0"
 authors = ["Pauan <pcxunlimited@gmail.com>"]
 
 [dependencies]
-stdweb = { path = "../stdweb" }
 stdweb-derive = { path = "../stdweb/stdweb-derive" }
 futures = "0.1.18"
 lazy_static = "1.0.0"
+
+[dependencies.stdweb]
+path = "../stdweb"
+features = ["experimental_features_which_may_break_on_minor_version_bumps"]
