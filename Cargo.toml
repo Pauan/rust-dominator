@@ -5,8 +5,9 @@ authors = ["Pauan <pcxunlimited@gmail.com>"]
 
 [dependencies]
 stdweb-derive = { path = "../stdweb/stdweb-derive" }
-futures = "0.1.18"
 lazy_static = "1.0.0"
+discard = "1.0.3"
+signals = { path = "./signals" }
 
 [dependencies.stdweb]
 path = "../stdweb"

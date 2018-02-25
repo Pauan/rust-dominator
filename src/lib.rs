@@ -1,5 +1,3 @@
-#![recursion_limit="128"]
-
 #[macro_use]
 extern crate stdweb;
 
@@ -9,12 +7,19 @@ extern crate stdweb_derive;
 #[macro_use]
 extern crate lazy_static;
 
-extern crate futures;
+extern crate discard;
+extern crate signals;
 
+
+mod macros;
+mod callbacks;
+mod operations;
+mod dom_operations;
 mod dom;
-pub use dom::*;
 
-pub mod signal;
+pub use dom::*;
+pub mod traits;
+
 
 #[cfg(test)]
 mod tests {

@@ -7,13 +7,17 @@ extern crate stdweb;
 #[macro_use]
 extern crate dominator;
 
+#[macro_use]
+extern crate signals;
+
 use std::rc::Rc;
 use stdweb::web::{document, HtmlElement};
 use stdweb::web::event::ClickEvent;
 use stdweb::web::IParentNode;
 
-use dominator::{Dom, signal};
-use dominator::signal::Signal;
+use signals::Signal;
+use dominator::traits::*;
+use dominator::{Dom, text};
 
 
 fn main() {
@@ -31,14 +35,15 @@ fn main() {
 
     let mut count = 0;
 
-    let (sender_elements, receiver_elements) = signal::unsync::mutable(count);
+    let (sender_elements, receiver_elements) = signals::unsync::mutable(count);
 
 
     let mut width: u32 = 10;
 
-    let (sender1, receiver1) = signal::unsync::mutable(width);
-    let (sender2, receiver2) = signal::unsync::mutable(vec![width]);
-    let (sender3, receiver3) = signal::unsync::mutable(vec![width]);
+    let (sender1, receiver1) = signals::unsync::mutable(width);
+    let (sender2, receiver2) = signals::unsync::mutable(vec![width]);
+    let (sender3, receiver3) = signals::unsync::mutable(vec![width]);
+    let (text_sender, text_receiver) = signals::unsync::mutable(format!("{}", width));
 
     /*let style_width = receiver1.switch(move |x| {
         receiver2.clone().switch(move |y| {
@@ -56,80 +61,85 @@ fn main() {
     };
 
 
-    html!("div", {
-        style("border", "10px solid blue");
-        children([
-            html!("div", {
-                style("width", style_width);
-                style("height", "50px");
-                style("background-color", "green");
-                event(move |event: ClickEvent| {
-                    count += 1;
-                    width += 5;
+    dominator::append_dom(&document().query_selector("body").unwrap().unwrap(),
+        html!("div", {
+            style("border", "10px solid blue");
+            children([
+                text("Testing testing!!!"),
 
-                    console!(log, &event);
+                text(text_receiver.dynamic()),
 
-                    sender1.set(width).unwrap();
-                    sender2.set(vec![width]).unwrap();
-                    sender3.set(vec![width]).unwrap();
-                    sender_elements.set(count).unwrap();
-                });
-                children(receiver_elements.map(|count| {
-                    (0..count).map(|_| {
-                        html!("div", {
-                            style("border", "5px solid red");
-                            style("width", "50px");
-                            style("height", "50px");
-                        })
-                    })
-                }));
-            }),
-
-            html!("div", {
-                style("width", "50px");
-                style("height", "50px");
-                style("background-color", "red");
-                children([
-                    html!("div", {
-                        style("width", "10px");
-                        style("height", "10px");
-                        style("background-color", "orange");
-                    })
-                ].as_mut());
-            }),
-
-            html!("div", {
-                style("width", "50px");
-                style("height", "50px");
-                style("background-color", "red");
-                class(&foobar, true);
-                children([
-                    html!("div", {
-                        style("width", "10px");
-                        style("height", "10px");
-                        style("background-color", "orange");
-                    })
-                ].as_mut());
-            }),
-
-            Dom::with_state(Rc::new(vec![1, 2, 3]), |a| {
                 html!("div", {
-                    style("width", "100px");
-                    style("height", "100px");
-                    style("background-color", "orange");
-                    class("foo", true);
-                    class("bar", false);
-                    event(clone!({ a } move |event: ClickEvent| {
-                        console!(log, &*a, &event);
-                    }));
-                })
-            }),
+                    style("width", style_width.dynamic());
+                    style("height", "50px");
+                    style("background-color", "green");
+                    event(move |event: ClickEvent| {
+                        count += 1;
+                        width += 5;
 
-            html!("input", {
-                focused(true);
-            }),
-        ].as_mut());
-    }).insert_into(
-        &document().query_selector("body").unwrap().unwrap()
+                        console!(log, &event);
+
+                        sender1.set(width).unwrap();
+                        sender2.set(vec![width]).unwrap();
+                        sender3.set(vec![width]).unwrap();
+                        text_sender.set(format!("{}", width)).unwrap();
+                        sender_elements.set(count).unwrap();
+                    });
+                    children(receiver_elements.map(|count| {
+                        (0..count).map(|_| {
+                            html!("div", {
+                                style("border", "5px solid red");
+                                style("width", "50px");
+                                style("height", "50px");
+                            })
+                        })
+                    }).dynamic());
+                }),
+
+                html!("div", {
+                    style("width", "50px");
+                    style("height", "50px");
+                    style("background-color", "red");
+                    children([
+                        html!("div", {
+                            style("width", "10px");
+                            style("height", "10px");
+                            style("background-color", "orange");
+                        })
+                    ].as_mut());
+                }),
+
+                html!("div", {
+                    style("width", "50px");
+                    style("height", "50px");
+                    style("background-color", "red");
+                    class(&foobar, true);
+                    children([
+                        html!("div", {
+                            style("width", "10px");
+                            style("height", "10px");
+                            style("background-color", "orange");
+                        })
+                    ].as_mut());
+                }),
+
+                Dom::with_state(Rc::new(vec![1, 2, 3]), |a| {
+                    html!("div", {
+                        style("width", "100px");
+                        style("height", "100px");
+                        style("background-color", "orange");
+                        class("foo", true);
+                        class("bar", false);
+                        event(clone!({ a } move |event: ClickEvent| {
+                            console!(log, &*a, &event);
+                        }));
+                    })
+                }),
+
+                html!("input", {
+                    focused(true);
+                }),
+            ].as_mut());
+        })
     );
 }

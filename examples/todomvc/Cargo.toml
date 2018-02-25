@@ -5,6 +5,7 @@ authors = ["Pauan <pcxunlimited@gmail.com>"]
 
 [dependencies]
 dominator = { path = "../.." }
+signals = { path = "../../signals" }
 
 [dependencies.stdweb]
 path = "../../../stdweb"

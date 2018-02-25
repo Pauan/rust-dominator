@@ -110,11 +110,11 @@ pub trait Signal {
     // TODO file Rust bug about bad error message when `callback` isn't marked as `mut`
     fn for_each<F, U>(self, callback: F) -> ForEach<SignalStream<Self>, F, U>
         where F: FnMut(Self::Item) -> U,
-        	  // TODO allow for errors ?
+              // TODO allow for errors ?
               U: IntoFuture<Item = (), Error = ()>,
               Self:Sized {
 
-      	self.to_stream().for_each(callback)
+        self.to_stream().for_each(callback)
     }
 
     #[inline]
@@ -195,7 +195,7 @@ impl<A, B> Future for CancelableFuture<A, B>
         if borrow.is_cancelled {
             let future = self.future.take().unwrap();
             let callback = self.when_cancelled.take().unwrap();
-            // TODO figure out how to call the callback immediately when discard is called
+            // TODO figure out how to call the callback immediately when discard is called, e.g. using two Rc<RefCell<>>
             Ok(Async::Ready(callback(future)))
 
         } else {
@@ -218,7 +218,7 @@ impl<A, B> Future for CancelableFuture<A, B>
 #[inline]
 pub fn cancelable_future<A, B>(future: A, when_cancelled: B) -> (DiscardOnDrop<CancelableFutureHandle>, CancelableFuture<A, B>)
     where A: Future,
-          B: FnOnce() -> A::Item {
+          B: FnOnce(A) -> A::Item {
 
     let state = Rc::new(RefCell::new(CancelableFutureState {
         is_cancelled: false,
@@ -230,9 +230,9 @@ pub fn cancelable_future<A, B>(future: A, when_cancelled: B) -> (DiscardOnDrop<C
     });
 
     let cancel_future = CancelableFuture {
-    	state,
-    	future: Some(future),
-    	when_cancelled: Some(when_cancelled),
+        state,
+        future: Some(future),
+        when_cancelled: Some(when_cancelled),
     };
 
     (cancel_handle, cancel_future)
