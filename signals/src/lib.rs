@@ -1,12 +1,14 @@
 #![recursion_limit="128"]
 
 extern crate futures;
+extern crate discard;
 
 use std::rc::{Rc, Weak};
 use std::cell::RefCell;
 use futures::{Async, Poll, task};
 use futures::future::{Future, IntoFuture};
 use futures::stream::{Stream, ForEach};
+use discard::{Discard, DiscardOnDrop};
 
 
 // TODO add in Done to allow the Signal to end ?
@@ -156,9 +158,8 @@ pub struct CancelableFutureHandle {
     state: Weak<RefCell<CancelableFutureState>>,
 }
 
-// TODO Cancel implementation
-impl CancelableFutureHandle {
-    pub fn cancel(&mut self) {
+impl Discard for CancelableFutureHandle {
+    fn discard(self) {
         if let Some(state) = self.state.upgrade() {
             let mut borrow = state.borrow_mut();
 
@@ -175,13 +176,13 @@ impl CancelableFutureHandle {
 
 pub struct CancelableFuture<A, B> {
     state: Rc<RefCell<CancelableFutureState>>,
-    future: A,
+    future: Option<A>,
     when_cancelled: Option<B>,
 }
 
 impl<A, B> Future for CancelableFuture<A, B>
     where A: Future,
-          B: FnOnce() -> A::Item {
+          B: FnOnce(A) -> A::Item {
 
     type Item = A::Item;
     type Error = A::Error;
@@ -189,16 +190,20 @@ impl<A, B> Future for CancelableFuture<A, B>
     // TODO should this inline ?
     #[inline]
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        let mut borrow = self.state.borrow_mut();
+        let borrow = self.state.borrow();
 
         if borrow.is_cancelled {
-            Ok(Async::Ready(self.when_cancelled.take().unwrap()()))
+            let future = self.future.take().unwrap();
+            let callback = self.when_cancelled.take().unwrap();
+            // TODO figure out how to call the callback immediately when discard is called
+            Ok(Async::Ready(callback(future)))
 
         } else {
-            // TODO does it need to drop borrow before calling poll ?
-            match self.future.poll() {
+            drop(borrow);
+
+            match self.future.as_mut().unwrap().poll() {
                 Ok(Async::NotReady) => {
-                    borrow.task = Some(task::current());
+                    self.state.borrow_mut().task = Some(task::current());
                     Ok(Async::NotReady)
                 },
                 a => a,
@@ -211,7 +216,7 @@ impl<A, B> Future for CancelableFuture<A, B>
 // TODO figure out a more efficient way to implement this
 // TODO this should be implemented in the futures crate
 #[inline]
-pub fn cancelable_future<A, B>(future: A, when_cancelled: B) -> (CancelableFutureHandle, CancelableFuture<A, B>)
+pub fn cancelable_future<A, B>(future: A, when_cancelled: B) -> (DiscardOnDrop<CancelableFutureHandle>, CancelableFuture<A, B>)
     where A: Future,
           B: FnOnce() -> A::Item {
 
@@ -220,14 +225,13 @@ pub fn cancelable_future<A, B>(future: A, when_cancelled: B) -> (CancelableFutur
         task: None,
     }));
 
-    // TODO CancelOnDrop
-    let cancel_handle = CancelableFutureHandle {
+    let cancel_handle = DiscardOnDrop::new(CancelableFutureHandle {
         state: Rc::downgrade(&state),
-    };
+    });
 
     let cancel_future = CancelableFuture {
     	state,
-    	future,
+    	future: Some(future),
     	when_cancelled: Some(when_cancelled),
     };
 
