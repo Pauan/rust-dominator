@@ -194,7 +194,7 @@ pub fn insert_children_signal<A, B, C>(element: &A, callbacks: &mut Callbacks, s
 }
 
 #[inline]
-pub fn insert_children_slice<A: INode>(element: &A, callbacks: &mut Callbacks, value: &mut [Dom]) {
+pub fn insert_children_iter<'a, A: INode, B: IntoIterator<Item = &'a mut Dom>>(element: &A, callbacks: &mut Callbacks, value: B) {
     for dom in value.into_iter() {
         callbacks.after_insert.append(&mut dom.callbacks.after_insert);
         callbacks.after_remove.append(&mut dom.callbacks.after_remove);

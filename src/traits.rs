@@ -92,10 +92,10 @@ impl Focused for bool {
 }
 
 // TODO figure out how to make this owned rather than &mut
-impl<'a> Children for &'a mut [Dom] {
+impl<'a, A: IntoIterator<Item = &'a mut Dom>> Children for A {
     #[inline]
-    fn insert_children<A: INode>(self, element: &A, callbacks: &mut Callbacks) {
-        operations::insert_children_slice(element, callbacks, self)
+    fn insert_children<B: INode>(self, element: &B, callbacks: &mut Callbacks) {
+        operations::insert_children_iter(element, callbacks, self)
     }
 }
 

@@ -64,7 +64,7 @@ fn main() {
     dominator::append_dom(&document().query_selector("body").unwrap().unwrap(),
         html!("div", {
             style("border", "10px solid blue");
-            children([
+            children(&mut [
                 text("Testing testing!!!"),
 
                 text(text_receiver.dynamic()),
@@ -100,13 +100,13 @@ fn main() {
                     style("width", "50px");
                     style("height", "50px");
                     style("background-color", "red");
-                    children([
+                    children(&mut [
                         html!("div", {
                             style("width", "10px");
                             style("height", "10px");
                             style("background-color", "orange");
                         })
-                    ].as_mut());
+                    ]);
                 }),
 
                 html!("div", {
@@ -114,13 +114,13 @@ fn main() {
                     style("height", "50px");
                     style("background-color", "red");
                     class(&foobar, true);
-                    children([
+                    children(&mut [
                         html!("div", {
                             style("width", "10px");
                             style("height", "10px");
                             style("background-color", "orange");
                         })
-                    ].as_mut());
+                    ]);
                 }),
 
                 Dom::with_state(Rc::new(vec![1, 2, 3]), |a| {
@@ -139,7 +139,7 @@ fn main() {
                 html!("input", {
                     focused(true);
                 }),
-            ].as_mut());
+            ]);
         })
     );
 }
