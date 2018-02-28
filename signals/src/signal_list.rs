@@ -2,7 +2,7 @@ use futures::Async;
 //use std::iter::Iterator;
 
 
-fn update_indexes<A: Copy, F: FnMut(A) -> A>(indexes: &mut [Option<A>], mut f: F) -> Option<A> {
+fn increment_indexes(indexes: &mut [Option<usize>]) -> Option<usize> {
     let mut first = None;
 
     for index in indexes.into_iter() {
@@ -11,11 +11,19 @@ fn update_indexes<A: Copy, F: FnMut(A) -> A>(indexes: &mut [Option<A>], mut f: F
                 first = Some(i);
             }
 
-            *index = Some(f(i));
+            *index = Some(i + 1);
         }
     }
 
     first
+}
+
+fn decrement_indexes(indexes: &mut [Option<usize>]) {
+    for index in indexes {
+        if let Some(i) = *index {
+            *index = Some(i - 1);
+        }
+    }
 }
 
 
@@ -26,6 +34,11 @@ pub enum ListChange<A> {
     },
 
     InsertAt {
+        index: usize,
+        value: A,
+    },
+
+    UpdateAt {
         index: usize,
         value: A,
     },
@@ -56,6 +69,7 @@ impl<A> ListChange<A> {
             // TODO figure out a more efficient way of implementing this
             ListChange::Replace { values } => ListChange::Replace { values: values.into_iter().map(callback).collect() },
             ListChange::InsertAt { index, value } => ListChange::InsertAt { index, value: callback(value) },
+            ListChange::UpdateAt { index, value } => ListChange::UpdateAt { index, value: callback(value) },
             ListChange::RemoveAt { index } => ListChange::RemoveAt { index },
             ListChange::Push { value } => ListChange::Push { value: callback(value) },
             ListChange::Pop {} => ListChange::Pop {},
@@ -162,7 +176,7 @@ impl<A, B, F> SignalList for FilterMap<A, F>
                     ListChange::InsertAt { index, value } => {
                         match (self.callback)(value) {
                             Some(value) => {
-                                let new_index = update_indexes(&mut self.indexes[index..], |index| index + 1).unwrap_or(self.length);
+                                let new_index = increment_indexes(&mut self.indexes[index..]).unwrap_or(self.length);
 
                                 self.indexes.insert(index, Some(new_index));
                                 self.length += 1;
@@ -176,14 +190,46 @@ impl<A, B, F> SignalList for FilterMap<A, F>
                         }
                     },
 
+                    ListChange::UpdateAt { index, value } => {
+                        match (self.callback)(value) {
+                            Some(value) => {
+                                match self.indexes[index] {
+                                    Some(old_index) => {
+                                        Async::Ready(Some(ListChange::UpdateAt { index: old_index, value }))
+                                    },
+                                    None => {
+                                        let new_index = increment_indexes(&mut self.indexes[(index + 1)..]).unwrap_or(self.length);
+
+                                        self.indexes[index] = Some(new_index);
+                                        self.length += 1;
+
+                                        Async::Ready(Some(ListChange::InsertAt { index: new_index, value }))
+                                    },
+                                }
+                            },
+                            None => {
+                                match self.indexes[index] {
+                                    Some(old_index) => {
+                                        self.indexes[index] = None;
+
+                                        decrement_indexes(&mut self.indexes[(index + 1)..]);
+                                        self.length -= 1;
+
+                                        Async::Ready(Some(ListChange::RemoveAt { index: old_index }))
+                                    },
+                                    None => {
+                                        continue;
+                                    },
+                                }
+                            },
+                        }
+                    },
+
                     ListChange::RemoveAt { index } => {
                         match self.indexes.remove(index) {
                             Some(old_index) => {
-                                for index in &mut self.indexes[index..] {
-                                    if let Some(i) = *index {
-                                        *index = Some(i - 1);
-                                    }
-                                }
+                                decrement_indexes(&mut self.indexes[index..]);
+                                self.length -= 1;
 
                                 Async::Ready(Some(ListChange::RemoveAt { index: old_index }))
                             },
@@ -209,7 +255,7 @@ impl<A, B, F> SignalList for FilterMap<A, F>
 
                     ListChange::Pop {} => {
                         match self.indexes.pop().expect("Cannot pop from empty vec") {
-                            Some(index) => {
+                            Some(_) => {
                                 Async::Ready(Some(ListChange::Pop {}))
                             },
                             None => {
