@@ -4,4 +4,4 @@ extern crate futures;
 extern crate discard;
 
 pub mod signal;
-pub mod signal_list;
+pub mod signal_vec;
