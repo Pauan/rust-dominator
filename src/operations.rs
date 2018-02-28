@@ -2,7 +2,7 @@ use stdweb::PromiseFuture;
 use discard::{Discard, DiscardOnDrop};
 use stdweb::Reference;
 use stdweb::web::TextNode;
-use signals::{Signal, cancelable_future, CancelableFutureHandle};
+use signals::signal::{Signal, cancelable_future, CancelableFutureHandle};
 use dom_operations;
 use dom::{Dom, IStyle};
 use callbacks::Callbacks;

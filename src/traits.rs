@@ -4,7 +4,7 @@ use stdweb::traits::{IElement, IHtmlElement, INode};
 use stdweb::unstable::TryInto;
 use dom::{Dom, IStyle, Dynamic};
 use callbacks::Callbacks;
-use signals::Signal;
+use signals::signal::Signal;
 use operations;
 
 

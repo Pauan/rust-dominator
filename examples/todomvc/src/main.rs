@@ -15,7 +15,8 @@ use stdweb::web::{document, HtmlElement};
 use stdweb::web::event::ClickEvent;
 use stdweb::web::IParentNode;
 
-use signals::Signal;
+use signals::signal;
+use signals::signal::Signal;
 use dominator::traits::*;
 use dominator::{Dom, text};
 
@@ -35,15 +36,15 @@ fn main() {
 
     let mut count = 0;
 
-    let (sender_elements, receiver_elements) = signals::unsync::mutable(count);
+    let (sender_elements, receiver_elements) = signal::unsync::mutable(count);
 
 
     let mut width: u32 = 10;
 
-    let (sender1, receiver1) = signals::unsync::mutable(width);
-    let (sender2, receiver2) = signals::unsync::mutable(vec![width]);
-    let (sender3, receiver3) = signals::unsync::mutable(vec![width]);
-    let (text_sender, text_receiver) = signals::unsync::mutable(format!("{}", width));
+    let (sender1, receiver1) = signal::unsync::mutable(width);
+    let (sender2, receiver2) = signal::unsync::mutable(vec![width]);
+    let (sender3, receiver3) = signal::unsync::mutable(vec![width]);
+    let (text_sender, text_receiver) = signal::unsync::mutable(format!("{}", width));
 
     /*let style_width = receiver1.switch(move |x| {
         receiver2.clone().switch(move |y| {
