@@ -28,7 +28,7 @@ fn decrement_indexes(indexes: &mut [Option<usize>]) {
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ListChange<A> {
+pub enum VecChange<A> {
     Replace {
         values: Vec<A>,
     },
@@ -62,27 +62,27 @@ pub enum ListChange<A> {
     Clear {},
 }
 
-impl<A> ListChange<A> {
+impl<A> VecChange<A> {
     // TODO inline this ?
-    fn map<B, F>(self, mut callback: F) -> ListChange<B> where F: FnMut(A) -> B {
+    fn map<B, F>(self, mut callback: F) -> VecChange<B> where F: FnMut(A) -> B {
         match self {
             // TODO figure out a more efficient way of implementing this
-            ListChange::Replace { values } => ListChange::Replace { values: values.into_iter().map(callback).collect() },
-            ListChange::InsertAt { index, value } => ListChange::InsertAt { index, value: callback(value) },
-            ListChange::UpdateAt { index, value } => ListChange::UpdateAt { index, value: callback(value) },
-            ListChange::RemoveAt { index } => ListChange::RemoveAt { index },
-            ListChange::Push { value } => ListChange::Push { value: callback(value) },
-            ListChange::Pop {} => ListChange::Pop {},
-            ListChange::Clear {} => ListChange::Clear {},
+            VecChange::Replace { values } => VecChange::Replace { values: values.into_iter().map(callback).collect() },
+            VecChange::InsertAt { index, value } => VecChange::InsertAt { index, value: callback(value) },
+            VecChange::UpdateAt { index, value } => VecChange::UpdateAt { index, value: callback(value) },
+            VecChange::RemoveAt { index } => VecChange::RemoveAt { index },
+            VecChange::Push { value } => VecChange::Push { value: callback(value) },
+            VecChange::Pop {} => VecChange::Pop {},
+            VecChange::Clear {} => VecChange::Clear {},
         }
     }
 }
 
 
-pub trait SignalList {
+pub trait SignalVec {
     type Item;
 
-    fn poll(&mut self) -> Async<Option<ListChange<Self::Item>>>;
+    fn poll(&mut self) -> Async<Option<VecChange<Self::Item>>>;
 
     #[inline]
     fn map<A, F>(self, callback: F) -> Map<Self, F>
@@ -107,8 +107,8 @@ pub trait SignalList {
     }
 
     #[inline]
-    fn to_stream(self) -> SignalListStream<Self> where Self: Sized {
-        SignalListStream {
+    fn to_stream(self) -> SignalVecStream<Self> where Self: Sized {
+        SignalVecStream {
             signal: self,
         }
     }
@@ -125,25 +125,25 @@ pub struct Map<A, B> {
     callback: B,
 }
 
-impl<A, B, F> SignalList for Map<A, F>
-    where A: SignalList,
+impl<A, B, F> SignalVec for Map<A, F>
+    where A: SignalVec,
           F: FnMut(A::Item) -> B {
     type Item = B;
 
     // TODO should this inline ?
     #[inline]
-    fn poll(&mut self) -> Async<Option<ListChange<Self::Item>>> {
+    fn poll(&mut self) -> Async<Option<VecChange<Self::Item>>> {
         self.signal.poll().map(|some| some.map(|change| change.map(|value| (self.callback)(value))))
     }
 }
 
 
-pub struct SignalListStream<A> {
+pub struct SignalVecStream<A> {
     signal: A,
 }
 
-impl<A: SignalList> Stream for SignalListStream<A> {
-    type Item = ListChange<A::Item>;
+impl<A: SignalVec> Stream for SignalVecStream<A> {
+    type Item = VecChange<A::Item>;
     type Error = ();
 
     #[inline]
@@ -163,23 +163,23 @@ pub struct FilterMap<A, B> {
     callback: B,
 }
 
-impl<A, B, F> SignalList for FilterMap<A, F>
-    where A: SignalList,
+impl<A, B, F> SignalVec for FilterMap<A, F>
+    where A: SignalVec,
           F: FnMut(A::Item) -> Option<B> {
     type Item = B;
 
     // TODO figure out a faster implementation of this
-    fn poll(&mut self) -> Async<Option<ListChange<Self::Item>>> {
+    fn poll(&mut self) -> Async<Option<VecChange<Self::Item>>> {
         loop {
             return match self.signal.poll() {
                 Async::NotReady => return Async::NotReady,
                 Async::Ready(None) => return Async::Ready(None),
                 Async::Ready(Some(change)) => match change {
-                    ListChange::Replace { values } => {
+                    VecChange::Replace { values } => {
                         self.length = 0;
                         self.indexes = Vec::with_capacity(values.len());
 
-                        Async::Ready(Some(ListChange::Replace {
+                        Async::Ready(Some(VecChange::Replace {
                             values: values.into_iter().filter_map(|value| {
                                 let value = (self.callback)(value);
 
@@ -198,7 +198,7 @@ impl<A, B, F> SignalList for FilterMap<A, F>
                         }))
                     },
 
-                    ListChange::InsertAt { index, value } => {
+                    VecChange::InsertAt { index, value } => {
                         match (self.callback)(value) {
                             Some(value) => {
                                 let new_index = increment_indexes(&mut self.indexes[index..]).unwrap_or(self.length);
@@ -206,7 +206,7 @@ impl<A, B, F> SignalList for FilterMap<A, F>
                                 self.indexes.insert(index, Some(new_index));
                                 self.length += 1;
 
-                                Async::Ready(Some(ListChange::InsertAt { index: new_index, value }))
+                                Async::Ready(Some(VecChange::InsertAt { index: new_index, value }))
                             },
                             None => {
                                 self.indexes.insert(index, None);
@@ -215,12 +215,12 @@ impl<A, B, F> SignalList for FilterMap<A, F>
                         }
                     },
 
-                    ListChange::UpdateAt { index, value } => {
+                    VecChange::UpdateAt { index, value } => {
                         match (self.callback)(value) {
                             Some(value) => {
                                 match self.indexes[index] {
                                     Some(old_index) => {
-                                        Async::Ready(Some(ListChange::UpdateAt { index: old_index, value }))
+                                        Async::Ready(Some(VecChange::UpdateAt { index: old_index, value }))
                                     },
                                     None => {
                                         let new_index = increment_indexes(&mut self.indexes[(index + 1)..]).unwrap_or(self.length);
@@ -228,7 +228,7 @@ impl<A, B, F> SignalList for FilterMap<A, F>
                                         self.indexes[index] = Some(new_index);
                                         self.length += 1;
 
-                                        Async::Ready(Some(ListChange::InsertAt { index: new_index, value }))
+                                        Async::Ready(Some(VecChange::InsertAt { index: new_index, value }))
                                     },
                                 }
                             },
@@ -240,7 +240,7 @@ impl<A, B, F> SignalList for FilterMap<A, F>
                                         decrement_indexes(&mut self.indexes[(index + 1)..]);
                                         self.length -= 1;
 
-                                        Async::Ready(Some(ListChange::RemoveAt { index: old_index }))
+                                        Async::Ready(Some(VecChange::RemoveAt { index: old_index }))
                                     },
                                     None => {
                                         continue;
@@ -250,13 +250,13 @@ impl<A, B, F> SignalList for FilterMap<A, F>
                         }
                     },
 
-                    ListChange::RemoveAt { index } => {
+                    VecChange::RemoveAt { index } => {
                         match self.indexes.remove(index) {
                             Some(old_index) => {
                                 decrement_indexes(&mut self.indexes[index..]);
                                 self.length -= 1;
 
-                                Async::Ready(Some(ListChange::RemoveAt { index: old_index }))
+                                Async::Ready(Some(VecChange::RemoveAt { index: old_index }))
                             },
                             None => {
                                 continue;
@@ -264,12 +264,12 @@ impl<A, B, F> SignalList for FilterMap<A, F>
                         }
                     },
 
-                    ListChange::Push { value } => {
+                    VecChange::Push { value } => {
                         match (self.callback)(value) {
                             Some(value) => {
                                 self.indexes.push(Some(self.length));
                                 self.length += 1;
-                                Async::Ready(Some(ListChange::Push { value }))
+                                Async::Ready(Some(VecChange::Push { value }))
                             },
                             None => {
                                 self.indexes.push(None);
@@ -278,10 +278,10 @@ impl<A, B, F> SignalList for FilterMap<A, F>
                         }
                     },
 
-                    ListChange::Pop {} => {
+                    VecChange::Pop {} => {
                         match self.indexes.pop().expect("Cannot pop from empty vec") {
                             Some(_) => {
-                                Async::Ready(Some(ListChange::Pop {}))
+                                Async::Ready(Some(VecChange::Pop {}))
                             },
                             None => {
                                 continue;
@@ -289,10 +289,10 @@ impl<A, B, F> SignalList for FilterMap<A, F>
                         }
                     },
 
-                    ListChange::Clear {} => {
+                    VecChange::Clear {} => {
                         self.length = 0;
                         self.indexes = vec![];
-                        Async::Ready(Some(ListChange::Clear {}))
+                        Async::Ready(Some(VecChange::Clear {}))
                     },
                 },
             }
@@ -307,21 +307,21 @@ mod tests {
     use super::*;
 
     struct Tester<A> {
-        changes: Vec<Async<ListChange<A>>>,
+        changes: Vec<Async<VecChange<A>>>,
     }
 
     impl<A> Tester<A> {
         #[inline]
-        fn new(changes: Vec<Async<ListChange<A>>>) -> Self {
+        fn new(changes: Vec<Async<VecChange<A>>>) -> Self {
             Self { changes }
         }
     }
 
-    impl<A> SignalList for Tester<A> {
+    impl<A> SignalVec for Tester<A> {
         type Item = A;
 
         #[inline]
-        fn poll(&mut self) -> Async<Option<ListChange<Self::Item>>> {
+        fn poll(&mut self) -> Async<Option<VecChange<Self::Item>>> {
             if self.changes.len() > 0 {
                 match self.changes.remove(0) {
                     Async::NotReady => {
@@ -339,20 +339,20 @@ mod tests {
 
 
     struct TesterFuture<A, B> {
-        signal_list: A,
+        signal: A,
         callback: B,
     }
 
-    impl<A: SignalList, B: FnMut(&mut A, ListChange<A::Item>)> TesterFuture<A, B> {
+    impl<A: SignalVec, B: FnMut(&mut A, VecChange<A::Item>)> TesterFuture<A, B> {
         #[inline]
-        fn new(signal_list: A, callback: B) -> Self {
-            Self { signal_list, callback }
+        fn new(signal: A, callback: B) -> Self {
+            Self { signal, callback }
         }
     }
 
     impl<A, B> Future for TesterFuture<A, B>
-        where A: SignalList,
-              B: FnMut(&mut A, ListChange<A::Item>) {
+        where A: SignalVec,
+              B: FnMut(&mut A, VecChange<A::Item>) {
 
         type Item = ();
         type Error = ();
@@ -360,9 +360,9 @@ mod tests {
         #[inline]
         fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
             loop {
-                return match self.signal_list.poll() {
+                return match self.signal.poll() {
                     Async::Ready(Some(change)) => {
-                        (self.callback)(&mut self.signal_list, change);
+                        (self.callback)(&mut self.signal, change);
                         continue;
                     },
                     Async::Ready(None) => Ok(Async::Ready(())),
@@ -372,10 +372,10 @@ mod tests {
         }
     }
 
-    fn run<A: SignalList, B: FnMut(&mut A, ListChange<A::Item>) -> C, C>(signal_list: A, mut callback: B) -> Vec<C> {
+    fn run<A: SignalVec, B: FnMut(&mut A, VecChange<A::Item>) -> C, C>(signal: A, mut callback: B) -> Vec<C> {
         let mut changes = vec![];
 
-        TesterFuture::new(signal_list, |signal, change| {
+        TesterFuture::new(signal, |signal, change| {
             changes.push(callback(signal, change));
         }).wait().unwrap();
 
@@ -389,40 +389,40 @@ mod tests {
         struct Change {
             length: usize,
             indexes: Vec<Option<usize>>,
-            change: ListChange<u32>,
+            change: VecChange<u32>,
         }
 
         let input = Tester::new(vec![
-            Async::Ready(ListChange::Replace { values: vec![0, 1, 2, 3, 4, 5] }),
+            Async::Ready(VecChange::Replace { values: vec![0, 1, 2, 3, 4, 5] }),
             Async::NotReady,
-            Async::Ready(ListChange::InsertAt { index: 0, value: 6 }),
-            Async::Ready(ListChange::InsertAt { index: 2, value: 7 }),
-            Async::NotReady,
-            Async::NotReady,
-            Async::NotReady,
-            Async::Ready(ListChange::InsertAt { index: 5, value: 8 }),
-            Async::Ready(ListChange::InsertAt { index: 7, value: 9 }),
-            Async::Ready(ListChange::InsertAt { index: 9, value: 10 }),
-            Async::NotReady,
-            Async::Ready(ListChange::InsertAt { index: 11, value: 11 }),
-            Async::NotReady,
-            Async::Ready(ListChange::InsertAt { index: 0, value: 0 }),
+            Async::Ready(VecChange::InsertAt { index: 0, value: 6 }),
+            Async::Ready(VecChange::InsertAt { index: 2, value: 7 }),
             Async::NotReady,
             Async::NotReady,
-            Async::Ready(ListChange::InsertAt { index: 1, value: 0 }),
-            Async::Ready(ListChange::InsertAt { index: 5, value: 0 }),
             Async::NotReady,
-            Async::Ready(ListChange::InsertAt { index: 5, value: 12 }),
+            Async::Ready(VecChange::InsertAt { index: 5, value: 8 }),
+            Async::Ready(VecChange::InsertAt { index: 7, value: 9 }),
+            Async::Ready(VecChange::InsertAt { index: 9, value: 10 }),
             Async::NotReady,
-            Async::Ready(ListChange::RemoveAt { index: 0 }),
-            Async::Ready(ListChange::RemoveAt { index: 0 }),
+            Async::Ready(VecChange::InsertAt { index: 11, value: 11 }),
             Async::NotReady,
-            Async::Ready(ListChange::RemoveAt { index: 0 }),
-            Async::Ready(ListChange::RemoveAt { index: 1 }),
+            Async::Ready(VecChange::InsertAt { index: 0, value: 0 }),
             Async::NotReady,
-            Async::Ready(ListChange::RemoveAt { index: 0 }),
             Async::NotReady,
-            Async::Ready(ListChange::RemoveAt { index: 0 }),
+            Async::Ready(VecChange::InsertAt { index: 1, value: 0 }),
+            Async::Ready(VecChange::InsertAt { index: 5, value: 0 }),
+            Async::NotReady,
+            Async::Ready(VecChange::InsertAt { index: 5, value: 12 }),
+            Async::NotReady,
+            Async::Ready(VecChange::RemoveAt { index: 0 }),
+            Async::Ready(VecChange::RemoveAt { index: 0 }),
+            Async::NotReady,
+            Async::Ready(VecChange::RemoveAt { index: 0 }),
+            Async::Ready(VecChange::RemoveAt { index: 1 }),
+            Async::NotReady,
+            Async::Ready(VecChange::RemoveAt { index: 0 }),
+            Async::NotReady,
+            Async::Ready(VecChange::RemoveAt { index: 0 }),
         ]);
 
         let output = input.filter_map(|x| {
@@ -445,17 +445,17 @@ mod tests {
         });
 
         assert_eq!(changes, vec![
-            Change { length: 2, indexes: vec![None, None, None, Some(0), Some(1), None], change: ListChange::Replace { values: vec![103, 104] } },
-            Change { length: 3, indexes: vec![Some(0), None, None, None, Some(1), Some(2), None], change: ListChange::InsertAt { index: 0, value: 106 } },
-            Change { length: 4, indexes: vec![Some(0), None, Some(1), None, None, Some(2), Some(3), None], change: ListChange::InsertAt { index: 1, value: 107 } },
-            Change { length: 5, indexes: vec![Some(0), None, Some(1), None, None, Some(2), Some(3), Some(4), None], change: ListChange::InsertAt { index: 2, value: 108 } },
-            Change { length: 6, indexes: vec![Some(0), None, Some(1), None, None, Some(2), Some(3), Some(4), Some(5), None], change: ListChange::InsertAt { index: 4, value: 109 } },
-            Change { length: 7, indexes: vec![Some(0), None, Some(1), None, None, Some(2), Some(3), Some(4), Some(5), Some(6), None], change: ListChange::InsertAt { index: 6, value: 110 } },
-            Change { length: 8, indexes: vec![Some(0), None, Some(1), None, None, Some(2), Some(3), Some(4), Some(5), Some(6), None, Some(7)], change: ListChange::InsertAt { index: 7, value: 111 } },
-            Change { length: 9, indexes: vec![None, None, Some(0), None, Some(1), Some(2), None, None, None, Some(3), Some(4), Some(5), Some(6), Some(7), None, Some(8)], change: ListChange::InsertAt { index: 2, value: 112 } },
-            Change { length: 8, indexes: vec![None, Some(0), Some(1), None, None, None, Some(2), Some(3), Some(4), Some(5), Some(6), None, Some(7)], change: ListChange::RemoveAt { index: 0 } },
-            Change { length: 7, indexes: vec![None, Some(0), None, None, None, Some(1), Some(2), Some(3), Some(4), Some(5), None, Some(6)], change: ListChange::RemoveAt { index: 0 } },
-            Change { length: 6, indexes: vec![None, None, None, Some(0), Some(1), Some(2), Some(3), Some(4), None, Some(5)], change: ListChange::RemoveAt { index: 0 } },
+            Change { length: 2, indexes: vec![None, None, None, Some(0), Some(1), None], change: VecChange::Replace { values: vec![103, 104] } },
+            Change { length: 3, indexes: vec![Some(0), None, None, None, Some(1), Some(2), None], change: VecChange::InsertAt { index: 0, value: 106 } },
+            Change { length: 4, indexes: vec![Some(0), None, Some(1), None, None, Some(2), Some(3), None], change: VecChange::InsertAt { index: 1, value: 107 } },
+            Change { length: 5, indexes: vec![Some(0), None, Some(1), None, None, Some(2), Some(3), Some(4), None], change: VecChange::InsertAt { index: 2, value: 108 } },
+            Change { length: 6, indexes: vec![Some(0), None, Some(1), None, None, Some(2), Some(3), Some(4), Some(5), None], change: VecChange::InsertAt { index: 4, value: 109 } },
+            Change { length: 7, indexes: vec![Some(0), None, Some(1), None, None, Some(2), Some(3), Some(4), Some(5), Some(6), None], change: VecChange::InsertAt { index: 6, value: 110 } },
+            Change { length: 8, indexes: vec![Some(0), None, Some(1), None, None, Some(2), Some(3), Some(4), Some(5), Some(6), None, Some(7)], change: VecChange::InsertAt { index: 7, value: 111 } },
+            Change { length: 9, indexes: vec![None, None, Some(0), None, Some(1), Some(2), None, None, None, Some(3), Some(4), Some(5), Some(6), Some(7), None, Some(8)], change: VecChange::InsertAt { index: 2, value: 112 } },
+            Change { length: 8, indexes: vec![None, Some(0), Some(1), None, None, None, Some(2), Some(3), Some(4), Some(5), Some(6), None, Some(7)], change: VecChange::RemoveAt { index: 0 } },
+            Change { length: 7, indexes: vec![None, Some(0), None, None, None, Some(1), Some(2), Some(3), Some(4), Some(5), None, Some(6)], change: VecChange::RemoveAt { index: 0 } },
+            Change { length: 6, indexes: vec![None, None, None, Some(0), Some(1), Some(2), Some(3), Some(4), None, Some(5)], change: VecChange::RemoveAt { index: 0 } },
         ]);
     }
 }
