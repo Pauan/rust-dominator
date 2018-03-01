@@ -1,30 +1,5 @@
+use std::cmp::Ordering;
 use futures::{Stream, Poll, Async};
-//use std::iter::Iterator;
-
-
-fn increment_indexes(indexes: &mut [Option<usize>]) -> Option<usize> {
-    let mut first = None;
-
-    for index in indexes.into_iter() {
-        if let Some(i) = *index {
-            if let None = first {
-                first = Some(i);
-            }
-
-            *index = Some(i + 1);
-        }
-    }
-
-    first
-}
-
-fn decrement_indexes(indexes: &mut [Option<usize>]) {
-    for index in indexes {
-        if let Some(i) = *index {
-            *index = Some(i - 1);
-        }
-    }
-}
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -107,6 +82,19 @@ pub trait SignalVec {
     }
 
     #[inline]
+    fn sort_by<A, F>(self, compare: F) -> SortBy<Self, F>
+        where F: FnMut(&Self::Item, &Self::Item) -> Ordering,
+              Self: Sized {
+        SortBy {
+            pending: None,
+            values: vec![],
+            indexes: vec![],
+            signal: self,
+            compare,
+        }
+    }
+
+    #[inline]
     fn to_stream(self) -> SignalVecStream<Self> where Self: Sized {
         SignalVecStream {
             signal: self,
@@ -163,6 +151,32 @@ pub struct FilterMap<A, B> {
     callback: B,
 }
 
+impl<A, B> FilterMap<A, B> {
+    fn increment_indexes(&mut self, index: usize) -> usize {
+        let mut first = None;
+
+        for index in &mut self.indexes[index..] {
+            if let Some(i) = *index {
+                if let None = first {
+                    first = Some(i);
+                }
+
+                *index = Some(i + 1);
+            }
+        }
+
+        first.unwrap_or(self.length)
+    }
+
+    fn decrement_indexes(&mut self, index: usize) {
+        for index in &mut self.indexes[index..] {
+            if let Some(i) = *index {
+                *index = Some(i - 1);
+            }
+        }
+    }
+}
+
 impl<A, B, F> SignalVec for FilterMap<A, F>
     where A: SignalVec,
           F: FnMut(A::Item) -> Option<B> {
@@ -201,7 +215,7 @@ impl<A, B, F> SignalVec for FilterMap<A, F>
                     VecChange::InsertAt { index, value } => {
                         match (self.callback)(value) {
                             Some(value) => {
-                                let new_index = increment_indexes(&mut self.indexes[index..]).unwrap_or(self.length);
+                                let new_index = self.increment_indexes(index);
 
                                 self.indexes.insert(index, Some(new_index));
                                 self.length += 1;
@@ -223,7 +237,7 @@ impl<A, B, F> SignalVec for FilterMap<A, F>
                                         Async::Ready(Some(VecChange::UpdateAt { index: old_index, value }))
                                     },
                                     None => {
-                                        let new_index = increment_indexes(&mut self.indexes[(index + 1)..]).unwrap_or(self.length);
+                                        let new_index = self.increment_indexes(index + 1);
 
                                         self.indexes[index] = Some(new_index);
                                         self.length += 1;
@@ -237,7 +251,7 @@ impl<A, B, F> SignalVec for FilterMap<A, F>
                                     Some(old_index) => {
                                         self.indexes[index] = None;
 
-                                        decrement_indexes(&mut self.indexes[(index + 1)..]);
+                                        self.decrement_indexes(index + 1);
                                         self.length -= 1;
 
                                         Async::Ready(Some(VecChange::RemoveAt { index: old_index }))
@@ -253,7 +267,7 @@ impl<A, B, F> SignalVec for FilterMap<A, F>
                     VecChange::RemoveAt { index } => {
                         match self.indexes.remove(index) {
                             Some(old_index) => {
-                                decrement_indexes(&mut self.indexes[index..]);
+                                self.decrement_indexes(index);
                                 self.length -= 1;
 
                                 Async::Ready(Some(VecChange::RemoveAt { index: old_index }))
@@ -296,6 +310,207 @@ impl<A, B, F> SignalVec for FilterMap<A, F>
                     },
                 },
             }
+        }
+    }
+}
+
+
+pub struct SortBy<A: SignalVec, B> {
+    pending: Option<Async<Option<VecChange<A::Item>>>>,
+    values: Vec<A::Item>,
+    indexes: Vec<usize>,
+    signal: A,
+    compare: B,
+}
+
+impl<A, F> SortBy<A, F>
+    where A: SignalVec,
+          F: FnMut(&A::Item, &A::Item) -> Ordering {
+    // TODO should this inline ?
+    fn binary_search(&mut self, index: usize) -> Result<usize, usize> {
+        let compare = &mut self.compare;
+        let values = &self.values;
+        let value = &values[index];
+
+        // TODO use get_unchecked ?
+        self.indexes.binary_search_by(|i| compare(&values[*i], value).then_with(|| i.cmp(&index)))
+    }
+
+    fn binary_search_insert(&mut self, index: usize) -> usize {
+        match self.binary_search(index) {
+            Ok(_) => panic!("Value already exists"),
+            Err(new_index) => new_index,
+        }
+    }
+
+    fn binary_search_remove(&mut self, index: usize) -> usize {
+        self.binary_search(index).expect("Could not find value")
+    }
+
+    fn increment_indexes(&mut self, start: usize) {
+        for index in &mut self.indexes {
+            let i = *index;
+
+            if i >= start {
+                *index = i + 1;
+            }
+        }
+    }
+
+    fn decrement_indexes(&mut self, start: usize) {
+        for index in &mut self.indexes {
+            let i = *index;
+
+            if i > start {
+                *index = i - 1;
+            }
+        }
+    }
+
+    fn insert_at(&mut self, sorted_index: usize, index: usize, value: A::Item) -> Async<Option<VecChange<A::Item>>> {
+        if sorted_index == self.indexes.len() {
+            self.indexes.push(index);
+
+            Async::Ready(Some(VecChange::Push {
+                value,
+            }))
+
+        } else {
+            self.indexes.insert(sorted_index, index);
+
+            Async::Ready(Some(VecChange::InsertAt {
+                index: sorted_index,
+                value,
+            }))
+        }
+    }
+
+    fn remove_at(&mut self, sorted_index: usize) -> Async<Option<VecChange<A::Item>>> {
+        if sorted_index == (self.indexes.len() - 1) {
+            self.indexes.pop();
+
+            Async::Ready(Some(VecChange::Pop {}))
+
+        } else {
+            self.indexes.remove(sorted_index);
+
+            Async::Ready(Some(VecChange::RemoveAt {
+                index: sorted_index,
+            }))
+        }
+    }
+}
+
+impl<A, F> SignalVec for SortBy<A, F>
+    where A: SignalVec,
+          F: FnMut(&A::Item, &A::Item) -> Ordering,
+          A::Item: Clone {
+    type Item = A::Item;
+
+    // TODO figure out a faster implementation of this
+    fn poll(&mut self) -> Async<Option<VecChange<Self::Item>>> {
+        match self.pending.take() {
+            Some(value) => value,
+            None => match self.signal.poll() {
+                Async::NotReady => Async::NotReady,
+                Async::Ready(None) => Async::Ready(None),
+                Async::Ready(Some(change)) => match change {
+                    VecChange::Replace { mut values } => {
+                        // TODO can this be made faster ?
+                        let mut indexes: Vec<usize> = (0..values.len()).collect();
+
+                        // TODO use get_unchecked ?
+                        indexes.sort_unstable_by(|a, b| (self.compare)(&values[*a], &values[*b]).then_with(|| a.cmp(b)));
+
+                        let output = Async::Ready(Some(VecChange::Replace {
+                            // TODO use get_unchecked ?
+                            values: indexes.iter().map(|i| values[*i].clone()).collect()
+                        }));
+
+                        self.values = values;
+                        self.indexes = indexes;
+
+                        output
+                    },
+
+                    VecChange::InsertAt { index, value } => {
+                        let new_value = value.clone();
+
+                        self.values.insert(index, value);
+
+                        self.increment_indexes(index);
+
+                        let sorted_index = self.binary_search_insert(index);
+
+                        self.insert_at(sorted_index, index, new_value)
+                    },
+
+                    VecChange::Push { value } => {
+                        let new_value = value.clone();
+
+                        let index = self.values.len();
+
+                        self.values.push(value);
+
+                        let sorted_index = self.binary_search_insert(index);
+
+                        self.insert_at(sorted_index, index, new_value)
+                    },
+
+                    VecChange::UpdateAt { index, value } => {
+                        let old_index = self.binary_search_remove(index);
+
+                        let old_output = self.remove_at(old_index);
+
+                        let new_value = value.clone();
+
+                        self.values[index] = value;
+
+                        let new_index = self.binary_search_insert(index);
+
+                        if old_index == new_index {
+                            self.indexes.insert(new_index, index);
+
+                            Async::Ready(Some(VecChange::UpdateAt {
+                                index: new_index,
+                                value: new_value,
+                            }))
+
+                        } else {
+                            let new_output = self.insert_at(new_index, index, new_value);
+                            self.pending = Some(new_output);
+
+                            old_output
+                        }
+                    },
+
+                    VecChange::RemoveAt { index } => {
+                        let sorted_index = self.binary_search_remove(index);
+
+                        self.values.remove(index);
+
+                        self.decrement_indexes(index);
+
+                        self.remove_at(sorted_index)
+                    },
+
+                    VecChange::Pop {} => {
+                        let index = self.values.len() - 1;
+
+                        let sorted_index = self.binary_search_remove(index);
+
+                        self.values.pop();
+
+                        self.remove_at(sorted_index)
+                    },
+
+                    VecChange::Clear {} => {
+                        self.values = vec![];
+                        self.indexes = vec![];
+                        Async::Ready(Some(VecChange::Clear {}))
+                    },
+                },
+            },
         }
     }
 }
