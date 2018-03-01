@@ -5,6 +5,7 @@ use stdweb::unstable::TryInto;
 use dom::{Dom, IStyle, Dynamic};
 use callbacks::Callbacks;
 use signals::signal::Signal;
+use signals::signal_vec::SignalVec;
 use operations;
 
 
@@ -53,6 +54,13 @@ impl<'a> Text for &'a str {
     #[inline]
     fn into_dom(self) -> Dom {
         Dom::new(js!( return document.createTextNode(@{self}); ).try_into().unwrap())
+    }
+}
+
+impl<'a> Text for String {
+    #[inline]
+    fn into_dom(self) -> Dom {
+        self.as_str().into_dom()
     }
 }
 
@@ -151,11 +159,18 @@ impl<A: Signal<Item = bool> + 'static> Focused for Dynamic<A> {
     }
 }
 
-impl<A, B> Children for Dynamic<B>
+/*impl<A, B> Children for Dynamic<B>
     where A: IntoIterator<Item = Dom>,
           B: Signal<Item = A> + 'static {
     #[inline]
     fn insert_children<C: INode + Clone + 'static>(self, element: &C, callbacks: &mut Callbacks) {
         operations::insert_children_signal(element, callbacks, self.0)
+    }
+}*/
+
+impl<A> Children for Dynamic<A> where A: SignalVec<Item = Dom> + 'static {
+    #[inline]
+    fn insert_children<C: INode + Clone + 'static>(self, element: &C, callbacks: &mut Callbacks) {
+        operations::insert_children_signal_vec(element, callbacks, self.0)
     }
 }

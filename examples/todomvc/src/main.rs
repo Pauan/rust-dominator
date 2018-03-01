@@ -16,7 +16,9 @@ use stdweb::web::event::ClickEvent;
 use stdweb::web::IParentNode;
 
 use signals::signal;
+use signals::signal_vec;
 use signals::signal::Signal;
+use signals::signal_vec::SignalVec;
 use dominator::traits::*;
 use dominator::{Dom, text};
 
@@ -36,7 +38,7 @@ fn main() {
 
     let mut count = 0;
 
-    let (sender_elements, receiver_elements) = signal::unsync::mutable(count);
+    let (sender_count, receiver_count) = signal::unsync::mutable(count);
 
 
     let mut width: u32 = 10;
@@ -45,6 +47,8 @@ fn main() {
     let (sender2, receiver2) = signal::unsync::mutable(vec![width]);
     let (sender3, receiver3) = signal::unsync::mutable(vec![width]);
     let (text_sender, text_receiver) = signal::unsync::mutable(format!("{}", width));
+
+    let (mut sender_elements, receiver_elements) = signal_vec::unsync::mutable();
 
     /*let style_width = receiver1.switch(move |x| {
         receiver2.clone().switch(move |y| {
@@ -62,6 +66,22 @@ fn main() {
     };
 
 
+    let mut elements_index = 0;
+
+    let mut increment = move || {
+        elements_index += 1;
+        elements_index
+    };
+
+    sender_elements.push((increment(), 1));
+    sender_elements.push((increment(), 2));
+    sender_elements.push((increment(), 3));
+    sender_elements.push((increment(), 4));
+    sender_elements.push((increment(), 5));
+    sender_elements.push((increment(), 6));
+    sender_elements.push((increment(), 7));
+
+
     dominator::append_dom(&document().query_selector("body").unwrap().unwrap(),
         html!("div", {
             style("border", "10px solid blue");
@@ -69,6 +89,8 @@ fn main() {
                 text("Testing testing!!!"),
 
                 text(text_receiver.dynamic()),
+
+                text(receiver_count.map(|x| format!(" - {}", x)).dynamic()),
 
                 html!("div", {
                     style("width", style_width.dynamic());
@@ -84,30 +106,36 @@ fn main() {
                         sender2.set(vec![width]).unwrap();
                         sender3.set(vec![width]).unwrap();
                         text_sender.set(format!("{}", width)).unwrap();
-                        sender_elements.set(count).unwrap();
+                        sender_count.set(count).unwrap();
+                        sender_elements.push((increment(), 8));
+                        sender_elements.push((increment(), 0));
+                        sender_elements.push((increment(), 5));
+                        sender_elements.push((increment(), 9));
                     });
-                    children(receiver_elements.map(|count| {
-                        (0..count).map(|_| {
-                            html!("div", {
-                                style("border", "5px solid red");
-                                style("width", "50px");
-                                style("height", "50px");
+                    children(
+                        receiver_elements
+                            .filter_map(|(x, y)| {
+                                if y > 2 {
+                                    Some((x, y + 100))
+                                } else {
+                                    None
+                                }
                             })
-                        })
-                    }).dynamic());
-                }),
-
-                html!("div", {
-                    style("width", "50px");
-                    style("height", "50px");
-                    style("background-color", "red");
-                    children(&mut [
-                        html!("div", {
-                            style("width", "10px");
-                            style("height", "10px");
-                            style("background-color", "orange");
-                        })
-                    ]);
+                            .sort_by(|&(_, a), &(_, b)| {
+                                a.cmp(&b).reverse()
+                            })
+                            .map(|(x, y)| {
+                                html!("div", {
+                                    style("border", "5px solid red");
+                                    style("width", "100px");
+                                    style("height", "50px");
+                                    children(&mut [
+                                        text(format!("({}, {})", x, y))
+                                    ]);
+                                })
+                            })
+                            .dynamic()
+                    );
                 }),
 
                 html!("div", {

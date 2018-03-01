@@ -10,6 +10,30 @@ pub fn create_element_ns<A: IElement>(name: &str, namespace: &str) -> A
     js!( return document.createElementNS(@{namespace}, @{name}); ).try_into().unwrap()
 }
 
+#[inline]
+pub fn insert_at<A: INode, B: INode>(parent: &A, index: u32, child: &B) {
+    js! { @(no_return)
+        var parent = @{parent.as_ref()};
+        parent.insertBefore(@{child.as_ref()}, parent.childNodes[@{index}]);
+    }
+}
+
+#[inline]
+pub fn update_at<A: INode, B: INode>(parent: &A, index: u32, child: &B) {
+    js! { @(no_return)
+        var parent = @{parent.as_ref()};
+        parent.replaceChild(@{child.as_ref()}, parent.childNodes[@{index}]);
+    }
+}
+
+#[inline]
+pub fn remove_at<A: INode>(parent: &A, index: u32) {
+    js! { @(no_return)
+        var parent = @{parent.as_ref()};
+        parent.removeChild(parent.childNodes[@{index}]);
+    }
+}
+
 // TODO this should be in stdweb
 #[inline]
 pub fn set_text(element: &TextNode, value: &str) {

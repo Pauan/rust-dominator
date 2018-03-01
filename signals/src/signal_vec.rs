@@ -1,5 +1,7 @@
 use std::cmp::Ordering;
 use futures::{Stream, Poll, Async};
+use futures::stream::ForEach;
+use futures::future::IntoFuture;
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,7 +84,7 @@ pub trait SignalVec {
     }
 
     #[inline]
-    fn sort_by<A, F>(self, compare: F) -> SortBy<Self, F>
+    fn sort_by<F>(self, compare: F) -> SortBy<Self, F>
         where F: FnMut(&Self::Item, &Self::Item) -> Ordering,
               Self: Sized {
         SortBy {
@@ -99,6 +101,17 @@ pub trait SignalVec {
         SignalVecStream {
             signal: self,
         }
+    }
+
+    #[inline]
+    // TODO file Rust bug about bad error message when `callback` isn't marked as `mut`
+    fn for_each<F, U>(self, callback: F) -> ForEach<SignalVecStream<Self>, F, U>
+        where F: FnMut(VecChange<Self::Item>) -> U,
+              // TODO allow for errors ?
+              U: IntoFuture<Item = (), Error = ()>,
+              Self:Sized {
+
+        self.to_stream().for_each(callback)
     }
 
     #[inline]
@@ -512,6 +525,112 @@ impl<A, F> SignalVec for SortBy<A, F>
                 },
             },
         }
+    }
+}
+
+
+// TODO verify that this is correct
+pub mod unsync {
+    use super::{SignalVec, VecChange};
+    use futures::unsync::mpsc;
+    use futures::{Async, Stream};
+
+
+    pub struct Sender<A> {
+        values: Vec<A>,
+        sender: mpsc::UnboundedSender<VecChange<A>>,
+    }
+
+    impl<A: Clone> Sender<A> {
+        pub fn push(&mut self, value: A) {
+            let clone = value.clone();
+            self.values.push(value);
+            self.sender.unbounded_send(VecChange::Push { value: clone }).unwrap();
+        }
+
+        pub fn insert(&mut self, index: usize, value: A) {
+            let clone = value.clone();
+
+            if index == self.values.len() {
+                self.values.push(value);
+                self.sender.unbounded_send(VecChange::Push { value: clone }).unwrap();
+
+            } else {
+                self.values.insert(index, value);
+                self.sender.unbounded_send(VecChange::InsertAt { index, value: clone }).unwrap();
+            }
+        }
+
+        // TODO replace this with something else, like entry or IndexMut or whatever
+        pub fn update(&mut self, index: usize, value: A) {
+            let clone = value.clone();
+            self.values[index] = value;
+            self.sender.unbounded_send(VecChange::UpdateAt { index, value: clone }).unwrap();
+        }
+    }
+
+    impl<A> Sender<A> {
+        pub fn pop(&mut self) -> Option<A> {
+            let value = self.values.pop();
+
+            if let Some(_) = value {
+                self.sender.unbounded_send(VecChange::Pop {}).unwrap();
+            }
+
+            value
+        }
+
+        pub fn remove(&mut self, index: usize) -> A {
+            let len = self.values.len();
+
+            let value = self.values.remove(index);
+
+            if index == (len - 1) {
+                self.sender.unbounded_send(VecChange::Pop {}).unwrap();
+
+            } else {
+                self.sender.unbounded_send(VecChange::RemoveAt { index }).unwrap();
+            }
+
+            value
+        }
+
+        pub fn clear(&mut self) {
+            let len = self.values.len();
+
+            self.values.clear();
+
+            if len > 0 {
+                self.sender.unbounded_send(VecChange::Clear {}).unwrap();
+            }
+        }
+    }
+
+
+    pub struct Receiver<A> {
+        receiver: mpsc::UnboundedReceiver<VecChange<A>>,
+    }
+
+    // TODO have it send a Replace at the beginning
+    impl<A> SignalVec for Receiver<A> {
+        type Item = A;
+
+        #[inline]
+        fn poll(&mut self) -> Async<Option<VecChange<Self::Item>>> {
+            self.receiver.poll().unwrap()
+        }
+    }
+
+
+    #[inline]
+    pub fn mutable<A>() -> (Sender<A>, Receiver<A>) {
+        let (sender, receiver) = mpsc::unbounded();
+
+        let sender = Sender { values: vec![], sender };
+
+        let receiver = Receiver { receiver };
+
+        (sender, receiver)
     }
 }
 
