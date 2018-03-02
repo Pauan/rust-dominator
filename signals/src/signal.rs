@@ -438,6 +438,7 @@ pub mod unsync {
     }
 
 
+    #[derive(Clone)]
     pub struct Sender<A> {
         inner: Weak<RefCell<Inner<A>>>,
     }
