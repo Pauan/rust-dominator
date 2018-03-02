@@ -525,19 +525,11 @@ macro_rules! __internal_map_clone {
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! __internal_map_rc_new {
-    ($value:expr) => {
-        $crate::signal::Signal::map($value, ::std::rc::Rc::new)
-    };
-}
-
-#[doc(hidden)]
-#[macro_export]
 macro_rules! __internal_map2 {
     ($f:expr, $old_pair:pat, $old_expr:expr, { $($lets:stmt);* }, let $name:ident: $t:ty = $value:expr;) => {
         $crate::signal::Signal::map2(
             $old_expr,
-            __internal_map_rc_new!($value),
+            $value,
             |&mut $old_pair, $name| {
                 $($lets;)*
                 let $name: $t = __internal_map_clone!($name);
@@ -551,7 +543,7 @@ macro_rules! __internal_map2 {
             ($old_pair, ref mut $name),
             $crate::signal::Signal::map2(
                 $old_expr,
-                __internal_map_rc_new!($value),
+                $value,
                 $crate::signal::pair_clone
             ),
             { $($lets;)* let $name: $t = __internal_map_clone!($name) },
@@ -565,15 +557,15 @@ macro_rules! __internal_map2 {
 macro_rules! __internal_map {
     ($f:expr, let $name:ident: $t:ty = $value:expr;) => {
         $crate::signal::Signal::map($value, |$name| {
-            let $name: $t = ::std::rc::Rc::new($name);
+            let $name: $t = $name;
             $f
         })
     };
     ($f:expr, let $name1:ident: $t1:ty = $value1:expr;
               let $name2:ident: $t2:ty = $value2:expr;) => {
         $crate::signal::Signal::map2(
-            __internal_map_rc_new!($value1),
-            __internal_map_rc_new!($value2),
+            $value1,
+            $value2,
             |$name1, $name2| {
                 let $name1: $t1 = __internal_map_clone!($name1);
                 let $name2: $t2 = __internal_map_clone!($name2);
@@ -585,7 +577,7 @@ macro_rules! __internal_map {
         __internal_map2!(
             $f,
             ref mut $name,
-            __internal_map_rc_new!($value),
+            $value,
             { let $name: $t = __internal_map_clone!($name) },
             $($args)+
         )
@@ -602,10 +594,10 @@ macro_rules! __internal_map_lets {
         __internal_map_lets!($f, { $($lets)* let $name: $t = $value; }, $($args)*)
     };
     ($f:expr, { $($lets:tt)* }, let $name:ident = $value:expr, $($args:tt)*) => {
-        __internal_map_lets!($f, { $($lets)* let $name: ::std::rc::Rc<_> = $value; }, $($args)*)
+        __internal_map_lets!($f, { $($lets)* let $name: _ = $value; }, $($args)*)
     };
     ($f:expr, { $($lets:tt)* }, $name:ident, $($args:tt)*) => {
-        __internal_map_lets!($f, { $($lets)* let $name: ::std::rc::Rc<_> = $name; }, $($args)*)
+        __internal_map_lets!($f, { $($lets)* let $name: _ = $name; }, $($args)*)
     };
 }
 
@@ -622,7 +614,7 @@ macro_rules! __internal_map_split {
 }
 
 #[macro_export]
-macro_rules! map_rc {
+macro_rules! map_clone {
     ($($input:tt)*) => { __internal_map_split!((), $($input)*) };
 }
 
@@ -634,9 +626,9 @@ mod tests {
     fn map_macro_ident_1() {
         let a = super::always(1);
 
-        let mut s = map_rc!(a => {
-            let a: ::std::rc::Rc<u32> = a;
-            *a + 1
+        let mut s = map_clone!(a => {
+            let a: u32 = a;
+            a + 1
         });
 
         assert_eq!(super::Signal::poll(&mut s), super::State::Changed(2));
@@ -648,10 +640,10 @@ mod tests {
         let a = super::always(1);
         let b = super::always(2);
 
-        let mut s = map_rc!(a, b => {
-            let a: ::std::rc::Rc<u32> = a;
-            let b: ::std::rc::Rc<u32> = b;
-            *a + *b
+        let mut s = map_clone!(a, b => {
+            let a: u32 = a;
+            let b: u32 = b;
+            a + b
         });
 
         assert_eq!(super::Signal::poll(&mut s), super::State::Changed(3));
@@ -664,11 +656,11 @@ mod tests {
         let b = super::always(2);
         let c = super::always(3);
 
-        let mut s = map_rc!(a, b, c => {
-            let a: ::std::rc::Rc<u32> = a;
-            let b: ::std::rc::Rc<u32> = b;
-            let c: ::std::rc::Rc<u32> = c;
-            *a + *b + *c
+        let mut s = map_clone!(a, b, c => {
+            let a: u32 = a;
+            let b: u32 = b;
+            let c: u32 = c;
+            a + b + c
         });
 
         assert_eq!(super::Signal::poll(&mut s), super::State::Changed(6));
@@ -682,12 +674,12 @@ mod tests {
         let c = super::always(3);
         let d = super::always(4);
 
-        let mut s = map_rc!(a, b, c, d => {
-            let a: ::std::rc::Rc<u32> = a;
-            let b: ::std::rc::Rc<u32> = b;
-            let c: ::std::rc::Rc<u32> = c;
-            let d: ::std::rc::Rc<u32> = d;
-            *a + *b + *c + *d
+        let mut s = map_clone!(a, b, c, d => {
+            let a: u32 = a;
+            let b: u32 = b;
+            let c: u32 = c;
+            let d: u32 = d;
+            a + b + c + d
         });
 
         assert_eq!(super::Signal::poll(&mut s), super::State::Changed(10));
@@ -702,13 +694,13 @@ mod tests {
         let d = super::always(4);
         let e = super::always(5);
 
-        let mut s = map_rc!(a, b, c, d, e => {
-            let a: ::std::rc::Rc<u32> = a;
-            let b: ::std::rc::Rc<u32> = b;
-            let c: ::std::rc::Rc<u32> = c;
-            let d: ::std::rc::Rc<u32> = d;
-            let e: ::std::rc::Rc<u32> = e;
-            *a + *b + *c + *d + *e
+        let mut s = map_clone!(a, b, c, d, e => {
+            let a: u32 = a;
+            let b: u32 = b;
+            let c: u32 = c;
+            let d: u32 = d;
+            let e: u32 = e;
+            a + b + c + d + e
         });
 
         assert_eq!(super::Signal::poll(&mut s), super::State::Changed(15));
@@ -720,9 +712,9 @@ mod tests {
     fn map_macro_let_1() {
         let a2 = super::always(1);
 
-        let mut s = map_rc!(let a = a2 => {
-            let a: ::std::rc::Rc<u32> = a;
-            *a + 1
+        let mut s = map_clone!(let a = a2 => {
+            let a: u32 = a;
+            a + 1
         });
 
         assert_eq!(super::Signal::poll(&mut s), super::State::Changed(2));
@@ -734,10 +726,10 @@ mod tests {
         let a2 = super::always(1);
         let b2 = super::always(2);
 
-        let mut s = map_rc!(let a = a2, let b = b2 => {
-            let a: ::std::rc::Rc<u32> = a;
-            let b: ::std::rc::Rc<u32> = b;
-            *a + *b
+        let mut s = map_clone!(let a = a2, let b = b2 => {
+            let a: u32 = a;
+            let b: u32 = b;
+            a + b
         });
 
         assert_eq!(super::Signal::poll(&mut s), super::State::Changed(3));
@@ -750,11 +742,11 @@ mod tests {
         let b2 = super::always(2);
         let c2 = super::always(3);
 
-        let mut s = map_rc!(let a = a2, let b = b2, let c = c2 => {
-            let a: ::std::rc::Rc<u32> = a;
-            let b: ::std::rc::Rc<u32> = b;
-            let c: ::std::rc::Rc<u32> = c;
-            *a + *b + *c
+        let mut s = map_clone!(let a = a2, let b = b2, let c = c2 => {
+            let a: u32 = a;
+            let b: u32 = b;
+            let c: u32 = c;
+            a + b + c
         });
 
         assert_eq!(super::Signal::poll(&mut s), super::State::Changed(6));
@@ -768,12 +760,12 @@ mod tests {
         let c2 = super::always(3);
         let d2 = super::always(4);
 
-        let mut s = map_rc!(let a = a2, let b = b2, let c = c2, let d = d2 => {
-            let a: ::std::rc::Rc<u32> = a;
-            let b: ::std::rc::Rc<u32> = b;
-            let c: ::std::rc::Rc<u32> = c;
-            let d: ::std::rc::Rc<u32> = d;
-            *a + *b + *c + *d
+        let mut s = map_clone!(let a = a2, let b = b2, let c = c2, let d = d2 => {
+            let a: u32 = a;
+            let b: u32 = b;
+            let c: u32 = c;
+            let d: u32 = d;
+            a + b + c + d
         });
 
         assert_eq!(super::Signal::poll(&mut s), super::State::Changed(10));
@@ -788,13 +780,13 @@ mod tests {
         let d2 = super::always(4);
         let e2 = super::always(5);
 
-        let mut s = map_rc!(let a = a2, let b = b2, let c = c2, let d = d2, let e = e2 => {
-            let a: ::std::rc::Rc<u32> = a;
-            let b: ::std::rc::Rc<u32> = b;
-            let c: ::std::rc::Rc<u32> = c;
-            let d: ::std::rc::Rc<u32> = d;
-            let e: ::std::rc::Rc<u32> = e;
-            *a + *b + *c + *d + *e
+        let mut s = map_clone!(let a = a2, let b = b2, let c = c2, let d = d2, let e = e2 => {
+            let a: u32 = a;
+            let b: u32 = b;
+            let c: u32 = c;
+            let d: u32 = d;
+            let e: u32 = e;
+            a + b + c + d + e
         });
 
         assert_eq!(super::Signal::poll(&mut s), super::State::Changed(15));
@@ -806,10 +798,10 @@ mod tests {
     fn map_macro_let_type_1() {
         let a2 = super::always(1);
 
-        let mut s = map_rc! {
-            let a: ::std::rc::Rc<u32> = a2 => {
-                let a: ::std::rc::Rc<u32> = a;
-                *a + 1
+        let mut s = map_clone! {
+            let a: u32 = a2 => {
+                let a: u32 = a;
+                a + 1
             }
         };
 
@@ -822,12 +814,12 @@ mod tests {
         let a2 = super::always(1);
         let b2 = super::always(2);
 
-        let mut s = map_rc! {
-            let a: ::std::rc::Rc<u32> = a2,
-            let b: ::std::rc::Rc<u32> = b2 => {
-                let a: ::std::rc::Rc<u32> = a;
-                let b: ::std::rc::Rc<u32> = b;
-                *a + *b
+        let mut s = map_clone! {
+            let a: u32 = a2,
+            let b: u32 = b2 => {
+                let a: u32 = a;
+                let b: u32 = b;
+                a + b
             }
         };
 
@@ -841,14 +833,14 @@ mod tests {
         let b2 = super::always(2);
         let c2 = super::always(3);
 
-        let mut s = map_rc! {
-            let a: ::std::rc::Rc<u32> = a2,
-            let b: ::std::rc::Rc<u32> = b2,
-            let c: ::std::rc::Rc<u32> = c2 => {
-                let a: ::std::rc::Rc<u32> = a;
-                let b: ::std::rc::Rc<u32> = b;
-                let c: ::std::rc::Rc<u32> = c;
-                *a + *b + *c
+        let mut s = map_clone! {
+            let a: u32 = a2,
+            let b: u32 = b2,
+            let c: u32 = c2 => {
+                let a: u32 = a;
+                let b: u32 = b;
+                let c: u32 = c;
+                a + b + c
             }
         };
 
@@ -863,16 +855,16 @@ mod tests {
         let c2 = super::always(3);
         let d2 = super::always(4);
 
-        let mut s = map_rc! {
-            let a: ::std::rc::Rc<u32> = a2,
-            let b: ::std::rc::Rc<u32> = b2,
-            let c: ::std::rc::Rc<u32> = c2,
-            let d: ::std::rc::Rc<u32> = d2 => {
-                let a: ::std::rc::Rc<u32> = a;
-                let b: ::std::rc::Rc<u32> = b;
-                let c: ::std::rc::Rc<u32> = c;
-                let d: ::std::rc::Rc<u32> = d;
-                *a + *b + *c + *d
+        let mut s = map_clone! {
+            let a: u32 = a2,
+            let b: u32 = b2,
+            let c: u32 = c2,
+            let d: u32 = d2 => {
+                let a: u32 = a;
+                let b: u32 = b;
+                let c: u32 = c;
+                let d: u32 = d;
+                a + b + c + d
             }
         };
 
@@ -888,18 +880,18 @@ mod tests {
         let d2 = super::always(4);
         let e2 = super::always(5);
 
-        let mut s = map_rc! {
-            let a: ::std::rc::Rc<u32> = a2,
-            let b: ::std::rc::Rc<u32> = b2,
-            let c: ::std::rc::Rc<u32> = c2,
-            let d: ::std::rc::Rc<u32> = d2,
-            let e: ::std::rc::Rc<u32> = e2 => {
-                let a: ::std::rc::Rc<u32> = a;
-                let b: ::std::rc::Rc<u32> = b;
-                let c: ::std::rc::Rc<u32> = c;
-                let d: ::std::rc::Rc<u32> = d;
-                let e: ::std::rc::Rc<u32> = e;
-                *a + *b + *c + *d + *e
+        let mut s = map_clone! {
+            let a: u32 = a2,
+            let b: u32 = b2,
+            let c: u32 = c2,
+            let d: u32 = d2,
+            let e: u32 = e2 => {
+                let a: u32 = a;
+                let b: u32 = b;
+                let c: u32 = c;
+                let d: u32 = d;
+                let e: u32 = e;
+                a + b + c + d + e
             }
         };
 
