@@ -4,6 +4,7 @@ use futures::{Async, Poll, task};
 use futures::future::{Future, IntoFuture};
 use futures::stream::{Stream, ForEach};
 use discard::{Discard, DiscardOnDrop};
+use signal_vec::{VecChange, SignalVec};
 
 
 // TODO add in Done to allow the Signal to end ?
@@ -107,9 +108,17 @@ pub trait Signal {
         where F: FnMut(Self::Item) -> U,
               // TODO allow for errors ?
               U: IntoFuture<Item = (), Error = ()>,
-              Self:Sized {
+              Self: Sized {
 
         self.to_stream().for_each(callback)
+    }
+
+    #[inline]
+    fn to_signal_vec(self) -> SignalSignalVec<Self>
+        where Self: Sized {
+        SignalSignalVec {
+            signal: self
+        }
     }
 
     #[inline]
@@ -266,6 +275,24 @@ impl<A, B, C> Signal for Map<A, B>
     #[inline]
     fn poll(&mut self) -> State<Self::Item> {
         self.signal.poll().map(|value| (self.callback)(value))
+    }
+}
+
+
+pub struct SignalSignalVec<A> {
+    signal: A,
+}
+
+impl<A, B> SignalVec for SignalSignalVec<A>
+    where A: Signal<Item = Vec<B>> {
+    type Item = B;
+
+    #[inline]
+    fn poll(&mut self) -> Async<Option<VecChange<B>>> {
+        match self.signal.poll() {
+            State::Changed(values) => Async::Ready(Some(VecChange::Replace { values })),
+            State::NotChanged => Async::NotReady,
+        }
     }
 }
 
