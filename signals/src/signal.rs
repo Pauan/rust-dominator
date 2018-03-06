@@ -125,6 +125,14 @@ pub trait Signal {
     fn as_mut(&mut self) -> &mut Self {
         self
     }
+
+    /// Convert to a signal which can be cloned
+    #[inline]
+    fn broadcast(self) -> Broadcast<Self>
+        where Self: Sized,
+              <Self as Signal>::Item: Clone {
+        Broadcast::new(self)
+    }
 }
 
 
@@ -450,6 +458,109 @@ impl<A> Signal for Flatten<A>
     }
 }
 
+#[doc(hidden)]
+pub struct Broadcast<A: Signal>
+    where <A as Signal>::Item: Clone {
+
+    // TODO: should these be Arcs ??
+
+    // The state of this instance
+    state: Rc<RefCell<Option<<A as Signal>::Item>>>,
+
+    // The state of the whole broadcast
+    inner: Rc<RefCell<BroadcastInner<A>>>
+}
+
+impl<A: Signal> Broadcast<A>
+    where <A as Signal>::Item: Clone {
+    fn new(signal: A) -> Self {
+        let state = Rc::new(RefCell::new(None));
+        let inner = BroadcastInner {
+            signal: signal,
+            children: vec![Rc::downgrade(&state)]
+        };
+
+        Self {
+            state: state,
+            inner: Rc::new(RefCell::new(inner))
+        }
+    }
+}
+
+struct BroadcastInner<A: Signal> {
+    children: Vec<Weak<RefCell<Option<<A as Signal>::Item>>>>,
+    signal: A
+}
+
+impl<A: Signal> Clone for Broadcast<A>
+    where <A as Signal>::Item: Clone {
+    fn clone(&self) -> Self {
+        let new_state = Rc::new(RefCell::new(self.state.borrow().clone()));
+        self.inner.borrow_mut().children.push(Rc::downgrade(&new_state));
+
+        Self {
+            state: new_state,
+            inner: Rc::clone(&self.inner)
+        }
+    }
+}
+
+impl<A: Signal> Signal for Broadcast<A>
+    where <A as Signal>::Item: Clone  {
+    type Item = <A as Signal>::Item;
+
+    fn poll(&mut self) -> State<Self::Item> {
+        let mut inner = self.inner.borrow_mut();
+
+        match inner.signal.poll() {
+            State::Changed (value) => {
+
+                // Need to broadcast through the whole lot of children.
+                //
+                // We'll also take this opportunity to clean up any
+                // children that have been dropped.
+                //
+                // Claim: The polling on the inner signal will mean that all
+                // polled children will be woken up when the inner is set,
+                // so we don't need tasks
+
+                let mut i = 0;
+                let mut removed_elements = 0;
+                let mut children = &mut inner.children;
+
+                // Either:
+                //  - the child is still alive; set its state
+                //  - the child has been dropped; copy the next weak ref into
+                //    this vector element.
+
+                for _ in 0..children.len() {
+                    if let Some(state) = children[i].upgrade() {
+                        *state.borrow_mut() = Some(value.clone());
+                        i += 1;
+                    } else {
+                        removed_elements += 1;
+                        if (i + removed_elements) != children.len() {
+                            children[i] = children[i + removed_elements].clone();
+                        }
+                    }
+                }
+
+                // We ran the whole array and collected it to the front, can
+                // drop the rest
+                children.resize(i, Weak::new());
+            },
+            State::NotChanged => { }
+        }
+
+        match self.state.borrow_mut().take() {
+            Some(value) => State::Changed(value),
+            None => {
+                State::NotChanged
+            }
+        }
+    }
+}
+
 
 // TODO verify that this is correct
 pub mod unsync {
@@ -458,7 +569,7 @@ pub mod unsync {
     use std::cell::RefCell;
     use futures::task;
 
-
+    #[derive(Debug)]
     struct Inner<A> {
         value: Option<A>,
         task: Option<task::Task>,
@@ -924,5 +1035,28 @@ mod tests {
 
         assert_eq!(super::Signal::poll(&mut s), super::State::Changed(15));
         assert_eq!(super::Signal::poll(&mut s), super::State::NotChanged);
+    }
+
+    #[test]
+    fn test_broadcast() {
+        use super::Signal;
+
+        let (s, r) = super::unsync::mutable(0);
+
+        let mut r1 = r.broadcast();
+        let mut r2 = r1.clone();
+
+        // TODO: NotChanged checks panic due to futures::task::current()
+
+        assert_eq! (r1.poll(), super::State::Changed(0));
+        // assert_eq! (r1.poll(), super::State::NotChanged);
+
+        assert_eq! (r2.poll(), super::State::Changed(0));
+        // assert_eq! (r2.poll(), super::State::NotChanged);
+
+        // TODO: Should a freshly-cloned receiver get the last broadcast?
+        //
+        // At the moment it is in the same state as what it cloned from
+        // assert_eq! (r1.clone().poll(), super::State::NotChanged);
     }
 }
