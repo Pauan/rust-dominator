@@ -536,45 +536,33 @@ pub mod unsync {
     use futures::{Async, Stream};
 
 
-    pub struct Sender<A> {
+    pub struct MutableVec<A> {
         values: Vec<A>,
-        sender: mpsc::UnboundedSender<VecChange<A>>,
+        senders: Vec<mpsc::UnboundedSender<VecChange<A>>>,
     }
 
-    impl<A: Clone> Sender<A> {
-        pub fn push(&mut self, value: A) {
-            let clone = value.clone();
-            self.values.push(value);
-            self.sender.unbounded_send(VecChange::Push { value: clone }).unwrap();
-        }
-
-        pub fn insert(&mut self, index: usize, value: A) {
-            let clone = value.clone();
-
-            if index == self.values.len() {
-                self.values.push(value);
-                self.sender.unbounded_send(VecChange::Push { value: clone }).unwrap();
-
-            } else {
-                self.values.insert(index, value);
-                self.sender.unbounded_send(VecChange::InsertAt { index, value: clone }).unwrap();
+    impl<A> MutableVec<A> {
+        #[inline]
+        pub fn new() -> Self {
+            Self {
+                values: vec![],
+                senders: vec![],
             }
         }
 
-        // TODO replace this with something else, like entry or IndexMut or whatever
-        pub fn update(&mut self, index: usize, value: A) {
-            let clone = value.clone();
-            self.values[index] = value;
-            self.sender.unbounded_send(VecChange::UpdateAt { index, value: clone }).unwrap();
+        // TODO should this inline ?
+        #[inline]
+        fn notify<B: FnMut() -> VecChange<A>>(&mut self, mut change: B) {
+            self.senders.retain(|sender| {
+                sender.unbounded_send(change()).is_ok()
+            });
         }
-    }
 
-    impl<A> Sender<A> {
         pub fn pop(&mut self) -> Option<A> {
             let value = self.values.pop();
 
             if let Some(_) = value {
-                self.sender.unbounded_send(VecChange::Pop {}).unwrap();
+                self.notify(|| VecChange::Pop {});
             }
 
             value
@@ -586,51 +574,109 @@ pub mod unsync {
             let value = self.values.remove(index);
 
             if index == (len - 1) {
-                self.sender.unbounded_send(VecChange::Pop {}).unwrap();
+                self.notify(|| VecChange::Pop {});
 
             } else {
-                self.sender.unbounded_send(VecChange::RemoveAt { index }).unwrap();
+                self.notify(|| VecChange::RemoveAt { index });
             }
 
             value
         }
 
         pub fn clear(&mut self) {
-            let len = self.values.len();
+            if self.values.len() > 0 {
+                self.values.clear();
 
-            self.values.clear();
-
-            if len > 0 {
-                self.sender.unbounded_send(VecChange::Clear {}).unwrap();
+                self.notify(|| VecChange::Clear {});
             }
         }
     }
 
+    impl<A: Clone> MutableVec<A> {
+        fn notify_clone<B, C>(&mut self, value: A, change: B, mut notify: C)
+            where B: FnOnce(&mut Self, A),
+                  C: FnMut(A) -> VecChange<A> {
 
-    pub struct Receiver<A> {
+            let mut len = self.senders.len();
+
+            if len == 0 {
+                change(self, value);
+
+            } else {
+                let mut clone = Some(value.clone());
+
+                change(self, value);
+
+                self.senders.retain(move |sender| {
+                    let value = clone.take().unwrap();
+
+                    len -= 1;
+
+                    let value = if len == 0 {
+                        value
+
+                    } else {
+                        let v = value.clone();
+                        clone = Some(value);
+                        v
+                    };
+
+                    sender.unbounded_send(notify(value)).is_ok()
+                });
+            }
+        }
+
+        pub fn signal_vec(&mut self) -> MutableSignalVec<A> {
+            let (sender, receiver) = mpsc::unbounded();
+
+            if self.values.len() > 0 {
+                sender.unbounded_send(VecChange::Replace { values: self.values.clone() }).unwrap();
+            }
+
+            self.senders.push(sender);
+
+            MutableSignalVec {
+                receiver
+            }
+        }
+
+        pub fn push(&mut self, value: A) {
+            self.notify_clone(value,
+                |this, value| this.values.push(value),
+                |value| VecChange::Push { value });
+        }
+
+        pub fn insert(&mut self, index: usize, value: A) {
+            if index == self.values.len() {
+                self.push(value);
+
+            } else {
+                self.notify_clone(value,
+                    |this, value| this.values.insert(index, value),
+                    |value| VecChange::InsertAt { index, value });
+            }
+        }
+
+        // TODO replace this with something else, like entry or IndexMut or whatever
+        pub fn set(&mut self, index: usize, value: A) {
+            self.notify_clone(value,
+                |this, value| this.values[index] = value,
+                |value| VecChange::UpdateAt { index, value });
+        }
+    }
+
+
+    pub struct MutableSignalVec<A> {
         receiver: mpsc::UnboundedReceiver<VecChange<A>>,
     }
 
-    // TODO have it send a Replace at the beginning
-    impl<A> SignalVec for Receiver<A> {
+    impl<A> SignalVec for MutableSignalVec<A> {
         type Item = A;
 
         #[inline]
         fn poll(&mut self) -> Async<Option<VecChange<Self::Item>>> {
             self.receiver.poll().unwrap()
         }
-    }
-
-
-    #[inline]
-    pub fn mutable<A>() -> (Sender<A>, Receiver<A>) {
-        let (sender, receiver) = mpsc::unbounded();
-
-        let sender = Sender { values: vec![], sender };
-
-        let receiver = Receiver { receiver };
-
-        (sender, receiver)
     }
 }
 
