@@ -462,6 +462,7 @@ pub mod unsync {
 
     struct MutableState<A> {
         value: A,
+        // TODO use HashMap or BTreeMap instead ?
         receivers: Vec<Weak<MutableSignalState<A>>>,
     }
 
@@ -541,6 +542,75 @@ pub mod unsync {
                 State::NotChanged
             }
         }
+    }
+
+
+    struct Inner<A> {
+        value: Option<A>,
+        task: Option<task::Task>,
+    }
+
+    pub struct Sender<A> {
+        inner: Weak<RefCell<Inner<A>>>,
+    }
+
+    impl<A> Sender<A> {
+        pub fn send(&self, value: A) -> Result<(), A> {
+            if let Some(inner) = self.inner.upgrade() {
+                let mut inner = inner.borrow_mut();
+
+                inner.value = Some(value);
+
+                if let Some(task) = inner.task.take() {
+                    drop(inner);
+                    task.notify();
+                }
+
+                Ok(())
+
+            } else {
+                Err(value)
+            }
+        }
+    }
+
+    pub struct Receiver<A> {
+        inner: Rc<RefCell<Inner<A>>>,
+    }
+
+    impl<A> Signal for Receiver<A> {
+        type Item = A;
+
+        #[inline]
+        fn poll(&mut self) -> State<Self::Item> {
+            let mut inner = self.inner.borrow_mut();
+
+            // TODO is this correct ?
+            match inner.value.take() {
+                Some(value) => State::Changed(value),
+                None => {
+                    inner.task = Some(task::current());
+                    State::NotChanged
+                },
+            }
+        }
+    }
+
+    pub fn channel<A>(initial_value: A) -> (Sender<A>, Receiver<A>) {
+        let inner = Rc::new(RefCell::new(Inner {
+            value: Some(initial_value),
+            task: None,
+        }));
+
+        let sender = Sender {
+            inner: Rc::downgrade(&inner),
+        };
+
+        let receiver = Receiver {
+            inner,
+        };
+
+        (sender, receiver)
     }
 }
 
