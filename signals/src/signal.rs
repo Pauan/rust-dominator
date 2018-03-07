@@ -455,81 +455,92 @@ impl<A> Signal for Flatten<A>
 pub mod unsync {
     use super::{Signal, State};
     use std::rc::{Rc, Weak};
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use futures::task;
+    use futures::task::Task;
 
 
-    struct Inner<A> {
-        value: Option<A>,
-        task: Option<task::Task>,
+    struct MutableState<A> {
+        value: A,
+        receivers: Vec<Weak<MutableSignalState<A>>>,
+    }
+
+    struct MutableSignalState<A> {
+        has_changed: Cell<bool>,
+        task: RefCell<Option<Task>>,
+        // TODO change this to Weak later
+        state: Rc<RefCell<MutableState<A>>>,
     }
 
 
     #[derive(Clone)]
-    pub struct Sender<A> {
-        inner: Weak<RefCell<Inner<A>>>,
+    pub struct Mutable<A>(Rc<RefCell<MutableState<A>>>);
+
+    impl<A> Mutable<A> {
+        pub fn new(value: A) -> Self {
+            Mutable(Rc::new(RefCell::new(MutableState {
+                value,
+                receivers: vec![],
+            })))
+        }
+
+        pub fn set(&self, value: A) {
+            let mut state = self.0.borrow_mut();
+
+            state.value = value;
+
+            state.receivers.retain(|receiver| {
+                if let Some(receiver) = receiver.upgrade() {
+                    receiver.has_changed.set(true);
+
+                    if let Some(task) = receiver.task.borrow_mut().take() {
+                        // TODO drop the mutable borrow before calling task.notify()
+                        task.notify();
+                    }
+
+                    true
+
+                } else {
+                    false
+                }
+            });
+        }
     }
 
-    impl<A> Sender<A> {
-        pub fn set(&self, value: A) -> Result<(), A> {
-            if let Some(inner) = self.inner.upgrade() {
-                let mut inner = inner.borrow_mut();
+    impl<A: Clone> Mutable<A> {
+        #[inline]
+        pub fn get(&self) -> A {
+            self.0.borrow().value.clone()
+        }
 
-                inner.value = Some(value);
+        pub fn signal(&self) -> MutableSignal<A> {
+            let state = Rc::new(MutableSignalState {
+                has_changed: Cell::new(false),
+                task: RefCell::new(None),
+                state: self.0.clone(),
+            });
 
-                if let Some(task) = inner.task.take() {
-                    drop(inner);
-                    task.notify();
-                }
+            self.0.borrow_mut().receivers.push(Rc::downgrade(&state));
 
-                Ok(())
-
-            } else {
-                Err(value)
-            }
+            MutableSignal(state)
         }
     }
 
 
-    #[derive(Clone)]
-    pub struct Receiver<A> {
-        inner: Rc<RefCell<Inner<A>>>,
-    }
+    pub struct MutableSignal<A: Clone>(Rc<MutableSignalState<A>>);
 
-    impl<A> Signal for Receiver<A> {
+    impl<A: Clone> Signal for MutableSignal<A> {
         type Item = A;
 
-        #[inline]
         fn poll(&mut self) -> State<Self::Item> {
-            let mut inner = self.inner.borrow_mut();
+            if self.0.has_changed.replace(false) {
+                State::Changed(self.0.state.borrow().value.clone())
 
-            // TODO is this correct ?
-            match inner.value.take() {
-                Some(value) => State::Changed(value),
-                None => {
-                    inner.task = Some(task::current());
-                    State::NotChanged
-                },
+            } else {
+                *self.0.task.borrow_mut() = Some(task::current());
+                State::NotChanged
             }
         }
-    }
-
-
-    pub fn mutable<A>(initial_value: A) -> (Sender<A>, Receiver<A>) {
-        let inner = Rc::new(RefCell::new(Inner {
-            value: Some(initial_value),
-            task: None,
-        }));
-
-        let sender = Sender {
-            inner: Rc::downgrade(&inner),
-        };
-
-        let receiver = Receiver {
-            inner,
-        };
-
-        (sender, receiver)
     }
 }
 
