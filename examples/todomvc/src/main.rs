@@ -74,6 +74,21 @@ impl State {
         }
     }
 
+    fn remove_todo(&self, todo: &Todo) {
+        // TODO make this more efficient ?
+        self.todo_list.retain(|x| x.id != todo.id);
+    }
+
+    fn update_filter(&self) {
+        let hash = document().location().unwrap().hash().unwrap();
+
+        self.filter.set(match hash.as_str() {
+            "#/active" => Filter::Active,
+            "#/completed" => Filter::Completed,
+            _ => Filter::All,
+        });
+    }
+
     fn deserialize() -> Self {
         window().local_storage().get("todos-rust-dominator").and_then(|state_json| {
             serde_json::from_str(state_json.as_str()).ok()
@@ -130,12 +145,16 @@ fn link(href: &str, t: &str) -> Dom {
 
 fn filter_button(state: Rc<State>, kind: Filter) -> Dom {
     html!("a", {
-        class("selected", state.filter.signal().map(clone!(kind => move |filter| filter == kind)).dynamic());
+        class("selected", state.filter.signal()
+            .map(clone!(kind => move |filter| filter == kind))
+            .dynamic());
+
         attribute("href", match kind {
             Filter::Active => "#/active",
             Filter::Completed => "#/completed",
             Filter::All => "#/",
         });
+
         children(&mut [
             text(match kind {
                 Filter::Active => "Active",
@@ -150,24 +169,14 @@ fn filter_button(state: Rc<State>, kind: Filter) -> Dom {
 fn main() {
     let state = Rc::new(State::deserialize());
 
-
-    fn update_filter(state: &Rc<State>) {
-        let hash = document().location().unwrap().hash().unwrap();
-
-        state.filter.set(match hash.as_str() {
-            "#/active" => Filter::Active,
-            "#/completed" => Filter::Completed,
-            _ => Filter::All,
-        });
-    }
-
-    update_filter(&state);
+    state.update_filter();
 
     window().add_event_listener(clone!(state => move |_: HashChangeEvent| {
-        update_filter(&state);
+        state.update_filter();
     }));
 
 
+    // TODO this should be in stdweb
     let body = document().query_selector("body").unwrap().unwrap();
 
     dominator::append_dom(&body,
@@ -233,7 +242,7 @@ fn main() {
 
                             property("checked", state.todo_list.signal_vec()
                                 .map_signal(|todo| todo.completed.signal())
-                                // TODO .filter()
+                                // TODO use .filter()
                                 .filter_map(|completed| if !completed { Some(()) } else { None })
                                 .len()
                                 .map(|len| len != 0)
@@ -249,129 +258,125 @@ fn main() {
                                 state.serialize();
                             }));
                         }),
+
                         html!("label", {
                             attribute("for", "toggle-all");
                             children(&mut [
                                 text("Mark all as complete"),
                             ]);
                         }),
+
                         html!("ul", {
                             class("todo-list", true);
-                            children(state.todo_list.signal_vec()/*.map_signal(clone!(state => move |todo| {
-                                state.filter.signal().switch(clone!(todo => move |filter| {
-                                    // TODO figure out a way to avoid using Box
-                                    let filter: Box<Signal<Item = bool>> = match filter {
-                                        // TODO .not() method
-                                        Filter::Active => Box::new(todo.completed.signal().map(|completed| !completed)),
-                                        Filter::Completed => Box::new(todo.completed.signal()),
-                                        Filter::All => Box::new(always(true)),
-                                    };
 
-                                    filter
-                                })).map_dedupe(move |show| {
-                                    if *show {
-                                        // TODO figure out a way to avoid this clone
-                                        Some(todo.clone())
-                                    } else {
-                                        None
-                                    }
-                                })
-                            })).filter_map(|todo| todo)*/.map(clone!(state => move |todo| {
-                                console!(log, "CREATING", todo.title.get());
+                            children(state.todo_list.signal_vec()
+                                .map(clone!(state => move |todo| {
+                                    html!("li", {
+                                        class("editing", todo.editing.signal()
+                                            .map(|x| x.is_some())
+                                            .dynamic());
 
-                                html!("li", {
-                                    class("editing", todo.editing.signal().map(|x| x.is_some()).dynamic());
-                                    class("completed", todo.completed.signal().dynamic());
+                                        class("completed", todo.completed.signal().dynamic());
 
-                                    property("hidden",
-                                        map_clone!(
-                                            let filter = state.filter.signal(),
-                                            let completed = todo.completed.signal() =>
-                                            match filter {
-                                                Filter::Active => !completed,
-                                                Filter::Completed => completed,
-                                                Filter::All => true,
-                                            }
-                                        )
-                                        .map_dedupe(|show| !*show)
-                                        .dynamic());
-
-                                    children(&mut [
-                                        html!("div", {
-                                            class("view", true);
-                                            children(&mut [
-                                                html!("input", {
-                                                    attribute("type", "checkbox");
-                                                    class("toggle", true);
-                                                    property("checked", todo.completed.signal().dynamic());
-                                                    event(clone!(state, todo => move |event: ChangeEvent| {
-                                                        todo.completed.set(get_checked(&event));
-                                                        state.serialize();
-                                                    }));
-                                                }),
-
-                                                html!("label", {
-                                                    children(&mut [
-                                                        text(todo.title.signal().map(|x| { console!(log, &x); x }).dynamic()),
-                                                    ]);
-                                                    event(clone!(todo => move |_: DoubleClickEvent| {
-                                                        todo.editing.set(Some(todo.title.get()));
-                                                    }));
-                                                }),
-
-                                                html!("button", {
-                                                    class("destroy", true);
-                                                    event(clone!(state, todo => move |_: ClickEvent| {
-                                                        // TODO make this more efficient ?
-                                                        state.todo_list.retain(|x| x.id != todo.id);
-
-                                                        state.serialize();
-                                                    }));
-                                                }),
-                                            ]);
-                                        }),
-
-                                        html!("input", {
-                                            class("edit", true);
-                                            property("value", todo.editing.signal().map(|x| x.unwrap_or_else(|| "".to_owned())).dynamic());
-                                            property("hidden", todo.editing.signal().map(|x| x.is_none()).dynamic());
-
-                                            // TODO dedupe this somehow ?
-                                            focused(todo.editing.signal().map(|x| x.is_some()).dynamic());
-
-                                            event(clone!(todo => move |event: KeyDownEvent| {
-                                                let key = event.key();
-
-                                                if key == "Enter" {
-                                                    let element: HtmlElement = event.target().unwrap().try_into().unwrap();
-                                                    element.blur();
-
-                                                } else if key == "Escape" {
-                                                    todo.editing.set(None);
+                                        property("hidden",
+                                            map_clone!(
+                                                let filter = state.filter.signal(),
+                                                let completed = todo.completed.signal() =>
+                                                match filter {
+                                                    Filter::Active => !completed,
+                                                    Filter::Completed => completed,
+                                                    Filter::All => true,
                                                 }
-                                            }));
+                                            )
+                                            .map_dedupe(|show| !*show)
+                                            .dynamic());
 
-                                            event(clone!(todo => move |event: InputEvent| {
-                                                todo.editing.set(Some(get_value(&event)));
-                                            }));
+                                        children(&mut [
+                                            html!("div", {
+                                                class("view", true);
+                                                children(&mut [
+                                                    html!("input", {
+                                                        attribute("type", "checkbox");
+                                                        class("toggle", true);
 
-                                            event(clone!(state, todo => move |_: BlurEvent| {
-                                                if let Some(title) = todo.editing.replace(None) {
-                                                    if let Some(title) = trim(title) {
-                                                        todo.title.set(title);
+                                                        property("checked", todo.completed.signal().dynamic());
 
-                                                    } else {
-                                                        // TODO make this more efficient ?
-                                                        state.todo_list.retain(|x| x.id != todo.id);
+                                                        event(clone!(state, todo => move |event: ChangeEvent| {
+                                                            todo.completed.set(get_checked(&event));
+                                                            state.serialize();
+                                                        }));
+                                                    }),
+
+                                                    html!("label", {
+                                                        event(clone!(todo => move |_: DoubleClickEvent| {
+                                                            todo.editing.set(Some(todo.title.get()));
+                                                        }));
+
+                                                        children(&mut [
+                                                            text(todo.title.signal().dynamic()),
+                                                        ]);
+                                                    }),
+
+                                                    html!("button", {
+                                                        class("destroy", true);
+                                                        event(clone!(state, todo => move |_: ClickEvent| {
+                                                            state.remove_todo(&todo);
+                                                            state.serialize();
+                                                        }));
+                                                    }),
+                                                ]);
+                                            }),
+
+                                            html!("input", {
+                                                class("edit", true);
+
+                                                property("value", todo.editing.signal()
+                                                    .map(|x| x.unwrap_or_else(|| "".to_owned()))
+                                                    .dynamic());
+
+                                                property("hidden", todo.editing.signal()
+                                                    .map(|x| x.is_none())
+                                                    .dynamic());
+
+                                                // TODO dedupe this somehow ?
+                                                focused(todo.editing.signal()
+                                                    .map(|x| x.is_some())
+                                                    .dynamic());
+
+                                                event(clone!(todo => move |event: KeyDownEvent| {
+                                                    let key = event.key();
+
+                                                    if key == "Enter" {
+                                                        let element: HtmlElement = event.target().unwrap().try_into().unwrap();
+                                                        element.blur();
+
+                                                    } else if key == "Escape" {
+                                                        todo.editing.set(None);
                                                     }
+                                                }));
 
-                                                    state.serialize();
-                                                }
-                                            }));
-                                        }),
-                                    ]);
-                                })
-                            })).dynamic());
+                                                event(clone!(todo => move |event: InputEvent| {
+                                                    todo.editing.set(Some(get_value(&event)));
+                                                }));
+
+                                                event(clone!(state, todo => move |_: BlurEvent| {
+                                                    if let Some(title) = todo.editing.replace(None) {
+                                                        if let Some(title) = trim(title) {
+                                                            todo.title.set(title);
+
+                                                        } else {
+                                                            state.remove_todo(&todo);
+                                                        }
+
+                                                        state.serialize();
+                                                    }
+                                                }));
+                                            }),
+                                        ]);
+                                    })
+                                }))
+                                .dynamic()
+                            );
                         }),
                     ]);
                 }),
@@ -380,31 +385,35 @@ fn main() {
                     class("footer", true);
 
                     // Hide if it doesn't have any todos.
-                    property("hidden", state.todo_list.signal_vec().len().map(|len| len == 0).dynamic());
+                    property("hidden", state.todo_list.signal_vec()
+                        .len()
+                        .map(|len| len == 0)
+                        .dynamic());
 
                     children(&mut [
                         html!("span", {
                             class("todo-count", true);
-                            children(
-                                state.todo_list.signal_vec()
-                                    .map_signal(|todo| todo.completed.signal())
-                                    // TODO .filter()
-                                    .filter_map(|completed| if !completed { Some(()) } else { None })
-                                    .len()
-                                    .map(|len| {
-                                        vec![
-                                            simple("strong", &mut [
-                                                text(len.to_string())
-                                            ]),
-                                            text(if len == 1 {
-                                                " item left"
-                                            } else {
-                                                " items left"
-                                            }),
-                                        ]
-                                    })
-                                    .to_signal_vec()
-                                    .dynamic()
+
+                            children(state.todo_list.signal_vec()
+                                .map_signal(|todo| todo.completed.signal())
+                                // TODO use .filter()
+                                .filter_map(|completed| if !completed { Some(()) } else { None })
+                                .len()
+                                // TODO make this more efficient
+                                .map(|len| {
+                                    vec![
+                                        simple("strong", &mut [
+                                            text(len.to_string())
+                                        ]),
+                                        text(if len == 1 {
+                                            " item left"
+                                        } else {
+                                            " items left"
+                                        }),
+                                    ]
+                                })
+                                .to_signal_vec()
+                                .dynamic()
                             );
                         }),
                         html!("ul", {
@@ -427,6 +436,7 @@ fn main() {
                             // Hide if it doesn't have any completed items.
                             property("hidden", state.todo_list.signal_vec()
                                 .map_signal(|todo| todo.completed.signal())
+                                // TODO use .filter()
                                 .filter_map(|completed| if completed { Some(()) } else { None })
                                 .len()
                                 .map(|len| len == 0)
@@ -434,7 +444,6 @@ fn main() {
 
                             event(clone!(state => move |_: ClickEvent| {
                                 state.todo_list.retain(|todo| todo.completed.get() == false);
-
                                 state.serialize();
                             }));
 
