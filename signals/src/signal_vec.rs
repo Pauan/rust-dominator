@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use futures::{Stream, Poll, Async};
 use futures::stream::ForEach;
 use futures::future::IntoFuture;
+use signal::{Signal, State};
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -120,6 +121,14 @@ pub trait SignalVec {
     }
 
     #[inline]
+    fn len(self) -> Len<Self> where Self: Sized {
+        Len {
+            signal: self,
+            len: 0,
+        }
+    }
+
+    #[inline]
     fn by_ref(&mut self) -> &mut Self {
         self
     }
@@ -140,6 +149,65 @@ impl<A, B, F> SignalVec for Map<A, F>
     #[inline]
     fn poll(&mut self) -> Async<Option<VecChange<Self::Item>>> {
         self.signal.poll().map(|some| some.map(|change| change.map(|value| (self.callback)(value))))
+    }
+}
+
+
+pub struct Len<A> {
+    signal: A,
+    len: usize,
+}
+
+impl<A> Signal for Len<A> where A: SignalVec {
+    type Item = usize;
+
+    fn poll(&mut self) -> State<Self::Item> {
+        let mut changed = false;
+
+        loop {
+            match self.signal.poll() {
+                Async::Ready(Some(change)) => {
+                    match change {
+                        VecChange::Replace { values } => {
+                            if self.len != values.len() {
+                                changed = true;
+                                self.len = values.len();
+                            }
+                        },
+
+                        VecChange::InsertAt { .. } | VecChange::Push { .. } => {
+                            changed = true;
+                            self.len += 1;
+                        },
+
+                        VecChange::UpdateAt { .. } => {},
+
+                        VecChange::RemoveAt { .. } | VecChange::Pop {} => {
+                            changed = true;
+                            self.len -= 1;
+                        },
+
+                        VecChange::Clear {} => {
+                            if self.len != 0 {
+                                changed = true;
+                                self.len = 0;
+                            }
+                        },
+                    }
+                },
+
+                // TODO change this after signals support stopping
+                // TODO what if changed is true ?
+                // TODO stop polling the SignalVec after it's ended
+                Async::Ready(None) => return State::NotChanged,
+
+                Async::NotReady => return if changed {
+                    State::Changed(self.len)
+                } else {
+                    State::NotChanged
+                },
+            }
+        }
     }
 }
 
