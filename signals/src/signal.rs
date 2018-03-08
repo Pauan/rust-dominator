@@ -539,7 +539,7 @@ pub mod unsync {
 
         pub fn signal(&self) -> MutableSignal<A> {
             let state = Rc::new(MutableSignalState {
-                has_changed: Cell::new(false),
+                has_changed: Cell::new(true),
                 task: RefCell::new(None),
                 state: self.0.clone(),
             });

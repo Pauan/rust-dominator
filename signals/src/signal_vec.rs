@@ -124,6 +124,7 @@ pub trait SignalVec {
     fn len(self) -> Len<Self> where Self: Sized {
         Len {
             signal: self,
+            first: true,
             len: 0,
         }
     }
@@ -155,6 +156,7 @@ impl<A, B, F> SignalVec for Map<A, F>
 
 pub struct Len<A> {
     signal: A,
+    first: bool,
     len: usize,
 }
 
@@ -198,10 +200,12 @@ impl<A> Signal for Len<A> where A: SignalVec {
 
                 // TODO change this after signals support stopping
                 // TODO what if changed is true ?
+                // TODO what if self.first is true ?
                 // TODO stop polling the SignalVec after it's ended
                 Async::Ready(None) => return State::NotChanged,
 
-                Async::NotReady => return if changed {
+                Async::NotReady => return if changed || self.first {
+                    self.first = false;
                     State::Changed(self.len)
                 } else {
                     State::NotChanged
@@ -605,24 +609,18 @@ impl<A, F> SignalVec for SortBy<A, F>
 // TODO verify that this is correct
 pub mod unsync {
     use super::{SignalVec, VecChange};
+    use std::rc::Rc;
+    use std::cell::RefCell;
     use futures::unsync::mpsc;
     use futures::{Async, Stream};
 
 
-    pub struct MutableVec<A> {
+    struct MutableVecState<A> {
         values: Vec<A>,
         senders: Vec<mpsc::UnboundedSender<VecChange<A>>>,
     }
 
-    impl<A> MutableVec<A> {
-        #[inline]
-        pub fn new() -> Self {
-            Self {
-                values: vec![],
-                senders: vec![],
-            }
-        }
-
+    impl<A> MutableVecState<A> {
         // TODO should this inline ?
         #[inline]
         fn notify<B: FnMut() -> VecChange<A>>(&mut self, mut change: B) {
@@ -631,7 +629,7 @@ pub mod unsync {
             });
         }
 
-        pub fn pop(&mut self) -> Option<A> {
+        fn pop(&mut self) -> Option<A> {
             let value = self.values.pop();
 
             if let Some(_) = value {
@@ -641,7 +639,7 @@ pub mod unsync {
             value
         }
 
-        pub fn remove(&mut self, index: usize) -> A {
+        fn remove(&mut self, index: usize) -> A {
             let len = self.values.len();
 
             let value = self.values.remove(index);
@@ -656,7 +654,7 @@ pub mod unsync {
             value
         }
 
-        pub fn clear(&mut self) {
+        fn clear(&mut self) {
             if self.values.len() > 0 {
                 self.values.clear();
 
@@ -664,7 +662,7 @@ pub mod unsync {
             }
         }
 
-        pub fn retain<F>(&mut self, mut f: F) where F: FnMut(&A) -> bool {
+        fn retain<F>(&mut self, mut f: F) where F: FnMut(&A) -> bool {
             let mut len = self.values.len();
 
             if len > 0 {
@@ -704,7 +702,7 @@ pub mod unsync {
         }
     }
 
-    impl<A: Clone> MutableVec<A> {
+    impl<A: Clone> MutableVecState<A> {
         fn notify_clone<B, C>(&mut self, value: A, change: B, mut notify: C)
             where B: FnOnce(&mut Self, A),
                   C: FnMut(A) -> VecChange<A> {
@@ -738,7 +736,7 @@ pub mod unsync {
             }
         }
 
-        pub fn signal_vec(&mut self) -> MutableSignalVec<A> {
+        fn signal_vec(&mut self) -> MutableSignalVec<A> {
             let (sender, receiver) = mpsc::unbounded();
 
             if self.values.len() > 0 {
@@ -752,13 +750,13 @@ pub mod unsync {
             }
         }
 
-        pub fn push(&mut self, value: A) {
+        fn push(&mut self, value: A) {
             self.notify_clone(value,
                 |this, value| this.values.push(value),
                 |value| VecChange::Push { value });
         }
 
-        pub fn insert(&mut self, index: usize, value: A) {
+        fn insert(&mut self, index: usize, value: A) {
             if index == self.values.len() {
                 self.push(value);
 
@@ -769,11 +767,67 @@ pub mod unsync {
             }
         }
 
-        // TODO replace this with something else, like entry or IndexMut or whatever
-        pub fn set(&mut self, index: usize, value: A) {
+        fn set(&mut self, index: usize, value: A) {
             self.notify_clone(value,
                 |this, value| this.values[index] = value,
                 |value| VecChange::UpdateAt { index, value });
+        }
+    }
+
+
+    #[derive(Clone)]
+    pub struct MutableVec<A>(Rc<RefCell<MutableVecState<A>>>);
+
+    impl<A> MutableVec<A> {
+        #[inline]
+        pub fn new() -> Self {
+            MutableVec(Rc::new(RefCell::new(MutableVecState {
+                values: vec![],
+                senders: vec![],
+            })))
+        }
+
+        #[inline]
+        pub fn pop(&self) -> Option<A> {
+            self.0.borrow_mut().pop()
+        }
+
+        #[inline]
+        pub fn remove(&self, index: usize) -> A {
+            self.0.borrow_mut().remove(index)
+        }
+
+        #[inline]
+        pub fn clear(&self) {
+            self.0.borrow_mut().clear()
+        }
+
+        #[inline]
+        pub fn retain<F>(&self, f: F) where F: FnMut(&A) -> bool {
+            self.0.borrow_mut().retain(f)
+        }
+    }
+
+    impl<A: Clone> MutableVec<A> {
+        #[inline]
+        pub fn signal_vec(&self) -> MutableSignalVec<A> {
+            self.0.borrow_mut().signal_vec()
+        }
+
+        #[inline]
+        pub fn push(&self, value: A) {
+            self.0.borrow_mut().push(value)
+        }
+
+        #[inline]
+        pub fn insert(&self, index: usize, value: A) {
+            self.0.borrow_mut().insert(index, value)
+        }
+
+        // TODO replace this with something else, like entry or IndexMut or whatever
+        #[inline]
+        pub fn set(&self, index: usize, value: A) {
+            self.0.borrow_mut().set(index, value)
         }
     }
 
