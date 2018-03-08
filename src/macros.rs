@@ -5,7 +5,7 @@ macro_rules! html {
     };
     ($kind:expr => $t:ty, { $( $name:ident( $( $args:expr ),* ); )* }) => {{
         let a: $crate::HtmlBuilder<$t> = $crate::HtmlBuilder::new($kind)$(.$name($($args),*))*;
-        let b: $crate::Dom = a.into();
+        let b: $crate::Dom = ::std::convert::Into::into(a);
         b
     }};
 
@@ -39,11 +39,22 @@ macro_rules! class {
 }
 
 
-// TODO move into stdweb
+// TODO this is pretty inefficient, it iterates over the token tree one token at a time
+#[doc(hidden)]
 #[macro_export]
-macro_rules! clone {
-    ({$($x:ident),+} $y:expr) => {{
-        $(let $x = $x.clone();)+
+macro_rules! __internal_clone_split {
+    (($($x:ident)*), $t:ident => $y:expr) => {{
+        $(let $x = ::std::clone::Clone::clone(&$x);)*
+        let $t = ::std::clone::Clone::clone(&$t);
         $y
     }};
+    (($($x:ident)*), $t:ident, $($after:tt)*) => {
+        __internal_clone_split!(($($x)* $t), $($after)*)
+    };
+}
+
+// TODO move into stdweb ?
+#[macro_export]
+macro_rules! clone {
+    ($($input:tt)*) => { __internal_clone_split!((), $($input)*) };
 }
