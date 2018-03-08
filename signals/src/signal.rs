@@ -22,6 +22,14 @@ impl<A> State<A> {
             State::NotChanged => State::NotChanged,
         }
     }
+
+    #[inline]
+    pub fn unwrap(self) -> A {
+        match self {
+            State::Changed(value) => value,
+            State::NotChanged => panic!("State has not changed!"),
+        }
+    }
 }
 
 
@@ -64,6 +72,7 @@ pub trait Signal {
 
     #[inline]
     fn map_dedupe<A, B>(self, callback: A) -> MapDedupe<Self, A>
+        // TODO should this use & instead of &mut ?
         where A: FnMut(&mut Self::Item) -> B,
               Self: Sized {
         MapDedupe {
@@ -122,8 +131,18 @@ pub trait Signal {
     }
 
     #[inline]
-    fn as_mut(&mut self) -> &mut Self {
+    fn as_mut(&mut self) -> &mut Self where Self: Sized {
         self
+    }
+}
+
+
+impl<F: ?Sized + Signal> Signal for ::std::boxed::Box<F> {
+    type Item = F::Item;
+
+    #[inline]
+    fn poll(&mut self) -> State<Self::Item> {
+        (**self).poll()
     }
 }
 
@@ -360,8 +379,9 @@ pub struct MapDedupe<A: Signal, B> {
 impl<A, B, C> Signal for MapDedupe<A, B>
     where A: Signal,
           A::Item: PartialEq,
+          // TODO should this use & instead of &mut ?
           // TODO should this use Fn instead ?
-          B: FnMut(&A::Item) -> C {
+          B: FnMut(&mut A::Item) -> C {
 
     type Item = C;
 
@@ -403,20 +423,20 @@ impl<A, B, C> Signal for FilterMap<A, B>
     #[inline]
     fn poll(&mut self) -> State<Self::Item> {
         loop {
-            match self.signal.poll() {
+            return match self.signal.poll() {
                 State::Changed(value) => match (self.callback)(value) {
                     Some(value) => {
                         self.first = false;
-                        return State::Changed(Some(value));
+                        State::Changed(Some(value))
                     },
-                    None => {
-                        if self.first {
-                            self.first = false;
-                            return State::Changed(None);
-                        }
+                    None => if self.first {
+                        self.first = false;
+                        State::Changed(None)
+                    } else {
+                        continue;
                     },
                 },
-                State::NotChanged => return State::NotChanged,
+                State::NotChanged => State::NotChanged,
             }
         }
     }

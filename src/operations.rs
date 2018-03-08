@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::cell::{Cell, RefCell};
 use stdweb::PromiseFuture;
 use discard::{Discard, DiscardOnDrop};
-use stdweb::Reference;
+use stdweb::{Reference, JsSerialize};
 use stdweb::web::TextNode;
 use signals::signal::{Signal, cancelable_future, CancelableFutureHandle};
 use signals::signal_vec::{VecChange, SignalVec};
@@ -65,23 +65,24 @@ pub fn set_text_signal<A>(element: &TextNode, callbacks: &mut Callbacks, signal:
 
 
 // TODO inline this ?
-pub fn set_property_signal<'a, A, B>(element: &A, callbacks: &mut Callbacks, name: &str, signal: B)
+pub fn set_property_signal<'a, A, B, C>(element: &A, callbacks: &mut Callbacks, name: &str, signal: C)
     where A: AsRef<Reference> + Clone + 'static,
-          B: Signal<Item = Option<String>> + 'static {
+          B: JsSerialize,
+          C: Signal<Item = B> + 'static {
 
     let element = element.clone();
     let name = name.to_owned();
 
     let handle = for_each(signal, move |value| {
-        dom_operations::set_property(&element, &name, value.as_ref().map(|x| x.as_str()));
+        dom_operations::set_property(&element, &name, &value);
     });
 
     callbacks.after_remove(move || handle.discard());
 }
 
 #[inline]
-pub fn set_property_str<A: AsRef<Reference>>(element: &A, name: &str, value: &str) {
-    dom_operations::set_property(element, name, Some(value))
+pub fn set_property_str<A: AsRef<Reference>, B: JsSerialize>(element: &A, name: &str, value: &B) {
+    dom_operations::set_property(element, name, value)
 }
 
 

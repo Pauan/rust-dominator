@@ -78,6 +78,18 @@ pub trait SignalVec {
     }
 
     #[inline]
+    fn map_signal<A, F>(self, callback: F) -> MapSignal<Self, A, F>
+        where A: Signal,
+              F: FnMut(Self::Item) -> A,
+              Self: Sized {
+        MapSignal {
+            signal: Some(self),
+            signals: vec![],
+            callback,
+        }
+    }
+
+    #[inline]
     fn filter_map<A, F>(self, callback: F) -> FilterMap<Self, F>
         where F: FnMut(Self::Item) -> Option<A>,
               Self: Sized {
@@ -136,6 +148,16 @@ pub trait SignalVec {
 }
 
 
+impl<F: ?Sized + SignalVec> SignalVec for ::std::boxed::Box<F> {
+    type Item = F::Item;
+
+    #[inline]
+    fn poll(&mut self) -> Async<Option<VecChange<Self::Item>>> {
+        (**self).poll()
+    }
+}
+
+
 pub struct Map<A, B> {
     signal: A,
     callback: B,
@@ -150,6 +172,105 @@ impl<A, B, F> SignalVec for Map<A, F>
     #[inline]
     fn poll(&mut self) -> Async<Option<VecChange<Self::Item>>> {
         self.signal.poll().map(|some| some.map(|change| change.map(|value| (self.callback)(value))))
+    }
+}
+
+
+pub struct MapSignal<A, B: Signal, F> {
+    signal: Option<A>,
+    signals: Vec<B>,
+    callback: F,
+}
+
+impl<A, B, F> SignalVec for MapSignal<A, B, F>
+    where A: SignalVec,
+          B: Signal,
+          F: FnMut(A::Item) -> B {
+    type Item = B::Item;
+
+    fn poll(&mut self) -> Async<Option<VecChange<Self::Item>>> {
+        if let Some(mut signal) = self.signal.take() {
+            match signal.poll() {
+                Async::Ready(Some(change)) => {
+                    self.signal = Some(signal);
+
+                    return Async::Ready(Some(match change {
+                        VecChange::Replace { values } => {
+                            self.signals = Vec::with_capacity(values.len());
+
+                            VecChange::Replace {
+                                values: values.into_iter().map(|value| {
+                                    let mut signal = (self.callback)(value);
+                                    let poll = signal.poll().unwrap();
+                                    self.signals.push(signal);
+                                    poll
+                                }).collect()
+                            }
+                        },
+
+                        VecChange::InsertAt { index, value } => {
+                            let mut signal = (self.callback)(value);
+                            let poll = signal.poll().unwrap();
+                            self.signals.insert(index, signal);
+                            VecChange::InsertAt { index, value: poll }
+                        },
+
+                        VecChange::UpdateAt { index, value } => {
+                            let mut signal = (self.callback)(value);
+                            let poll = signal.poll().unwrap();
+                            self.signals[index] = signal;
+                            VecChange::UpdateAt { index, value: poll }
+                        },
+
+                        VecChange::Push { value } => {
+                            let mut signal = (self.callback)(value);
+                            let poll = signal.poll().unwrap();
+                            self.signals.push(signal);
+                            VecChange::Push { value: poll }
+                        },
+
+                        VecChange::RemoveAt { index } => {
+                            self.signals.remove(index);
+                            VecChange::RemoveAt { index }
+                        },
+
+                        VecChange::Pop {} => {
+                            self.signals.pop().unwrap();
+                            VecChange::Pop {}
+                        },
+
+                        VecChange::Clear {} => {
+                            self.signals = vec![];
+                            VecChange::Clear {}
+                        },
+                    }))
+                },
+                Async::Ready(None) => if self.signals.len() == 0 {
+                    return Async::Ready(None)
+                },
+                Async::NotReady => {
+                    self.signal = Some(signal);
+                },
+            }
+        }
+
+        // TODO is there a better way to accomplish this ?
+        let mut iter = self.signals.as_mut_slice().into_iter();
+        let mut index = 0;
+
+        loop {
+            match iter.next() {
+                Some(signal) => match signal.poll() {
+                    State::Changed(value) => {
+                        return Async::Ready(Some(VecChange::UpdateAt { index, value }))
+                    },
+                    State::NotChanged => {
+                        index += 1;
+                    },
+                },
+                None => return Async::NotReady,
+            }
+        }
     }
 }
 
@@ -610,7 +731,7 @@ impl<A, F> SignalVec for SortBy<A, F>
 pub mod unsync {
     use super::{SignalVec, VecChange};
     use std::rc::Rc;
-    use std::cell::RefCell;
+    use std::cell::{RefCell, Ref};
     use futures::unsync::mpsc;
     use futures::{Async, Stream};
 
@@ -805,6 +926,21 @@ pub mod unsync {
         #[inline]
         pub fn retain<F>(&self, f: F) where F: FnMut(&A) -> bool {
             self.0.borrow_mut().retain(f)
+        }
+
+        #[inline]
+        pub fn as_slice(&self) -> Ref<[A]> {
+            Ref::map(self.0.borrow(), |x| x.values.as_slice())
+        }
+
+        #[inline]
+        pub fn len(&self) -> usize {
+            self.0.borrow().values.len()
+        }
+
+        #[inline]
+        pub fn is_empty(&self) -> bool {
+            self.0.borrow().values.is_empty()
         }
     }
 

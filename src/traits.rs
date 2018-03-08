@@ -1,4 +1,4 @@
-use stdweb::Reference;
+use stdweb::{Reference, JsSerialize};
 use stdweb::web::TextNode;
 use stdweb::traits::{IElement, IHtmlElement, INode};
 use stdweb::unstable::TryInto;
@@ -64,10 +64,10 @@ impl<'a> Text for String {
     }
 }
 
-impl<'a> Property for &'a str {
+impl<'a, A: JsSerialize> Property for A {
     #[inline]
-    fn set_property<A: AsRef<Reference>>(self, element: &A, _callbacks: &mut Callbacks, name: &str) {
-        operations::set_property_str(element, name, self)
+    fn set_property<B: AsRef<Reference>>(self, element: &B, _callbacks: &mut Callbacks, name: &str) {
+        operations::set_property_str(element, name, &self)
     }
 }
 
@@ -124,9 +124,9 @@ impl<A: Signal<Item = String> + 'static> Text for Dynamic<A> {
     }
 }
 
-impl<A: Signal<Item = Option<String>> + 'static> Property for Dynamic<A> {
+impl<A: Signal<Item = B> + 'static, B: JsSerialize> Property for Dynamic<A> {
     #[inline]
-    fn set_property<B: AsRef<Reference> + Clone + 'static>(self, element: &B, callbacks: &mut Callbacks, name: &str) {
+    fn set_property<C: AsRef<Reference> + Clone + 'static>(self, element: &C, callbacks: &mut Callbacks, name: &str) {
         operations::set_property_signal(element, callbacks, name, self.0)
     }
 }

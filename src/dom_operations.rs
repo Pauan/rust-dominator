@@ -1,6 +1,6 @@
 use std;
 use stdweb::unstable::{TryFrom, TryInto};
-use stdweb::{Value, Reference};
+use stdweb::{Value, Reference, JsSerialize};
 use stdweb::web::{TextNode, INode, IHtmlElement, IElement};
 
 
@@ -115,18 +115,12 @@ pub fn remove_attribute<A: IElement>(element: &A, name: &str, namespace: Option<
 
 
 // TODO check that the property *actually* was changed ?
+// TODO better type checks ?
 #[inline]
-pub fn set_property<A: AsRef<Reference>>(obj: &A, name: &str, value: Option<&str>) {
-    // TODO make this more efficient
-    match value {
-        Some(value) => js! { @(no_return)
-            @{obj.as_ref()}[@{name}] = @{value};
-        },
-
-        None => js! { @(no_return)
-            @{obj.as_ref()}[@{name}] = null;
-        },
-    };
+pub fn set_property<A: AsRef<Reference>, B: JsSerialize>(obj: &A, name: &str, value: &B) {
+    js! { @(no_return)
+        @{obj.as_ref()}[@{name}] = @{value};
+    }
 }
 
 
