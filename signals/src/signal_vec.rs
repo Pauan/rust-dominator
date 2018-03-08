@@ -25,6 +25,11 @@ pub enum VecChange<A> {
     },
 
     // TODO
+    /*Batch {
+        changes: Vec<VecChange<A>>,
+    }*/
+
+    // TODO
     /*Swap {
         old_index: usize,
         new_index: usize,
@@ -588,6 +593,45 @@ pub mod unsync {
                 self.values.clear();
 
                 self.notify(|| VecChange::Clear {});
+            }
+        }
+
+        pub fn retain<F>(&mut self, mut f: F) where F: FnMut(&A) -> bool {
+            let mut len = self.values.len();
+
+            if len > 0 {
+                let mut index = 0;
+
+                let mut removals = vec![];
+
+                self.values.retain(|value| {
+                    if f(value) {
+                        index += 1;
+                        true
+
+                    } else {
+                        len -= 1;
+
+                        if index == len {
+                            removals.push(None);
+
+                        } else {
+                            removals.push(Some(index));
+                        }
+
+                        false
+                    }
+                });
+
+                // TODO use VecChange::Batch
+                for x in removals {
+                    if let Some(index) = x {
+                        self.notify(|| VecChange::RemoveAt { index });
+
+                    } else {
+                        self.notify(|| VecChange::Pop {});
+                    }
+                }
             }
         }
     }
