@@ -479,6 +479,7 @@ pub mod unsync {
     use std::cell::{Cell, RefCell, RefMut};
     use futures::task;
     use futures::task::Task;
+    use serde::{Serialize, Deserialize, Serializer, Deserializer};
 
 
     struct MutableState<A> {
@@ -567,6 +568,27 @@ pub mod unsync {
             self.0.borrow_mut().receivers.push(Rc::downgrade(&state));
 
             MutableSignal(state)
+        }
+    }
+
+    impl<T> Serialize for Mutable<T> where T: Serialize {
+        #[inline]
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+            self.0.borrow().value.serialize(serializer)
+        }
+    }
+
+    impl<'de, T> Deserialize<'de> for Mutable<T> where T: Deserialize<'de> {
+        #[inline]
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+            T::deserialize(deserializer).map(Mutable::new)
+        }
+    }
+
+    impl<T: Default> Default for Mutable<T> {
+        #[inline]
+        fn default() -> Self {
+            Mutable::new(Default::default())
         }
     }
 

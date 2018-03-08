@@ -4,6 +4,10 @@ extern crate stdweb;
 extern crate dominator;
 #[macro_use]
 extern crate signals;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde;
+extern crate serde_json;
 
 use std::rc::Rc;
 use std::cell::Cell;
@@ -28,19 +32,58 @@ enum Filter {
     All,
 }
 
-#[derive(Clone)]
+impl Default for Filter {
+    #[inline]
+    fn default() -> Self {
+        Filter::All
+    }
+}
+
+
+#[derive(Clone, Serialize, Deserialize)]
 struct Todo {
     id: u32,
     title: Mutable<String>,
     completed: Mutable<bool>,
+
+    #[serde(skip)]
     editing: Mutable<Option<String>>,
 }
 
+
+#[derive(Serialize, Deserialize)]
 struct State {
     todo_id: Cell<u32>,
+
+    #[serde(skip)]
     new_todo_title: Mutable<String>,
+
     todo_list: MutableVec<Todo>,
+
+    #[serde(skip)]
     filter: Mutable<Filter>,
+}
+
+impl State {
+    fn new() -> Self {
+        State {
+            todo_id: Cell::new(0),
+            new_todo_title: Mutable::new("".to_owned()),
+            todo_list: MutableVec::new(),
+            filter: Mutable::new(Filter::All),
+        }
+    }
+
+    fn deserialize() -> Self {
+        window().local_storage().get("todos-rust-dominator").and_then(|state_json| {
+            serde_json::from_str(state_json.as_str()).ok()
+        }).unwrap_or_else(State::new)
+    }
+
+    fn serialize(&self) {
+        let state_json = serde_json::to_string(self).unwrap();
+        window().local_storage().insert("todos-rust-dominator", state_json.as_str()).unwrap();
+    }
 }
 
 
@@ -105,12 +148,7 @@ fn filter_button(state: Rc<State>, kind: Filter) -> Dom {
 
 
 fn main() {
-    let state = Rc::new(State {
-        todo_id: Cell::new(0),
-        new_todo_title: Mutable::new("".to_owned()),
-        todo_list: MutableVec::new(),
-        filter: Mutable::new(Filter::All),
-    });
+    let state = Rc::new(State::deserialize());
 
 
     fn update_filter(state: &Rc<State>) {
@@ -169,6 +207,8 @@ fn main() {
                                             completed: Mutable::new(false),
                                             editing: Mutable::new(None),
                                         });
+
+                                        state.serialize();
                                     }
                                 }
                             }));
@@ -205,6 +245,8 @@ fn main() {
                                 for todo in state.todo_list.as_slice().iter() {
                                     todo.completed.set(checked);
                                 }
+
+                                state.serialize();
                             }));
                         }),
                         html!("label", {
@@ -262,8 +304,9 @@ fn main() {
                                                     attribute("type", "checkbox");
                                                     class("toggle", true);
                                                     property("checked", todo.completed.signal().dynamic());
-                                                    event(clone!(todo => move |event: ChangeEvent| {
+                                                    event(clone!(state, todo => move |event: ChangeEvent| {
                                                         todo.completed.set(get_checked(&event));
+                                                        state.serialize();
                                                     }));
                                                 }),
 
@@ -281,6 +324,8 @@ fn main() {
                                                     event(clone!(state, todo => move |_: ClickEvent| {
                                                         // TODO make this more efficient ?
                                                         state.todo_list.retain(|x| x.id != todo.id);
+
+                                                        state.serialize();
                                                     }));
                                                 }),
                                             ]);
@@ -319,6 +364,8 @@ fn main() {
                                                         // TODO make this more efficient ?
                                                         state.todo_list.retain(|x| x.id != todo.id);
                                                     }
+
+                                                    state.serialize();
                                                 }
                                             }));
                                         }),
@@ -387,6 +434,8 @@ fn main() {
 
                             event(clone!(state => move |_: ClickEvent| {
                                 state.todo_list.retain(|todo| todo.completed.get() == false);
+
+                                state.serialize();
                             }));
 
                             children(&mut [

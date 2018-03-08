@@ -734,6 +734,7 @@ pub mod unsync {
     use std::cell::{RefCell, Ref};
     use futures::unsync::mpsc;
     use futures::{Async, Stream};
+    use serde::{Serialize, Deserialize, Serializer, Deserializer};
 
 
     struct MutableVecState<A> {
@@ -901,11 +902,16 @@ pub mod unsync {
 
     impl<A> MutableVec<A> {
         #[inline]
-        pub fn new() -> Self {
+        pub fn new_with_values(values: Vec<A>) -> Self {
             MutableVec(Rc::new(RefCell::new(MutableVecState {
-                values: vec![],
+                values,
                 senders: vec![],
             })))
+        }
+
+        #[inline]
+        pub fn new() -> Self {
+            Self::new_with_values(vec![])
         }
 
         #[inline]
@@ -964,6 +970,27 @@ pub mod unsync {
         #[inline]
         pub fn set(&self, index: usize, value: A) {
             self.0.borrow_mut().set(index, value)
+        }
+    }
+
+    impl<T> Serialize for MutableVec<T> where T: Serialize {
+        #[inline]
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+            self.0.borrow().values.serialize(serializer)
+        }
+    }
+
+    impl<'de, T> Deserialize<'de> for MutableVec<T> where T: Deserialize<'de> {
+        #[inline]
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+            <Vec<T>>::deserialize(deserializer).map(MutableVec::new_with_values)
+        }
+    }
+
+    impl<T> Default for MutableVec<T> {
+        #[inline]
+        fn default() -> Self {
+            MutableVec::new()
         }
     }
 

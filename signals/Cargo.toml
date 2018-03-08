@@ -6,3 +6,5 @@ authors = ["Pauan <pcxunlimited@gmail.com>"]
 [dependencies]
 futures = "0.1.18"
 discard = "1.0.3"
+# TODO make this optional
+serde = "1.0.27"
