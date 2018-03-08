@@ -454,8 +454,9 @@ impl<A> Signal for Flatten<A>
 // TODO verify that this is correct
 pub mod unsync {
     use super::{Signal, State};
+    use std::mem::swap;
     use std::rc::{Rc, Weak};
-    use std::cell::{Cell, RefCell};
+    use std::cell::{Cell, RefCell, RefMut};
     use futures::task;
     use futures::task::Task;
 
@@ -485,11 +486,7 @@ pub mod unsync {
             })))
         }
 
-        pub fn set(&self, value: A) {
-            let mut state = self.0.borrow_mut();
-
-            state.value = value;
-
+        fn notify(state: &mut RefMut<MutableState<A>>) {
             state.receivers.retain(|receiver| {
                 if let Some(receiver) = receiver.upgrade() {
                     receiver.has_changed.set(true);
@@ -505,6 +502,32 @@ pub mod unsync {
                     false
                 }
             });
+        }
+
+        /*pub fn update<F>(&self, f: F) where F: FnOnce(A) -> A {
+            let mut state = self.0.borrow_mut();
+
+            state.value = f(state.value);
+
+            Self::notify(&mut state);
+        }*/
+
+        pub fn replace(&self, mut value: A) -> A {
+            let mut state = self.0.borrow_mut();
+
+            swap(&mut state.value, &mut value);
+
+            Self::notify(&mut state);
+
+            value
+        }
+
+        pub fn set(&self, value: A) {
+            let mut state = self.0.borrow_mut();
+
+            state.value = value;
+
+            Self::notify(&mut state);
         }
     }
 
