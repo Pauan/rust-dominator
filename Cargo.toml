@@ -2,12 +2,19 @@
 name = "dominator"
 version = "0.1.0"
 authors = ["Pauan <pcxunlimited@gmail.com>"]
+description = "Zero cost virtual DOM library using FRP signals"
+repository = "https://github.com/Pauan/rust-dominator"
+homepage = "https://github.com/Pauan/rust-dominator"
+readme = "README.md"
+license = "MIT"
+keywords = ["javascript", "dom", "reactive", "signal", "frp"]
+categories = ["web-programming", "template-engine", "wasm"]
 
 [dependencies]
 stdweb-derive = "0.4.0"
 lazy_static = "1.0.0"
 discard = "1.0.3"
-signals = { path = "./signals" }
+signals = "0.1.0"
 
 [dependencies.stdweb]
 version = "0.4.0"
