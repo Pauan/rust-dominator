@@ -242,8 +242,7 @@ fn main() {
 
                             property("checked", state.todo_list.signal_vec()
                                 .map_signal(|todo| todo.completed.signal())
-                                // TODO use .filter()
-                                .filter_map(|completed| if !completed { Some(()) } else { None })
+                                .filter(|completed| !completed)
                                 .len()
                                 .map(|len| len != 0)
                                 .dynamic());
@@ -396,8 +395,7 @@ fn main() {
 
                             children(state.todo_list.signal_vec()
                                 .map_signal(|todo| todo.completed.signal())
-                                // TODO use .filter()
-                                .filter_map(|completed| if !completed { Some(()) } else { None })
+                                .filter(|completed| !completed)
                                 .len()
                                 // TODO make this more efficient
                                 .map(|len| {
@@ -436,8 +434,7 @@ fn main() {
                             // Hide if it doesn't have any completed items.
                             property("hidden", state.todo_list.signal_vec()
                                 .map_signal(|todo| todo.completed.signal())
-                                // TODO use .filter()
-                                .filter_map(|completed| if completed { Some(()) } else { None })
+                                .filter(|completed| completed)
                                 .len()
                                 .map(|len| len == 0)
                                 .dynamic());
