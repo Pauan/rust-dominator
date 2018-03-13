@@ -21,6 +21,7 @@ impl<A> IntoDynamic for A {
 }
 
 
+// TODO if I change these traits to inherit from Signal, and I implement Signal for &str / bool, then I might be able to avoid using Dynamic
 pub trait Text {
     fn into_dom(self) -> Dom;
 }

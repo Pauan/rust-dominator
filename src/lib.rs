@@ -19,6 +19,7 @@ mod dom;
 
 pub use dom::*;
 pub mod traits;
+pub mod animation;
 
 
 #[cfg(test)]
