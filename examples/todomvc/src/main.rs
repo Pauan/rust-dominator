@@ -434,7 +434,7 @@ fn main() {
                             // Hide if it doesn't have any completed items.
                             property("hidden", state.todo_list.signal_vec()
                                 .map_signal(|todo| todo.completed.signal())
-                                .filter(|completed| completed)
+                                .filter(|completed| *completed)
                                 .len()
                                 .map(|len| len == 0)
                                 .dynamic());

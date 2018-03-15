@@ -1,10 +1,19 @@
+use self::unsync::MutableAnimation;
+use futures::Async;
+use futures::future::Future;
+use signals::signal::{Signal, WaitFor};
+use signals::signal::unsync::MutableSignal;
+use signals::signal_vec::{SignalVec, VecChange};
+use stdweb::Value;
+
+
 // TODO generalize this so it works for any target, not just JS
 // TODO maybe keep a queue in Rust, so that way it only needs to call the callback once
 struct Raf(Value);
 
 impl Raf {
     #[inline]
-    fn new<F: FnMut(f64, f64) -> bool>(callback: F) -> Self {
+    fn new<F>(callback: F) -> Self where F: FnMut(f64, f64) -> bool + 'static {
         Raf(js!(
             var starting_time = null;
             var callback = @{callback};
@@ -38,7 +47,7 @@ impl Drop for Raf {
     #[inline]
     fn drop(&mut self) {
         js! { @(no_return)
-            var self = @{self};
+            var self = @{&self.0};
 
             if (self.id !== null) {
                 cancelAnimationFrame(self.id);
@@ -49,19 +58,20 @@ impl Drop for Raf {
 }
 
 
-pub trait AnimatedSignalVec {
-    fn animated_map<A, B, F>(self, duration: f64, f: F) -> AnimatedMap<Self, F>
-        // TODO maybe don't make this signal generic ?
-        where A: Signal<f64>,
-              F: FnMut(Self::Item, A) -> B;
+pub trait AnimatedSignalVec: SignalVec {
+    type AnimatedSignal: Signal<Item = Percentage>;
+
+    fn animated_map<A, F>(self, duration: f64, f: F) -> AnimatedMap<Self, F>
+        where F: FnMut(Self::Item, Self::AnimatedSignal) -> A,
+              Self: Sized;
 }
 
 impl<S: SignalVec> AnimatedSignalVec for S {
+    type AnimatedSignal = MutableSignal<Percentage>;
+
     #[inline]
-    fn animated_map<A, B, F>(self, duration: f64, f: F) -> AnimatedMap<Self, F>
-        // TODO maybe don't make this signal generic ?
-        where A: Signal<f64>,
-              F: FnMut(Self::Item, A) -> B {
+    fn animated_map<A, F>(self, duration: f64, f: F) -> AnimatedMap<Self, F>
+        where F: FnMut(Self::Item, Self::AnimatedSignal) -> A {
         AnimatedMap {
             duration: duration,
             animations: vec![],
@@ -74,7 +84,7 @@ impl<S: SignalVec> AnimatedSignalVec for S {
 
 struct AnimatedMapState {
     animation: MutableAnimation,
-    removing: Option<WaitFor<MutableSignal<f64>>>,
+    removing: Option<WaitFor<MutableSignal<Percentage>>>,
 }
 
 // TODO move this into signals crate and also generalize it to work with any future, not just animations
@@ -85,15 +95,9 @@ pub struct AnimatedMap<A, B> {
     callback: B,
 }
 
-impl<A, B, F, S> AnimatedMap<S, F>
+impl<A, F, S> AnimatedMap<S, F>
     where S: SignalVec,
-          A: Signal<f64>
-          F: FnMut(S::Item, A) -> B {
-
-    #[inline]
-    fn call(&self, value: S::Item, state: &AnimatedMapState) -> B {
-        (self.callback)(value, state.animation.signal())
-    }
+          F: FnMut(S::Item, MutableSignal<Percentage>) -> A {
 
     fn animated_state(&self) -> AnimatedMapState {
         let state = AnimatedMapState {
@@ -101,12 +105,12 @@ impl<A, B, F, S> AnimatedMap<S, F>
             removing: None,
         };
 
-        state.animation.animate_to(1.0);
+        state.animation.animate_to(Percentage::new_unchecked(1.0));
 
         state
     }
 
-    fn remove_index(&self, index: usize) -> Async<Option<VecChange<B>>> {
+    fn remove_index(&mut self, index: usize) -> Async<Option<VecChange<A>>> {
         if index == (self.animations.len() - 1) {
             self.animations.pop();
             Async::Ready(Some(VecChange::Pop {}))
@@ -117,19 +121,19 @@ impl<A, B, F, S> AnimatedMap<S, F>
         }
     }
 
-    fn remove(&self, index: usize) -> Option<Async<Option<VecChange<B>>>> {
-        let state = self.animations[index];
+    fn should_remove(&mut self, index: usize) -> bool {
+        let state = &mut self.animations[index];
 
-        state.animation.animate_to(0.0);
+        state.animation.animate_to(Percentage::new_unchecked(0.0));
 
-        let future = state.animation.signal().wait_for(0.0);
+        let mut future = state.animation.signal().wait_for(Percentage::new_unchecked(0.0));
 
         if future.poll().unwrap().is_ready() {
-            Some(self.remove_index(index))
+            true
 
         } else {
             state.removing = Some(future);
-            None
+            false
         }
     }
 
@@ -159,18 +163,17 @@ impl<A, B, F, S> AnimatedMap<S, F>
     }
 }
 
-impl<A, B, F, S> SignalVec for AnimatedMap<S, F>
+impl<A, F, S> SignalVec for AnimatedMap<S, F>
     where S: SignalVec,
-          A: Signal<f64>
-          F: FnMut(S::Item, A) -> B {
-    type Item = B;
+          F: FnMut(S::Item, MutableSignal<Percentage>) -> A {
+    type Item = A;
 
     // TODO this can probably be implemented more efficiently
-    fn poll(&mut self) -> Async<Option<Self::Item>> {
-        let is_done = true;
+    fn poll(&mut self) -> Async<Option<VecChange<Self::Item>>> {
+        let mut is_done = true;
 
         // TODO is this loop correct ?
-        while let Some(signal) = self.signal.take() {
+        while let Some(mut signal) = self.signal.take() {
             match signal.poll() {
                 Async::Ready(Some(change)) => {
                     self.signal = Some(signal);
@@ -183,11 +186,11 @@ impl<A, B, F, S> SignalVec for AnimatedMap<S, F>
                             Async::Ready(Some(VecChange::Replace {
                                 values: values.into_iter().map(|value| {
                                     let state = AnimatedMapState {
-                                        animation: MutableAnimation::new_with_initial(self.duration, 1.0),
+                                        animation: MutableAnimation::new_with_initial(self.duration, Percentage::new_unchecked(1.0)),
                                         removing: None,
                                     };
 
-                                    let value = self.call(value, &state);
+                                    let value = (self.callback)(value, state.animation.signal());
 
                                     self.animations.push(state);
 
@@ -199,30 +202,30 @@ impl<A, B, F, S> SignalVec for AnimatedMap<S, F>
                         VecChange::InsertAt { index, value } => {
                             let index = self.find_index(index).unwrap_or_else(|| self.animations.len());
                             let state = self.animated_state();
-                            let value = self.call(value, &state);
+                            let value = (self.callback)(value, state.animation.signal());
                             self.animations.insert(index, state);
                             Async::Ready(Some(VecChange::InsertAt { index, value }))
                         },
 
                         VecChange::Push { value } => {
                             let state = self.animated_state();
-                            let value = self.call(value, &state);
+                            let value = (self.callback)(value, state.animation.signal());
                             self.animations.push(state);
                             Async::Ready(Some(VecChange::Push { value }))
                         },
 
                         VecChange::UpdateAt { index, value } => {
                             let index = self.find_index(index).expect("Could not find value");
-                            let state = self.animations[index];
-                            let value = self.call(value, &state);
+                            let state = &self.animations[index];
+                            let value = (self.callback)(value, state.animation.signal());
                             Async::Ready(Some(VecChange::UpdateAt { index, value }))
                         },
 
                         VecChange::RemoveAt { index } => {
                             let index = self.find_index(index).expect("Could not find value");
 
-                            if let Some(value) = self.remove(index) {
-                                value
+                            if self.should_remove(index) {
+                                self.remove_index(index)
 
                             } else {
                                 continue;
@@ -232,8 +235,8 @@ impl<A, B, F, S> SignalVec for AnimatedMap<S, F>
                         VecChange::Pop {} => {
                             let index = self.find_last_index().expect("Cannot pop from empty vec");
 
-                            if let Some(value) = self.remove(index) {
-                                value
+                            if self.should_remove(index) {
+                                self.remove_index(index)
 
                             } else {
                                 continue;
@@ -258,12 +261,12 @@ impl<A, B, F, S> SignalVec for AnimatedMap<S, F>
             }
         }
 
-        let is_removing = false;
+        let mut is_removing = false;
 
         // TODO make this more efficient (e.g. using a similar strategy as FuturesUnordered)
         // This uses rposition so that way it will return VecChange::Pop in more situations
-        let index = self.animations.rposition(|state| {
-            if let Some(future) = state.removing {
+        let index = self.animations.iter_mut().rposition(|state| {
+            if let Some(ref mut future) = state.removing {
                 is_removing = true;
                 future.poll().unwrap().is_ready()
 
@@ -287,7 +290,7 @@ impl<A, B, F, S> SignalVec for AnimatedMap<S, F>
 }
 
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Percentage(f64);
 
 impl Percentage {
@@ -303,40 +306,76 @@ impl Percentage {
     }
 
     #[inline]
+    pub fn map<F>(self, f: F) -> Self where F: FnOnce(f64) -> f64 {
+        Self::new(f(self.0))
+    }
+
+    #[inline]
+    pub fn map_unchecked<F>(self, f: F) -> Self where F: FnOnce(f64) -> f64 {
+        Self::new_unchecked(f(self.0))
+    }
+
+    #[inline]
+    pub fn invert(self) -> Self {
+        // TODO use new instead ?
+        Self::new_unchecked(1.0 - self.0)
+    }
+
+    #[inline]
     pub fn range_inclusive(&self, low: f64, high: f64) -> f64 {
-        low + (self.0 * (high - low))
+        range_inclusive(self.0, low, high)
+    }
+
+    // TODO figure out better name
+    #[inline]
+    pub fn into_f64(self) -> f64 {
+        self.0
     }
 }
 
 impl Into<f64> for Percentage {
     #[inline]
-    fn into(input: Self) -> f64 {
-        input.0
+    fn into(self) -> f64 {
+        self.0
     }
+}
+
+#[inline]
+fn range_inclusive(percentage: f64, low: f64, high: f64) -> f64 {
+    low + (percentage * (high - low))
 }
 
 
 pub mod unsync {
-    pub struct MutableAnimation {
-        playing: bool,
-        duration: f64,
+    use super::{Raf, Percentage, range_inclusive};
+    use std::rc::Rc;
+    use std::cell::{Cell, RefCell};
+    use signals::signal::unsync::{Mutable, MutableSignal};
+
+
+    struct MutableAnimationState {
+        playing: Cell<bool>,
+        duration: Cell<f64>,
         value: Mutable<Percentage>,
-        end: Percentage,
-        raf: Option<Raf>,
+        end: Cell<Percentage>,
+        raf: RefCell<Option<Raf>>,
     }
+
+    #[derive(Clone)]
+    pub struct MutableAnimation(Rc<MutableAnimationState>);
 
     impl MutableAnimation {
         #[inline]
         pub fn new_with_initial(duration: f64, initial: Percentage) -> Self {
             debug_assert!(duration >= 0.0);
 
-            MutableAnimation {
-                playing: true,
-                duration,
+            MutableAnimation(Rc::new(MutableAnimationState {
+                playing: Cell::new(true),
+                duration: Cell::new(duration),
                 value: Mutable::new(initial),
-                end: initial,
-                raf: None,
-            }
+                end: Cell::new(initial),
+                raf: RefCell::new(None),
+            }))
         }
 
         #[inline]
@@ -345,80 +384,124 @@ pub mod unsync {
         }
 
         #[inline]
-        fn stop_raf(&mut self) {
-            self.raf.take();
+        fn stop_raf(&self) {
+            *self.0.raf.borrow_mut() = None;
         }
 
-        fn start_raf(&mut self) {
-            // TODO use Copy constraint to make value.get() faster ?
-            let start = self.value.get();
+        fn start_raf(&self) {
+            if self.0.playing.get() {
+                // TODO use Copy constraint to make value.get() faster ?
+                let start: f64 = self.0.value.get().into();
+                let end: f64 = self.0.end.get().into();
 
-            if start != self.end && self.duration > 0 {
-                self.raf = Some(Raf::new(|starting_time, current_time| {
-                    console!(log, format!("{:#?} {:#?}", starting_time, current_time));
+                if start != end {
+                    let duration = self.0.duration.get();
 
-                    let diff = (current_time - starting_time) / duration;
+                    if duration > 0.0 {
+                        let duration = (end - start).abs() * duration;
 
-                    if diff >= 1 {
-                        self.value.set(self.end);
-                        false
+                        let value = self.0.value.clone();
+
+                        *self.0.raf.borrow_mut() = Some(Raf::new(move |starting_time, current_time| {
+                            let diff = (current_time - starting_time) / duration;
+
+                            if diff >= 1.0 {
+                                value.set(Percentage::new_unchecked(end));
+                                false
+
+                            } else {
+                                value.set(Percentage::new_unchecked(range_inclusive(diff, start, end)));
+                                true
+                            }
+                        }));
 
                     } else {
-                        // TODO adjust based on the start / end
-                        self.value.set(diff);
-                        true
+                        self.stop_raf();
+                        self.0.value.set(Percentage::new_unchecked(end));
                     }
-                }));
-            }
-        }
 
-        pub fn set_duration(&mut self, duration: f64) {
-            debug_assert!(duration >= 0.0);
-
-            if self.duration != duration {
-                self.duration = duration;
-
-                // TODO this doesn't need to stop/start in some situations
-                if self.playing {
+                } else {
+                    // TODO is this necessary ?
                     self.stop_raf();
-                    self.start_raf();
                 }
             }
         }
 
+        pub fn set_duration(&self, duration: f64) {
+            debug_assert!(duration >= 0.0);
+
+            if self.0.duration.get() != duration {
+                self.0.duration.set(duration);
+                self.start_raf();
+            }
+        }
+
         #[inline]
-        pub fn pause(&mut self) {
-            self.playing = false;
+        pub fn pause(&self) {
+            self.0.playing.set(false);
             self.stop_raf();
         }
 
         #[inline]
-        pub fn play(&mut self) {
-            self.playing = true;
+        pub fn play(&self) {
+            self.0.playing.set(true);
             self.start_raf();
         }
 
-        pub fn jump_to(&mut self, end: Percentage) {
+        pub fn jump_to(&self, end: Percentage) {
+            self.stop_raf();
+
+            self.0.end.set(end);
+
             // TODO use Copy constraint to make value.get() faster ?
-            if self.value.get() != end {
-                self.stop_raf();
-                self.end = end;
-                self.value.set(end);
+            if self.0.value.get() != end {
+                self.0.value.set(end);
             }
         }
 
-        pub fn animate_to(&mut self, end: Percentage) {
-            if self.end != end {
-                if self.duration <= 0 {
+        pub fn animate_to(&self, end: Percentage) {
+            if self.0.end.get() != end {
+                if self.0.duration.get() <= 0.0 {
                     self.jump_to(end);
 
-                } else if self.playing {
-                    // TODO does this need to stop/start the raf ?
-                    self.stop_raf();
-                    self.end = end;
+                } else {
+                    self.0.end.set(end);
                     self.start_raf();
                 }
             }
         }
+
+        #[inline]
+        pub fn signal(&self) -> MutableSignal<Percentage> {
+            self.0.value.signal()
+        }
+    }
+}
+
+
+pub mod easing {
+    use super::Percentage;
+
+
+    // TODO should this use map rather than map_unchecked ?
+    #[inline]
+    pub fn powi(p: Percentage, n: i32) -> Percentage {
+        p.map_unchecked(|p| p.powi(n))
+    }
+
+    #[inline]
+    pub fn cubic(p: Percentage) -> Percentage {
+        powi(p, 3)
+    }
+
+    pub fn in_out<F>(p: Percentage, f: F) -> Percentage where F: FnOnce(Percentage) -> Percentage {
+        p.map_unchecked(|p| {
+            if p <= 0.5 {
+                f(Percentage::new_unchecked(p * 2.0)).into_f64() / 2.0
+
+            } else {
+                1.0 - (f(Percentage::new_unchecked((1.0 - p) * 2.0)).into_f64() / 2.0)
+            }
+        })
     }
 }

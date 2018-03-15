@@ -1,17 +1,5 @@
 use std;
-
-
-// TODO replace this with FnOnce later
-trait IRemoveCallback {
-    fn call(self: Box<Self>);
-}
-
-impl<F: FnOnce()> IRemoveCallback for F {
-    #[inline]
-    fn call(self: Box<Self>) {
-        self();
-    }
-}
+use discard::Discard;
 
 
 // TODO replace this with FnOnce later
@@ -27,9 +15,23 @@ impl<F: FnOnce(&mut Callbacks)> IInsertCallback for F {
 }
 
 
+// TODO a bit gross
+trait IRemove {
+    fn remove(self: Box<Self>);
+}
+
+impl<A: Discard> IRemove for A {
+    #[inline]
+    fn remove(self: Box<Self>) {
+        self.discard();
+    }
+}
+
+
 pub struct InsertCallback(Box<IInsertCallback>);
 
-pub struct RemoveCallback(Box<IRemoveCallback>);
+// TODO is there a more efficient way of doing this ?
+pub struct RemoveCallback(Box<IRemove>);
 
 impl std::fmt::Debug for InsertCallback {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -48,8 +50,7 @@ impl std::fmt::Debug for RemoveCallback {
 pub struct Callbacks {
     pub after_insert: Vec<InsertCallback>,
     pub after_remove: Vec<RemoveCallback>,
-    // TODO figure out a better way
-    pub(crate) trigger_remove: bool,
+    trigger_remove: bool,
 }
 
 impl Callbacks {
@@ -68,8 +69,8 @@ impl Callbacks {
     }
 
     #[inline]
-    pub fn after_remove<A: FnOnce() + 'static>(&mut self, callback: A) {
-        self.after_remove.push(RemoveCallback(Box::new(callback)));
+    pub fn after_remove<A: Discard + 'static>(&mut self, value: A) {
+        self.after_remove.push(RemoveCallback(Box::new(value)));
     }
 
     // TODO runtime checks to make sure this isn't called multiple times ?
@@ -85,32 +86,44 @@ impl Callbacks {
             f.0.call(&mut callbacks);
         }
 
-        self.after_insert.shrink_to_fit();
+        // TODO verify that this is correct
+        self.after_insert = vec![];
 
         // TODO figure out a better way of verifying this
         assert_eq!(callbacks.after_insert.len(), 0);
 
         // TODO verify that this is correct
+        // TODO what if `callbacks` is leaked ?
         std::mem::swap(&mut callbacks.after_remove, &mut self.after_remove);
     }
 
     #[inline]
     fn trigger_after_remove(&mut self) {
         for f in self.after_remove.drain(..) {
-            f.0.call();
+            f.0.remove();
         }
+    }
 
-        // TODO is this a good idea?
-        self.after_remove.shrink_to_fit();
+    #[inline]
+    pub fn leak(&mut self) {
+        self.trigger_remove = false;
     }
 }
 
-// TODO use Discard instead
+
+// TODO use DiscardOnDrop instead
 impl Drop for Callbacks {
     #[inline]
     fn drop(&mut self) {
         if self.trigger_remove {
             self.trigger_after_remove();
         }
+    }
+}
+
+impl Discard for Callbacks {
+    #[inline]
+    fn discard(mut self) {
+        self.trigger_after_remove();
     }
 }

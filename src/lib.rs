@@ -1,3 +1,5 @@
+#![recursion_limit="128"]
+
 #[macro_use]
 extern crate stdweb;
 
@@ -8,6 +10,7 @@ extern crate stdweb_derive;
 extern crate lazy_static;
 
 extern crate discard;
+extern crate futures;
 extern crate signals;
 
 

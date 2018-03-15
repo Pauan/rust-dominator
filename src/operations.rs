@@ -11,18 +11,13 @@ use dom::{Dom, IStyle};
 use callbacks::Callbacks;
 use std::iter::IntoIterator;
 use stdweb::traits::{INode, IElement, IHtmlElement};
+use futures::future::Future;
 
 
+// TODO this should probably be in stdweb
 #[inline]
-fn for_each<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
-    where A: Signal + 'static,
-          B: FnMut(A::Item) + 'static {
-
-    let future = signal.for_each(move |value| {
-        callback(value);
-        Ok(())
-    });
-
+pub fn spawn_future<F>(future: F) -> CancelableFutureHandle
+    where F: Future<Item = (), Error = ()> + 'static {
     // TODO make this more efficient ?
     let (handle, future) = cancelable_future(future, |_| ());
 
@@ -32,21 +27,27 @@ fn for_each<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
 }
 
 
+#[inline]
+fn for_each<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
+    where A: Signal + 'static,
+          B: FnMut(A::Item) + 'static {
+
+    spawn_future(signal.for_each(move |value| {
+        callback(value);
+        Ok(())
+    }))
+}
+
+
+#[inline]
 fn for_each_vec<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
     where A: SignalVec + 'static,
           B: FnMut(VecChange<A::Item>) + 'static {
 
-    let future = signal.for_each(move |value| {
+    spawn_future(signal.for_each(move |value| {
         callback(value);
         Ok(())
-    });
-
-    // TODO make this more efficient ?
-    let (handle, future) = cancelable_future(future, |_| ());
-
-    PromiseFuture::spawn(future);
-
-    DiscardOnDrop::leak(handle)
+    }))
 }
 
 
@@ -60,7 +61,7 @@ pub fn set_text_signal<A>(element: &TextNode, callbacks: &mut Callbacks, signal:
         dom_operations::set_text(&element, &value);
     });
 
-    callbacks.after_remove(move || handle.discard());
+    callbacks.after_remove(handle);
 }
 
 
@@ -77,7 +78,7 @@ pub fn set_property_signal<'a, A, B, C>(element: &A, callbacks: &mut Callbacks, 
         dom_operations::set_property(&element, &name, &value);
     });
 
-    callbacks.after_remove(move || handle.discard());
+    callbacks.after_remove(handle);
 }
 
 #[inline]
@@ -105,7 +106,7 @@ pub fn set_attribute_signal<A, B>(element: &A, callbacks: &mut Callbacks, name: 
         }
     });
 
-    callbacks.after_remove(move || handle.discard());
+    callbacks.after_remove(handle);
 }
 
 #[inline]
@@ -126,7 +127,7 @@ pub fn toggle_class_signal<A, B>(element: &A, callbacks: &mut Callbacks, name: &
         dom_operations::toggle_class(&element, &name, value);
     });
 
-    callbacks.after_remove(move || handle.discard());
+    callbacks.after_remove(handle);
 }
 
 #[inline]
@@ -150,7 +151,7 @@ pub fn set_style_signal<A, B>(element: &A, callbacks: &mut Callbacks, name: &str
         }
     });
 
-    callbacks.after_remove(move || handle.discard());
+    callbacks.after_remove(handle);
 }
 
 #[inline]
@@ -173,7 +174,7 @@ pub fn set_focused_signal<A, B>(element: &A, callbacks: &mut Callbacks, signal: 
         });
 
         // TODO verify that this is correct under all circumstances
-        callbacks.after_remove(move || handle.discard());
+        callbacks.after_remove(handle);
     });
 }
 
@@ -213,7 +214,7 @@ pub fn insert_children_signal<A, B, C>(element: &A, callbacks: &mut Callbacks, s
     });
 
     // TODO verify that this will drop `old_children`
-    callbacks.after_remove(move || handle.discard());
+    callbacks.after_remove(handle);
 }*/
 
 #[inline]
@@ -225,6 +226,54 @@ pub fn insert_children_iter<'a, A: INode, B: IntoIterator<Item = &'a mut Dom>>(e
         element.append_child(&dom.element);
     }
 }
+
+
+// TODO move this into the discard crate
+// TODO verify that this is correct and doesn't leak memory or cause memory safety
+pub struct RcDiscard<A>(*const A);
+
+impl<A> RcDiscard<A> {
+    #[inline]
+    pub fn new(value: Rc<A>) -> Self {
+        RcDiscard(Rc::into_raw(value))
+    }
+}
+
+impl<A> Discard for RcDiscard<A> {
+    #[inline]
+    fn discard(self) {
+        unsafe {
+            Rc::from_raw(self.0);
+        }
+    }
+}
+
+
+// TODO move this into the discard crate
+// TODO verify that this is correct and doesn't leak memory or cause memory safety
+pub struct BoxDiscard<A>(*mut A);
+
+impl<A> BoxDiscard<A> {
+    #[inline]
+    pub fn new(value: A) -> Self {
+        Self::from_box(Box::new(value))
+    }
+
+    #[inline]
+    pub fn from_box(value: Box<A>) -> Self {
+        BoxDiscard(Box::into_raw(value))
+    }
+}
+
+impl<A> Discard for BoxDiscard<A> {
+    #[inline]
+    fn discard(self) {
+        unsafe {
+            Box::from_raw(self.0);
+        }
+    }
+}
+
 
 pub fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, signal: B)
     where A: INode + Clone + 'static,
@@ -238,6 +287,7 @@ pub fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, 
         children: RefCell<Vec<Dom>>,
     }
 
+    // TODO use two separate Rcs ?
     let state = Rc::new(State {
         is_inserted: Cell::new(false),
         children: RefCell::new(vec![]),
@@ -250,8 +300,7 @@ pub fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, 
             if !state.is_inserted.replace(true) {
                 let mut children = state.children.borrow_mut();
 
-                // TODO figure out a better way to iterate
-                for mut dom in &mut children[..] {
+                for dom in children.iter_mut() {
                     dom.callbacks.trigger_after_insert();
                 }
             }
@@ -265,14 +314,21 @@ pub fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, 
 
                 let mut children = state.children.borrow_mut();
 
+                for dom in children.drain(..) {
+                    dom.callbacks.discard();
+                }
+
                 *children = values;
 
+                let is_inserted = state.is_inserted.get();
+
                 // TODO use document fragment ?
-                // TODO figure out a better way to iterate
-                for dom in &mut children[..] {
+                for dom in children.iter_mut() {
+                    dom.callbacks.leak();
+
                     element.append_child(&dom.element);
 
-                    if state.is_inserted.get() {
+                    if is_inserted {
                         dom.callbacks.trigger_after_insert();
                     }
                 }
@@ -282,6 +338,8 @@ pub fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, 
                 // TODO better usize -> u32 conversion
                 dom_operations::insert_at(&element, index as u32, &value.element);
 
+                value.callbacks.leak();
+
                 if state.is_inserted.get() {
                     value.callbacks.trigger_after_insert();
                 }
@@ -290,27 +348,10 @@ pub fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, 
                 state.children.borrow_mut().insert(index, value);
             },
 
-            VecChange::UpdateAt { index, mut value } => {
-                // TODO better usize -> u32 conversion
-                dom_operations::update_at(&element, index as u32, &value.element);
-
-                if state.is_inserted.get() {
-                    value.callbacks.trigger_after_insert();
-                }
-
-                // TODO figure out a way to move this to the top
-                state.children.borrow_mut()[index] = value;
-            },
-
-            VecChange::RemoveAt { index } => {
-                // TODO better usize -> u32 conversion
-                dom_operations::remove_at(&element, index as u32);
-
-                state.children.borrow_mut().remove(index);
-            },
-
             VecChange::Push { mut value } => {
                 element.append_child(&value.element);
+
+                value.callbacks.leak();
 
                 if state.is_inserted.get() {
                     value.callbacks.trigger_after_insert();
@@ -320,25 +361,58 @@ pub fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, 
                 state.children.borrow_mut().push(value);
             },
 
+            VecChange::UpdateAt { index, mut value } => {
+                // TODO better usize -> u32 conversion
+                dom_operations::update_at(&element, index as u32, &value.element);
+
+                value.callbacks.leak();
+
+                if state.is_inserted.get() {
+                    value.callbacks.trigger_after_insert();
+                }
+
+                // TODO figure out a way to move this to the top
+                let mut children = state.children.borrow_mut();
+
+                // TODO test this
+                ::std::mem::swap(&mut children[index], &mut value);
+
+                value.callbacks.discard();
+            },
+
+            VecChange::RemoveAt { index } => {
+                // TODO better usize -> u32 conversion
+                dom_operations::remove_at(&element, index as u32);
+
+                state.children.borrow_mut().remove(index).callbacks.discard();
+            },
+
             VecChange::Pop {} => {
                 let mut children = state.children.borrow_mut();
 
                 let index = children.len() - 1;
 
+                // TODO create remove_last_child function ?
                 // TODO better usize -> u32 conversion
                 dom_operations::remove_at(&element, index as u32);
 
-                children.pop();
+                children.pop().unwrap().callbacks.discard();
             },
 
             VecChange::Clear {} => {
                 dom_operations::remove_all_children(&element);
 
-                *state.children.borrow_mut() = vec![];
+                let mut children = state.children.borrow_mut();
+
+                for dom in children.drain(..) {
+                    dom.callbacks.discard();
+                }
+
+                *children = vec![];
             },
         }
     });
 
-    // TODO verify that this will drop `old_children`
-    callbacks.after_remove(move || handle.discard());
+    // TODO verify that this will drop `children`
+    callbacks.after_remove(handle);
 }

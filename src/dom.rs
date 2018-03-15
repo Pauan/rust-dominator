@@ -7,6 +7,9 @@ use stdweb::web::event::ConcreteEvent;
 use callbacks::Callbacks;
 use traits::*;
 use dom_operations;
+use operations::{BoxDiscard, spawn_future};
+use futures::future::Future;
+use discard::Discard;
 
 
 pub struct Dynamic<A>(pub(crate) A);
@@ -42,15 +45,32 @@ pub const HTML_NAMESPACE: &str = "http://www.w3.org/1999/xhtml";
 pub const SVG_NAMESPACE: &str = "http://www.w3.org/2000/svg";
 
 
-// TODO return a Handle ?
+pub struct DomHandle {
+    parent: Node,
+    dom: Dom,
+}
+
+impl Discard for DomHandle {
+    #[inline]
+    fn discard(self) {
+        self.parent.remove_child(&self.dom.element).unwrap();
+        self.dom.callbacks.discard();
+    }
+}
+
 #[inline]
-pub fn append_dom<A: INode>(parent: &A, mut dom: Dom) {
+pub fn append_dom<A: INode>(parent: &A, mut dom: Dom) -> DomHandle {
     parent.append_child(&dom.element);
 
     dom.callbacks.trigger_after_insert();
 
-    // This prevents it from calling trigger_after_remove
-    dom.callbacks.trigger_remove = false;
+    // This prevents it from triggering after_remove
+    dom.callbacks.leak();
+
+    DomHandle {
+        parent: parent.as_node().clone(),
+        dom
+    }
 }
 
 
@@ -88,7 +108,8 @@ impl Dom {
 
         let mut dom = initializer(&mut state);
 
-        dom.callbacks.after_remove(move || drop(state));
+        // TODO make this more efficient somehow ? what if the value is already on the heap ?
+        dom.callbacks.after_remove(BoxDiscard::new(state));
 
         dom
     }
@@ -100,6 +121,14 @@ pub struct HtmlBuilder<A> {
     callbacks: Callbacks,
     // TODO verify this with static types instead ?
     has_children: bool,
+}
+
+impl<A> HtmlBuilder<A> {
+    #[inline]
+    pub fn future<F>(mut self, future: F) -> Self where F: Future<Item = (), Error = ()> + 'static {
+        self.callbacks.after_remove(spawn_future(future));
+        self
+    }
 }
 
 // TODO add in SVG nodes
@@ -124,6 +153,23 @@ impl<A: AsRef<Reference> + Clone + 'static> HtmlBuilder<A> {
     }
 }
 
+struct EventListenerHandle {
+    event: &'static str,
+    element: Reference,
+    listener: Value,
+}
+
+impl Discard for EventListenerHandle {
+    #[inline]
+    fn discard(self) {
+        js! { @(no_return)
+            var listener = @{&self.listener};
+            @{&self.element}.removeEventListener(@{self.event}, listener);
+            listener.drop();
+        }
+    }
+}
+
 impl<A: IEventTarget> HtmlBuilder<A> {
     // TODO maybe inline this ?
     // TODO replace with element.add_event_listener
@@ -139,12 +185,10 @@ impl<A: IEventTarget> HtmlBuilder<A> {
             return listener;
         );
 
-        self.callbacks.after_remove(move || {
-            js! { @(no_return)
-                var listener = @{listener};
-                @{element}.removeEventListener(@{T::EVENT_TYPE}, listener);
-                listener.drop();
-            }
+        self.callbacks.after_remove(EventListenerHandle {
+            event: T::EVENT_TYPE,
+            element,
+            listener,
         });
     }
 
@@ -269,8 +313,8 @@ impl StylesheetBuilder {
     pub fn done(mut self) {
         self.callbacks.trigger_after_insert();
 
-        // This prevents it from calling trigger_after_remove
-        self.callbacks.trigger_remove = false;
+        // This prevents it from triggering after_remove
+        self.callbacks.leak();
     }
 }
 
