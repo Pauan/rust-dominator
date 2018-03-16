@@ -1,5 +1,4 @@
 use std;
-use std::sync::Mutex;
 use stdweb::{Reference, Value, ReferenceType};
 use stdweb::unstable::{TryFrom, TryInto};
 use stdweb::web::{IEventTarget, INode, IElement, IHtmlElement, Node};
@@ -9,7 +8,7 @@ use traits::*;
 use dom_operations;
 use operations::{BoxDiscard, spawn_future};
 use futures::future::Future;
-use discard::Discard;
+use discard::{Discard, DiscardOnDrop};
 
 
 pub struct Dynamic<A>(pub(crate) A);
@@ -126,7 +125,7 @@ pub struct HtmlBuilder<A> {
 impl<A> HtmlBuilder<A> {
     #[inline]
     pub fn future<F>(mut self, future: F) -> Self where F: Future<Item = (), Error = ()> + 'static {
-        self.callbacks.after_remove(spawn_future(future));
+        self.callbacks.after_remove(DiscardOnDrop::leak(spawn_future(future)));
         self
     }
 }
@@ -330,14 +329,16 @@ impl ClassBuilder {
     #[inline]
     pub fn new() -> Self {
         let class_name = {
+            use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
+
             lazy_static! {
                 // TODO can this be made more efficient ?
-                static ref CLASS_ID: Mutex<u32> = Mutex::new(0);
+                // TODO use AtomicU32 instead ?
+                static ref CLASS_ID: AtomicUsize = ATOMIC_USIZE_INIT;
             }
 
-            let mut id = CLASS_ID.lock().unwrap();
-
-            *id += 1;
+            // TODO check for overflow ?
+            let id = CLASS_ID.fetch_add(1, Ordering::Relaxed);
 
             // TODO make this more efficient ?
             format!("__class_{}__", id)

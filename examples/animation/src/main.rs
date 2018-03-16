@@ -2,17 +2,15 @@
 extern crate stdweb;
 #[macro_use]
 extern crate dominator;
-#[macro_use]
 extern crate signals;
 
 use stdweb::traits::*;
 use stdweb::web::{document, HtmlElement};
 use stdweb::web::event::{MouseDownEvent, MouseUpEvent};
-use signals::signal::{always, Signal};
-use signals::signal_vec::SignalVec;
+use signals::signal::Signal;
 use signals::signal_vec::unsync::MutableVec;
 use dominator::traits::*;
-use dominator::{text, Dom};
+use dominator::Dom;
 use dominator::animation::{Percentage, easing};
 use dominator::animation::unsync::MutableAnimation;
 

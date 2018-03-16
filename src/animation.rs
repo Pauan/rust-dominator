@@ -1,36 +1,26 @@
 use self::unsync::MutableAnimation;
-use futures::Async;
+use std::sync::{Arc, Weak, Mutex};
+use futures::{Async, task};
 use futures::future::Future;
-use signals::signal::{Signal, WaitFor};
+use futures::task::Task;
+use signals::signal::{Signal, State, WaitFor};
 use signals::signal::unsync::MutableSignal;
 use signals::signal_vec::{SignalVec, VecChange};
 use stdweb::Value;
 
 
 // TODO generalize this so it works for any target, not just JS
-// TODO maybe keep a queue in Rust, so that way it only needs to call the callback once
 struct Raf(Value);
 
 impl Raf {
     #[inline]
-    fn new<F>(callback: F) -> Self where F: FnMut(f64, f64) -> bool + 'static {
+    fn new<F>(callback: F) -> Self where F: FnMut(f64) + 'static {
         Raf(js!(
-            var starting_time = null;
             var callback = @{callback};
 
             function loop(time) {
-                // TODO assign this immediately when the Raf is created ?
-                if (starting_time === null) {
-                    starting_time = time;
-                }
-
-                if (callback(starting_time, time)) {
-                    value.id = requestAnimationFrame(loop);
-
-                } else {
-                    value.id = null;
-                    callback.drop();
-                }
+                value.id = requestAnimationFrame(loop);
+                callback(time);
             }
 
             var value = {
@@ -48,13 +38,102 @@ impl Drop for Raf {
     fn drop(&mut self) {
         js! { @(no_return)
             var self = @{&self.0};
-
-            if (self.id !== null) {
-                cancelAnimationFrame(self.id);
-                self.callback.drop();
-            }
+            cancelAnimationFrame(self.id);
+            self.callback.drop();
         }
     }
+}
+
+
+struct TimestampsGlobal {
+    raf: Option<Raf>,
+    // TODO make this more efficient
+    states: Vec<Weak<Mutex<TimestampsState>>>,
+}
+
+struct TimestampsState {
+    first: bool,
+    value: Option<f64>,
+    task: Option<Task>,
+}
+
+// TODO make this more efficient
+pub struct Timestamps(Arc<Mutex<TimestampsState>>);
+
+impl Signal for Timestamps {
+    type Item = Option<f64>;
+
+    fn poll(&mut self) -> State<Self::Item> {
+        let mut lock = self.0.lock().unwrap();
+
+        let value = lock.value.take();
+
+        if lock.first {
+            lock.first = false;
+            State::Changed(value)
+
+        } else if value.is_some() {
+            State::Changed(value)
+
+        } else {
+            lock.task = Some(task::current());
+            State::NotChanged
+        }
+    }
+}
+
+pub fn timestamps() -> Timestamps {
+    lazy_static! {
+        static ref TIMESTAMPS: Mutex<TimestampsGlobal> = Mutex::new(TimestampsGlobal {
+            raf: None,
+            states: vec![],
+        });
+    }
+
+    let state = Arc::new(Mutex::new(TimestampsState {
+        first: true,
+        value: None,
+        task: None,
+    }));
+
+    {
+        let mut lock = TIMESTAMPS.lock().unwrap();
+
+        lock.states.push(Arc::downgrade(&state));
+
+        if let None = lock.raf {
+            lock.raf = Some(Raf::new(|time| {
+                // TODO is it possible for this to deadlock or error or whatever ?
+                let mut lock = TIMESTAMPS.lock().unwrap();
+
+                lock.states.retain(|state| {
+                    if let Some(state) = state.upgrade() {
+                        let mut lock = state.lock().unwrap();
+
+                        // TODO it should always poll the most recent time, so this needs to be a has_changed boolean instead
+                        lock.value = Some(time);
+
+                        if let Some(task) = lock.task.take() {
+                            drop(lock);
+                            task.notify();
+                        }
+
+                        true
+
+                    } else {
+                        false
+                    }
+                });
+
+                if lock.states.len() == 0 {
+                    lock.raf = None;
+                    lock.states = vec![];
+                }
+            }));
+        }
+    }
+
+    Timestamps(state)
 }
 
 
@@ -347,10 +426,13 @@ fn range_inclusive(percentage: f64, low: f64, high: f64) -> f64 {
 
 
 pub mod unsync {
-    use super::{Raf, Percentage, range_inclusive};
+    use super::{Percentage, range_inclusive, timestamps};
+    use operations::spawn_future;
     use std::rc::Rc;
     use std::cell::{Cell, RefCell};
+    use signals::signal::{Signal, CancelableFutureHandle};
     use signals::signal::unsync::{Mutable, MutableSignal};
+    use discard::DiscardOnDrop;
 
 
     struct MutableAnimationState {
@@ -358,7 +440,7 @@ pub mod unsync {
         duration: Cell<f64>,
         value: Mutable<Percentage>,
         end: Cell<Percentage>,
-        raf: RefCell<Option<Raf>>,
+        animating: RefCell<Option<DiscardOnDrop<CancelableFutureHandle>>>,
     }
 
     #[derive(Clone)]
@@ -374,7 +456,7 @@ pub mod unsync {
                 duration: Cell::new(duration),
                 value: Mutable::new(initial),
                 end: Cell::new(initial),
-                raf: RefCell::new(None),
+                animating: RefCell::new(None),
             }))
         }
 
@@ -384,11 +466,11 @@ pub mod unsync {
         }
 
         #[inline]
-        fn stop_raf(&self) {
-            *self.0.raf.borrow_mut() = None;
+        fn stop_animating(&self) {
+            *self.0.animating.borrow_mut() = None;
         }
 
-        fn start_raf(&self) {
+        fn start_animating(&self) {
             if self.0.playing.get() {
                 // TODO use Copy constraint to make value.get() faster ?
                 let start: f64 = self.0.value.get().into();
@@ -400,29 +482,44 @@ pub mod unsync {
                     if duration > 0.0 {
                         let duration = (end - start).abs() * duration;
 
-                        let value = self.0.value.clone();
+                        let state = self.clone();
 
-                        *self.0.raf.borrow_mut() = Some(Raf::new(move |starting_time, current_time| {
-                            let diff = (current_time - starting_time) / duration;
+                        let mut starting_time = None;
 
-                            if diff >= 1.0 {
-                                value.set(Percentage::new_unchecked(end));
-                                false
+                        *self.0.animating.borrow_mut() = Some(spawn_future(
+                            timestamps()
+                                .map(move |current_time| {
+                                    if let Some(current_time) = current_time {
+                                        let starting_time = *starting_time.get_or_insert(current_time);
 
-                            } else {
-                                value.set(Percentage::new_unchecked(range_inclusive(diff, start, end)));
-                                true
-                            }
-                        }));
+                                        let diff = (current_time - starting_time) / duration;
+
+                                        // TODO don't update if the new value is the same as the old value
+                                        if diff >= 1.0 {
+                                            state.stop_animating();
+                                            state.0.value.set(Percentage::new_unchecked(end));
+                                            true
+
+                                        } else {
+                                            state.0.value.set(Percentage::new_unchecked(range_inclusive(diff, start, end)));
+                                            false
+                                        }
+
+                                    } else {
+                                        false
+                                    }
+                                })
+                                .wait_for(true)
+                        ));
 
                     } else {
-                        self.stop_raf();
+                        self.stop_animating();
                         self.0.value.set(Percentage::new_unchecked(end));
                     }
 
                 } else {
                     // TODO is this necessary ?
-                    self.stop_raf();
+                    self.stop_animating();
                 }
             }
         }
@@ -432,24 +529,24 @@ pub mod unsync {
 
             if self.0.duration.get() != duration {
                 self.0.duration.set(duration);
-                self.start_raf();
+                self.start_animating();
             }
         }
 
         #[inline]
         pub fn pause(&self) {
             self.0.playing.set(false);
-            self.stop_raf();
+            self.stop_animating();
         }
 
         #[inline]
         pub fn play(&self) {
             self.0.playing.set(true);
-            self.start_raf();
+            self.start_animating();
         }
 
         pub fn jump_to(&self, end: Percentage) {
-            self.stop_raf();
+            self.stop_animating();
 
             self.0.end.set(end);
 
@@ -466,7 +563,7 @@ pub mod unsync {
 
                 } else {
                     self.0.end.set(end);
-                    self.start_raf();
+                    self.start_animating();
                 }
             }
         }

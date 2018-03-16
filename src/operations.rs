@@ -16,14 +16,14 @@ use futures::future::Future;
 
 // TODO this should probably be in stdweb
 #[inline]
-pub fn spawn_future<F>(future: F) -> CancelableFutureHandle
+pub fn spawn_future<F>(future: F) -> DiscardOnDrop<CancelableFutureHandle>
     where F: Future<Item = (), Error = ()> + 'static {
     // TODO make this more efficient ?
     let (handle, future) = cancelable_future(future, |_| ());
 
     PromiseFuture::spawn(future);
 
-    DiscardOnDrop::leak(handle)
+    handle
 }
 
 
@@ -32,10 +32,10 @@ fn for_each<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
     where A: Signal + 'static,
           B: FnMut(A::Item) + 'static {
 
-    spawn_future(signal.for_each(move |value| {
+    DiscardOnDrop::leak(spawn_future(signal.for_each(move |value| {
         callback(value);
         Ok(())
-    }))
+    })))
 }
 
 
@@ -44,10 +44,10 @@ fn for_each_vec<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
     where A: SignalVec + 'static,
           B: FnMut(VecChange<A::Item>) + 'static {
 
-    spawn_future(signal.for_each(move |value| {
+    DiscardOnDrop::leak(spawn_future(signal.for_each(move |value| {
         callback(value);
         Ok(())
-    }))
+    })))
 }
 
 
