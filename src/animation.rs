@@ -1,5 +1,6 @@
 use self::unsync::MutableAnimation;
-use std::sync::{Arc, Weak, Mutex};
+use std::rc::{Rc, Weak};
+use std::cell::RefCell;
 use futures::{Async, task};
 use futures::future::Future;
 use futures::task::Task;
@@ -48,7 +49,7 @@ impl Drop for Raf {
 struct TimestampsGlobal {
     raf: Option<Raf>,
     // TODO make this more efficient
-    states: Vec<Weak<Mutex<TimestampsState>>>,
+    states: Vec<Weak<RefCell<TimestampsState>>>,
 }
 
 struct TimestampsState {
@@ -58,13 +59,13 @@ struct TimestampsState {
 }
 
 // TODO make this more efficient
-pub struct Timestamps(Arc<Mutex<TimestampsState>>);
+pub struct Timestamps(Rc<RefCell<TimestampsState>>);
 
 impl Signal for Timestamps {
     type Item = Option<f64>;
 
     fn poll(&mut self) -> State<Self::Item> {
-        let mut lock = self.0.lock().unwrap();
+        let mut lock = self.0.borrow_mut();
 
         let value = lock.value.take();
 
@@ -82,33 +83,34 @@ impl Signal for Timestamps {
     }
 }
 
-pub fn timestamps() -> Timestamps {
-    lazy_static! {
-        static ref TIMESTAMPS: Mutex<TimestampsGlobal> = Mutex::new(TimestampsGlobal {
-            raf: None,
-            states: vec![],
-        });
-    }
+thread_local! {
+    static TIMESTAMPS: Rc<RefCell<TimestampsGlobal>> = Rc::new(RefCell::new(TimestampsGlobal {
+        raf: None,
+        states: vec![],
+    }));
+}
 
-    let state = Arc::new(Mutex::new(TimestampsState {
+pub fn timestamps() -> Timestamps {
+    let state = Rc::new(RefCell::new(TimestampsState {
         first: true,
         value: None,
         task: None,
     }));
 
-    {
-        let mut lock = TIMESTAMPS.lock().unwrap();
+    TIMESTAMPS.with(|timestamps| {
+        let mut lock = timestamps.borrow_mut();
 
-        lock.states.push(Arc::downgrade(&state));
+        lock.states.push(Rc::downgrade(&state));
 
         if let None = lock.raf {
-            lock.raf = Some(Raf::new(|time| {
-                // TODO is it possible for this to deadlock or error or whatever ?
-                let mut lock = TIMESTAMPS.lock().unwrap();
+            let timestamps = timestamps.clone();
+
+            lock.raf = Some(Raf::new(move |time| {
+                let mut lock = timestamps.borrow_mut();
 
                 lock.states.retain(|state| {
                     if let Some(state) = state.upgrade() {
-                        let mut lock = state.lock().unwrap();
+                        let mut lock = state.borrow_mut();
 
                         // TODO it should always poll the most recent time, so this needs to be a has_changed boolean instead
                         lock.value = Some(time);
@@ -131,7 +133,7 @@ pub fn timestamps() -> Timestamps {
                 }
             }));
         }
-    }
+    });
 
     Timestamps(state)
 }

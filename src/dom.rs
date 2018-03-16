@@ -20,10 +20,15 @@ pub trait IStyle: ReferenceType {
     // TODO handle browser prefixes
     #[inline]
     fn set_style(&self, name: &str, value: &str, important: bool) {
-        let important = if important { "important" } else { "" };
+        if important {
+            js! { @(no_return)
+                @{self.as_ref()}.style.setProperty(@{name}, @{value}, "important");
+            }
 
-        js! { @(no_return)
-            @{self.as_ref()}.style.setProperty(@{name}, @{value}, @{important});
+        } else {
+            js! { @(no_return)
+                @{self.as_ref()}.style.setProperty(@{name}, @{value}, "");
+            }
         }
     }
 }
