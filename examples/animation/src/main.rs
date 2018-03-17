@@ -2,11 +2,12 @@
 extern crate stdweb;
 #[macro_use]
 extern crate dominator;
+#[macro_use]
 extern crate signals;
 
 use stdweb::traits::*;
 use stdweb::web::{document, HtmlElement};
-use stdweb::web::event::{MouseDownEvent, MouseUpEvent};
+use stdweb::web::event::{MouseOverEvent, MouseOutEvent};
 use signals::signal::Signal;
 use signals::signal_vec::unsync::MutableVec;
 use dominator::traits::*;
@@ -18,7 +19,7 @@ use dominator::animation::unsync::MutableAnimation;
 fn make_animated_box<A>(value: u32, t: A) -> Dom where A: Signal<Item = Percentage> + Clone + 'static {
     let animation = MutableAnimation::new(3000.0);
 
-    let click_animation = MutableAnimation::new(500.0);
+    let hover_animation = MutableAnimation::new(300.0);
 
     let low: f64 = value as f64;
     let high: f64 = (value + 60) as f64;
@@ -37,12 +38,12 @@ fn make_animated_box<A>(value: u32, t: A) -> Dom where A: Signal<Item = Percenta
             Ok(())
         })));
 
-        event(clone!(click_animation => move |_: MouseDownEvent| {
-            click_animation.animate_to(Percentage::new(1.0));
+        event(clone!(hover_animation => move |_: MouseOverEvent| {
+            hover_animation.animate_to(Percentage::new(1.0));
         }));
 
-        event(clone!(click_animation => move |_: MouseUpEvent| {
-            click_animation.animate_to(Percentage::new(0.0));
+        event(clone!(hover_animation => move |_: MouseOutEvent| {
+            hover_animation.animate_to(Percentage::new(0.0));
         }));
 
         style("border-radius", "10px");
@@ -57,7 +58,7 @@ fn make_animated_box<A>(value: u32, t: A) -> Dom where A: Signal<Item = Percenta
         style("margin-left", animation.signal()
             .map(|t| t.invert())
             .map(|t| easing::in_out(t, easing::cubic))
-            .map(|t| Some(format!("{}px", t.range_inclusive(50.0, 0.0))))
+            .map(|t| Some(format!("{}px", t.range_inclusive(20.0, 0.0))))
             .dynamic());
 
         style("left", t.clone()
@@ -65,9 +66,12 @@ fn make_animated_box<A>(value: u32, t: A) -> Dom where A: Signal<Item = Percenta
             .map(|t| Some(format!("{}px", t.range_inclusive(100.0, 0.0))))
             .dynamic());
 
-        style("height", t.clone()
-            .map(|t| easing::in_out(t, easing::cubic))
-            .map(|t| Some(format!("{}px", t.range_inclusive(0.0, 5.0))))
+        style("height",
+            map_clone! {
+                let animation = t.clone().map(|t| easing::in_out(t, easing::cubic)),
+                let hover = hover_animation.signal().map(|t| easing::out(t, easing::cubic)) =>
+                Some(format!("{}px", animation.range_inclusive(0.0, hover.range_inclusive(5.0, 15.0))))
+            }
             .dynamic());
 
         style("background-color", animation.signal()
@@ -127,21 +131,51 @@ fn main() {
         color += 10;
     });
 
-    js! { @(no_return)
-        setInterval(function () {
+    let _timer_id = js!(
+        return setInterval(function () {
             @{f}();
         }, 500);
-    }
-
-    dominator::append_dom(&body,
-        Dom::with_state(state, |state| {
-            html!("div", {
-                children(state.boxes.signal_vec()
-                    .animated_map(2000.0, |value, t| {
-                        make_animated_box(value, t)
-                    })
-                    .dynamic());
-            })
-        })
     );
+
+    /*dominator::append_dom(&body,
+        html!("button", {
+            event(clone!(state => move |_: ClickEvent| {
+                js! { @(no_return)
+                    clearInterval(@{&timer_id});
+                }
+
+                state.boxes.clear();
+            }));
+
+            children(&mut [
+                text("Clear all animations")
+            ]);
+        })
+    );*/
+
+    for _ in 0..2 {
+        dominator::append_dom(&body,
+            html!("div", {
+                style("display", "flex");
+
+                children(&mut [
+                    html!("div", {
+                        children(state.boxes.signal_vec()
+                            .animated_map(2000.0, |value, t| {
+                                make_animated_box(value, t)
+                            })
+                            .dynamic());
+                    }),
+
+                    html!("div", {
+                        children(state.boxes.signal_vec()
+                            .animated_map(2000.0, |value, t| {
+                                make_animated_box(value, t)
+                            })
+                            .dynamic());
+                    }),
+                ]);
+            })
+        );
+    }
 }

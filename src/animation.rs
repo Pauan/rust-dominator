@@ -1,6 +1,6 @@
 use self::unsync::MutableAnimation;
 use std::rc::{Rc, Weak};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use futures::{Async, task};
 use futures::future::Future;
 use futures::task::Task;
@@ -48,37 +48,45 @@ impl Drop for Raf {
 
 struct TimestampsGlobal {
     raf: Option<Raf>,
+    value: Option<f64>,
     // TODO make this more efficient
-    states: Vec<Weak<RefCell<TimestampsState>>>,
+    states: Vec<Weak<TimestampsState>>,
+}
+
+#[derive(Clone, Copy)]
+enum TimestampsEnum {
+    First,
+    Changed,
+    NotChanged,
 }
 
 struct TimestampsState {
-    first: bool,
-    value: Option<f64>,
-    task: Option<Task>,
+    state: Cell<TimestampsEnum>,
+    task: RefCell<Option<Task>>,
+    global: Rc<RefCell<TimestampsGlobal>>,
 }
 
 // TODO make this more efficient
-pub struct Timestamps(Rc<RefCell<TimestampsState>>);
+pub struct Timestamps(Rc<TimestampsState>);
 
 impl Signal for Timestamps {
     type Item = Option<f64>;
 
     fn poll(&mut self) -> State<Self::Item> {
-        let mut lock = self.0.borrow_mut();
-
-        let value = lock.value.take();
-
-        if lock.first {
-            lock.first = false;
-            State::Changed(value)
-
-        } else if value.is_some() {
-            State::Changed(value)
-
-        } else {
-            lock.task = Some(task::current());
-            State::NotChanged
+        match self.0.state.get() {
+            TimestampsEnum::Changed => {
+                self.0.state.set(TimestampsEnum::NotChanged);
+                // TODO make this more efficient ?
+                State::Changed(self.0.global.borrow().value.clone())
+            },
+            TimestampsEnum::First => {
+                self.0.state.set(TimestampsEnum::NotChanged);
+                State::Changed(None)
+            },
+            TimestampsEnum::NotChanged => {
+                *self.0.task.borrow_mut() = Some(task::current());
+                State::NotChanged
+            },
         }
     }
 }
@@ -86,56 +94,60 @@ impl Signal for Timestamps {
 thread_local! {
     static TIMESTAMPS: Rc<RefCell<TimestampsGlobal>> = Rc::new(RefCell::new(TimestampsGlobal {
         raf: None,
+        value: None,
         states: vec![],
     }));
 }
 
 pub fn timestamps() -> Timestamps {
-    let state = Rc::new(RefCell::new(TimestampsState {
-        first: true,
-        value: None,
-        task: None,
-    }));
-
     TIMESTAMPS.with(|timestamps| {
-        let mut lock = timestamps.borrow_mut();
+        let state = Rc::new(TimestampsState {
+            state: Cell::new(TimestampsEnum::First),
+            task: RefCell::new(None),
+            global: timestamps.clone(),
+        });
 
-        lock.states.push(Rc::downgrade(&state));
+        {
+            let mut lock = timestamps.borrow_mut();
 
-        if let None = lock.raf {
-            let timestamps = timestamps.clone();
+            lock.states.push(Rc::downgrade(&state));
 
-            lock.raf = Some(Raf::new(move |time| {
-                let mut lock = timestamps.borrow_mut();
+            if let None = lock.raf {
+                let timestamps = timestamps.clone();
 
-                lock.states.retain(|state| {
-                    if let Some(state) = state.upgrade() {
-                        let mut lock = state.borrow_mut();
+                lock.raf = Some(Raf::new(move |time| {
+                    let mut lock = timestamps.borrow_mut();
 
-                        // TODO it should always poll the most recent time, so this needs to be a has_changed boolean instead
-                        lock.value = Some(time);
+                    lock.value = Some(time);
 
-                        if let Some(task) = lock.task.take() {
-                            drop(lock);
-                            task.notify();
+                    lock.states.retain(|state| {
+                        if let Some(state) = state.upgrade() {
+                            state.state.set(TimestampsEnum::Changed);
+
+                            let mut lock = state.task.borrow_mut();
+
+                            if let Some(task) = lock.take() {
+                                drop(lock);
+                                task.notify();
+                            }
+
+                            true
+
+                        } else {
+                            false
                         }
+                    });
 
-                        true
-
-                    } else {
-                        false
+                    if lock.states.len() == 0 {
+                        lock.raf = None;
+                        lock.states = vec![];
                     }
-                });
-
-                if lock.states.len() == 0 {
-                    lock.raf = None;
-                    lock.states = vec![];
-                }
-            }));
+                }));
+            }
         }
-    });
 
-    Timestamps(state)
+        Timestamps(state)
+    })
 }
 
 
@@ -591,6 +603,11 @@ pub mod easing {
     #[inline]
     pub fn cubic(p: Percentage) -> Percentage {
         powi(p, 3)
+    }
+
+    #[inline]
+    pub fn out<F>(p: Percentage, f: F) -> Percentage where F: FnOnce(Percentage) -> Percentage {
+        f(p.invert()).invert()
     }
 
     pub fn in_out<F>(p: Percentage, f: F) -> Percentage where F: FnOnce(Percentage) -> Percentage {
