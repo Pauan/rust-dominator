@@ -25,7 +25,7 @@ use dominator::traits::*;
 use dominator::{Dom, text};
 
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum Filter {
     Active,
     Completed,
@@ -104,7 +104,7 @@ impl State {
 
 // TODO make this more efficient
 #[inline]
-fn trim(input: String) -> Option<String> {
+fn trim(input: &str) -> Option<String> {
     let trimmed = input.trim();
 
     if trimmed.is_empty() {
@@ -194,7 +194,7 @@ fn main() {
                             class("new-todo", true);
                             attribute("placeholder", "What needs to be done?");
 
-                            property("value", state.new_todo_title.signal().dynamic());
+                            property("value", state.new_todo_title.signal_cloned().dynamic());
 
                             event(clone!(state => move |event: InputEvent| {
                                 state.new_todo_title.set(get_value(&event));
@@ -204,13 +204,16 @@ fn main() {
                                 if event.key() == "Enter" {
                                     event.prevent_default();
 
-                                    // TODO don't reset it if it only has whitespace
-                                    if let Some(title) = trim(state.new_todo_title.replace("".to_owned())) {
+                                    let trimmed = trim(&state.new_todo_title.borrow());
+
+                                    if let Some(title) = trimmed {
+                                        state.new_todo_title.set("".to_owned());
+
                                         let id = state.todo_id.get();
 
                                         state.todo_id.set(id + 1);
 
-                                        state.todo_list.push(Todo {
+                                        state.todo_list.push_cloned(Todo {
                                             id: id,
                                             title: Mutable::new(title),
                                             completed: Mutable::new(false),
@@ -229,7 +232,7 @@ fn main() {
                     class("main", true);
 
                     // Hide if it doesn't have any todos.
-                    property("hidden", state.todo_list.signal_vec()
+                    property("hidden", state.todo_list.signal_vec_cloned()
                         .len()
                         .map(|len| len == 0)
                         .dynamic());
@@ -240,7 +243,7 @@ fn main() {
                             attribute("id", "toggle-all");
                             attribute("type", "checkbox");
 
-                            property("checked", state.todo_list.signal_vec()
+                            property("checked", state.todo_list.signal_vec_cloned()
                                 .map_signal(|todo| todo.completed.signal())
                                 .filter(|completed| !completed)
                                 .len()
@@ -268,17 +271,17 @@ fn main() {
                         html!("ul", {
                             class("todo-list", true);
 
-                            children(state.todo_list.signal_vec()
+                            children(state.todo_list.signal_vec_cloned()
                                 .map(clone!(state => move |todo| {
                                     html!("li", {
-                                        class("editing", todo.editing.signal()
+                                        class("editing", todo.editing.signal_cloned()
                                             .map(|x| x.is_some())
                                             .dynamic());
 
                                         class("completed", todo.completed.signal().dynamic());
 
                                         property("hidden",
-                                            map_clone!(
+                                            map_cloned!(
                                                 let filter = state.filter.signal(),
                                                 let completed = todo.completed.signal() =>
                                                 match filter {
@@ -308,11 +311,11 @@ fn main() {
 
                                                     html!("label", {
                                                         event(clone!(todo => move |_: DoubleClickEvent| {
-                                                            todo.editing.set(Some(todo.title.get()));
+                                                            todo.editing.set(Some(todo.title.get_cloned()));
                                                         }));
 
                                                         children(&mut [
-                                                            text(todo.title.signal().dynamic()),
+                                                            text(todo.title.signal_cloned().dynamic()),
                                                         ]);
                                                     }),
 
@@ -329,16 +332,16 @@ fn main() {
                                             html!("input", {
                                                 class("edit", true);
 
-                                                property("value", todo.editing.signal()
+                                                property("value", todo.editing.signal_cloned()
                                                     .map(|x| x.unwrap_or_else(|| "".to_owned()))
                                                     .dynamic());
 
-                                                property("hidden", todo.editing.signal()
+                                                property("hidden", todo.editing.signal_cloned()
                                                     .map(|x| x.is_none())
                                                     .dynamic());
 
                                                 // TODO dedupe this somehow ?
-                                                focused(todo.editing.signal()
+                                                focused(todo.editing.signal_cloned()
                                                     .map(|x| x.is_some())
                                                     .dynamic());
 
@@ -358,9 +361,10 @@ fn main() {
                                                     todo.editing.set(Some(get_value(&event)));
                                                 }));
 
+                                                // TODO global_event ?
                                                 event(clone!(state, todo => move |_: BlurEvent| {
                                                     if let Some(title) = todo.editing.replace(None) {
-                                                        if let Some(title) = trim(title) {
+                                                        if let Some(title) = trim(&title) {
                                                             todo.title.set(title);
 
                                                         } else {
@@ -384,7 +388,7 @@ fn main() {
                     class("footer", true);
 
                     // Hide if it doesn't have any todos.
-                    property("hidden", state.todo_list.signal_vec()
+                    property("hidden", state.todo_list.signal_vec_cloned()
                         .len()
                         .map(|len| len == 0)
                         .dynamic());
@@ -393,7 +397,7 @@ fn main() {
                         html!("span", {
                             class("todo-count", true);
 
-                            children(state.todo_list.signal_vec()
+                            children(state.todo_list.signal_vec_cloned()
                                 .map_signal(|todo| todo.completed.signal())
                                 .filter(|completed| !completed)
                                 .len()
@@ -432,7 +436,7 @@ fn main() {
                             class("clear-completed", true);
 
                             // Hide if it doesn't have any completed items.
-                            property("hidden", state.todo_list.signal_vec()
+                            property("hidden", state.todo_list.signal_vec_cloned()
                                 .map_signal(|todo| todo.completed.signal())
                                 .filter(|completed| *completed)
                                 .len()

@@ -67,7 +67,7 @@ fn make_animated_box<A>(value: u32, t: A) -> Dom where A: Signal<Item = Percenta
             .dynamic());
 
         style("height",
-            map_clone! {
+            map_cloned! {
                 let animation = t.clone().map(|t| easing::in_out(t, easing::cubic)),
                 let hover = hover_animation.signal().map(|t| easing::out(t, easing::cubic)) =>
                 Some(format!("{}px", animation.range_inclusive(0.0, hover.range_inclusive(5.0, 15.0))))
