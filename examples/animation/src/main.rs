@@ -5,13 +5,11 @@ extern crate dominator;
 #[macro_use]
 extern crate futures_signals;
 
-use stdweb::traits::*;
-use stdweb::web::{document, HtmlElement};
-use stdweb::web::event::{MouseOverEvent, MouseOutEvent};
 use futures_signals::signal::Signal;
 use futures_signals::signal_vec::unsync::MutableVec;
 use dominator::traits::*;
 use dominator::Dom;
+use dominator::events::{MouseOverEvent, MouseOutEvent};
 use dominator::animation::{Percentage, easing};
 use dominator::animation::unsync::MutableAnimation;
 
@@ -117,9 +115,6 @@ fn main() {
         boxes: MutableVec::new_with_values(vec![0]),
     };
 
-    // TODO this should be in stdweb
-    let body = document().query_selector("body").unwrap().unwrap();
-
     let mut color = 10;
 
     let f = clone!(state => move || {
@@ -154,7 +149,7 @@ fn main() {
     );*/
 
     for _ in 0..1 {
-        dominator::append_dom(&body,
+        dominator::append_dom(&dominator::body(),
             html!("div", {
                 style("display", "flex");
 

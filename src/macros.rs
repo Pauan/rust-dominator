@@ -10,12 +10,10 @@ macro_rules! html {
     }};
 
     ($kind:expr) => {
-        // TODO need better hygiene for HtmlElement
-        html!($kind => HtmlElement)
+        html!($kind => $crate::HtmlElement)
     };
     ($kind:expr, { $( $name:ident( $( $args:expr ),* ); )* }) => {{
-        // TODO need better hygiene for HtmlElement
-        html!($kind => HtmlElement, { $( $name( $( $args ),* ); )* })
+        html!($kind => $crate::HtmlElement, { $( $name( $( $args ),* ); )* })
     }};
 }
 

@@ -11,7 +11,9 @@ extern crate serde_json;
 
 use std::rc::Rc;
 use std::cell::Cell;
-use stdweb::web::{window, document, HtmlElement};
+
+// TODO replace most of these with dominator
+use stdweb::web::{window, document};
 use stdweb::web::event::{InputEvent, ClickEvent, HashChangeEvent, KeyDownEvent, ChangeEvent, DoubleClickEvent, BlurEvent};
 use stdweb::web::html_element::InputElement;
 use stdweb::unstable::TryInto;
@@ -176,8 +178,7 @@ fn main() {
     }));
 
 
-    // TODO this should be in stdweb
-    let body = document().query_selector("body").unwrap().unwrap();
+    let body = dominator::body();
 
     dominator::append_dom(&body,
         html!("section", {

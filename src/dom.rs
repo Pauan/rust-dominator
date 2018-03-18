@@ -1,7 +1,7 @@
 use std;
 use stdweb::{Reference, Value, ReferenceType};
 use stdweb::unstable::{TryFrom, TryInto};
-use stdweb::web::{IEventTarget, INode, IElement, IHtmlElement, Node};
+use stdweb::web::{IEventTarget, INode, IElement, IHtmlElement, HtmlElement, Node};
 use stdweb::web::event::ConcreteEvent;
 use callbacks::Callbacks;
 use traits::*;
@@ -47,6 +47,13 @@ impl IStyle for CssStyleRule {}
 // https://developer.mozilla.org/en-US/docs/Web/API/Document/createElementNS#Valid%20Namespace%20URIs
 pub const HTML_NAMESPACE: &str = "http://www.w3.org/1999/xhtml";
 pub const SVG_NAMESPACE: &str = "http://www.w3.org/2000/svg";
+
+
+// TODO this should be in stdweb
+// TODO this should return HtmlBodyElement
+pub fn body() -> HtmlElement {
+    js! ( return document.body; ).try_into().unwrap()
+}
 
 
 pub struct DomHandle {

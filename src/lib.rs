@@ -24,6 +24,12 @@ pub use dom::*;
 pub mod traits;
 pub mod animation;
 
+pub use stdweb::web::HtmlElement;
+
+pub mod events {
+	pub use stdweb::web::event::*;
+}
+
 
 #[cfg(test)]
 mod tests {
