@@ -3,7 +3,7 @@ extern crate stdweb;
 #[macro_use]
 extern crate dominator;
 #[macro_use]
-extern crate signals;
+extern crate futures_signals;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde;
@@ -17,10 +17,10 @@ use stdweb::web::html_element::InputElement;
 use stdweb::unstable::TryInto;
 use stdweb::traits::*;
 
-use signals::signal::Signal;
-use signals::signal_vec::SignalVec;
-use signals::signal::unsync::Mutable;
-use signals::signal_vec::unsync::MutableVec;
+use futures_signals::signal::Signal;
+use futures_signals::signal_vec::SignalVec;
+use futures_signals::signal::unsync::Mutable;
+use futures_signals::signal_vec::unsync::MutableVec;
 use dominator::traits::*;
 use dominator::{Dom, text};
 

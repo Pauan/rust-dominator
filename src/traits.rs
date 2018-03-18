@@ -4,8 +4,8 @@ use stdweb::traits::{IElement, IHtmlElement, INode};
 use stdweb::unstable::TryInto;
 use dom::{Dom, IStyle, Dynamic};
 use callbacks::Callbacks;
-use signals::signal::Signal;
-use signals::signal_vec::SignalVec;
+use futures_signals::signal::Signal;
+use futures_signals::signal_vec::SignalVec;
 use operations;
 
 

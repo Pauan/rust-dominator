@@ -4,9 +4,9 @@ use std::cell::{Cell, RefCell};
 use futures::{Async, task};
 use futures::future::Future;
 use futures::task::Task;
-use signals::signal::{Signal, State, WaitFor};
-use signals::signal::unsync::MutableSignal;
-use signals::signal_vec::{SignalVec, VecChange};
+use futures_signals::signal::{Signal, State, WaitFor};
+use futures_signals::signal::unsync::MutableSignal;
+use futures_signals::signal_vec::{SignalVec, VecChange};
 use stdweb::Value;
 
 
@@ -444,8 +444,8 @@ pub mod unsync {
     use operations::spawn_future;
     use std::rc::Rc;
     use std::cell::{Cell, RefCell};
-    use signals::signal::{Signal, CancelableFutureHandle};
-    use signals::signal::unsync::{Mutable, MutableSignal};
+    use futures_signals::signal::{Signal, CancelableFutureHandle};
+    use futures_signals::signal::unsync::{Mutable, MutableSignal};
     use discard::DiscardOnDrop;
 
 

@@ -336,6 +336,7 @@ impl ClassBuilder {
         let class_name = {
             use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
 
+            // TODO replace this with a global counter in JavaScript ?
             lazy_static! {
                 // TODO can this be made more efficient ?
                 // TODO use AtomicU32 instead ?

@@ -1,11 +1,11 @@
 [package]
-name = "todomvc"
+name = "test"
 version = "0.1.0"
 authors = ["Pauan <pcxunlimited@gmail.com>"]
 
 [dependencies]
 dominator = { path = "../.." }
-signals = { git = "https://github.com/Pauan/rust-signals" }
+futures-signals = "0.1.0"
 
 [dependencies.stdweb]
 version = "0.4.0"

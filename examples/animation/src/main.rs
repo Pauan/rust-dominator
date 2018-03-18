@@ -3,13 +3,13 @@ extern crate stdweb;
 #[macro_use]
 extern crate dominator;
 #[macro_use]
-extern crate signals;
+extern crate futures_signals;
 
 use stdweb::traits::*;
 use stdweb::web::{document, HtmlElement};
 use stdweb::web::event::{MouseOverEvent, MouseOutEvent};
-use signals::signal::Signal;
-use signals::signal_vec::unsync::MutableVec;
+use futures_signals::signal::Signal;
+use futures_signals::signal_vec::unsync::MutableVec;
 use dominator::traits::*;
 use dominator::Dom;
 use dominator::animation::{Percentage, easing};
@@ -153,7 +153,7 @@ fn main() {
         })
     );*/
 
-    for _ in 0..2 {
+    for _ in 0..1 {
         dominator::append_dom(&body,
             html!("div", {
                 style("display", "flex");

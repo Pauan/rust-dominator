@@ -11,7 +11,7 @@ extern crate lazy_static;
 
 extern crate discard;
 extern crate futures;
-extern crate signals;
+extern crate futures_signals;
 
 
 mod macros;

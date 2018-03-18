@@ -5,17 +5,17 @@ extern crate stdweb;
 extern crate dominator;
 
 #[macro_use]
-extern crate signals;
+extern crate futures_signals;
 
 use std::rc::Rc;
 use stdweb::web::{document, HtmlElement};
 use stdweb::web::event::ClickEvent;
 use stdweb::web::IParentNode;
 
-use signals::signal;
-use signals::signal_vec;
-use signals::signal::Signal;
-use signals::signal_vec::SignalVec;
+use futures_signals::signal;
+use futures_signals::signal_vec;
+use futures_signals::signal::Signal;
+use futures_signals::signal_vec::SignalVec;
 use dominator::traits::*;
 use dominator::{Dom, text};
 
