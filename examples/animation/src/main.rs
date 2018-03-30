@@ -5,6 +5,7 @@ extern crate dominator;
 #[macro_use]
 extern crate futures_signals;
 
+use std::rc::Rc;
 use futures_signals::signal::Signal;
 use futures_signals::signal_vec::unsync::MutableVec;
 use dominator::traits::*;
@@ -15,9 +16,9 @@ use dominator::animation::unsync::MutableAnimation;
 
 
 fn make_animated_box<A>(value: u32, t: A) -> Dom where A: Signal<Item = Percentage> + Clone + 'static {
-    let animation = MutableAnimation::new(3000.0);
+    let animation = Rc::new(MutableAnimation::new(3000.0));
 
-    let hover_animation = MutableAnimation::new(300.0);
+    let hover_animation = Rc::new(MutableAnimation::new(300.0));
 
     let low: f64 = value as f64;
     let high: f64 = (value + 60) as f64;
@@ -65,7 +66,7 @@ fn make_animated_box<A>(value: u32, t: A) -> Dom where A: Signal<Item = Percenta
             .dynamic());
 
         style("height",
-            map_cloned! {
+            map_ref! {
                 let animation = t.clone().map(|t| easing::in_out(t, easing::cubic)),
                 let hover = hover_animation.signal().map(|t| easing::out(t, easing::cubic)) =>
                 Some(format!("{}px", animation.range_inclusive(0.0, hover.range_inclusive(5.0, 15.0))))
@@ -97,7 +98,6 @@ fn make_animated_box<A>(value: u32, t: A) -> Dom where A: Signal<Item = Percenta
 }
 
 
-#[derive(Clone)]
 struct State {
     boxes: MutableVec<u32>,
 }
@@ -111,9 +111,9 @@ impl Drop for State {
 }
 
 fn main() {
-    let state = State {
+    let state = Rc::new(State {
         boxes: MutableVec::new_with_values(vec![0]),
-    };
+    });
 
     let mut color = 10;
 
@@ -148,7 +148,7 @@ fn main() {
         })
     );*/
 
-    for _ in 0..1 {
+    for _ in 0..7 {
         dominator::append_dom(&dominator::body(),
             html!("div", {
                 style("display", "flex");

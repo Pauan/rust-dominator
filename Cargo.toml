@@ -15,9 +15,10 @@ stdweb-derive = "0.4.0"
 lazy_static = "1.0.0"
 discard = "1.0.3"
 futures = "0.1.18"
-futures-signals = "0.1.0"
+futures-signals = { git = "https://github.com/Pauan/rust-signals" }
 
 [dependencies.stdweb]
-version = "0.4.0"
+#version = "0.4.0"
+git = "https://github.com/koute/stdweb"
 #path = "../stdweb"
 features = ["experimental_features_which_may_break_on_minor_version_bumps"]

@@ -407,8 +407,6 @@ pub fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, 
                 for dom in children.drain(..) {
                     dom.callbacks.discard();
                 }
-
-                *children = vec![];
             },
         }
     });

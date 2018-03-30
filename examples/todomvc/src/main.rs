@@ -16,6 +16,7 @@ use std::cell::Cell;
 use stdweb::web::{window, document};
 use stdweb::web::event::{InputEvent, ClickEvent, HashChangeEvent, KeyDownEvent, ChangeEvent, DoubleClickEvent, BlurEvent};
 use stdweb::web::html_element::InputElement;
+use stdweb::web::HtmlElement;
 use stdweb::unstable::TryInto;
 use stdweb::traits::*;
 
@@ -42,7 +43,7 @@ impl Default for Filter {
 }
 
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct Todo {
     id: u32,
     title: Mutable<String>,
@@ -60,7 +61,7 @@ struct State {
     #[serde(skip)]
     new_todo_title: Mutable<String>,
 
-    todo_list: MutableVec<Todo>,
+    todo_list: MutableVec<Rc<Todo>>,
 
     #[serde(skip)]
     filter: Mutable<Filter>,
@@ -214,12 +215,12 @@ fn main() {
 
                                         state.todo_id.set(id + 1);
 
-                                        state.todo_list.push_cloned(Todo {
+                                        state.todo_list.push_cloned(Rc::new(Todo {
                                             id: id,
                                             title: Mutable::new(title),
                                             completed: Mutable::new(false),
                                             editing: Mutable::new(None),
-                                        });
+                                        }));
 
                                         state.serialize();
                                     }
@@ -282,12 +283,12 @@ fn main() {
                                         class("completed", todo.completed.signal().dynamic());
 
                                         property("hidden",
-                                            map_cloned!(
+                                            map_ref!(
                                                 let filter = state.filter.signal(),
                                                 let completed = todo.completed.signal() =>
-                                                match filter {
+                                                match *filter {
                                                     Filter::Active => !completed,
-                                                    Filter::Completed => completed,
+                                                    Filter::Completed => *completed,
                                                     Filter::All => true,
                                                 }
                                             )

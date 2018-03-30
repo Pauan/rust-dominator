@@ -4,7 +4,7 @@ use std::cell::{Cell, RefCell};
 use futures::{Async, task};
 use futures::future::Future;
 use futures::task::Task;
-use futures_signals::signal::{Signal, State, WaitFor};
+use futures_signals::signal::{Signal, WaitFor};
 use futures_signals::signal::unsync::MutableSignal;
 use futures_signals::signal_vec::{SignalVec, VecChange};
 use stdweb::Value;
@@ -72,20 +72,21 @@ pub struct Timestamps(Rc<TimestampsState>);
 impl Signal for Timestamps {
     type Item = Option<f64>;
 
-    fn poll(&mut self) -> State<Self::Item> {
+    // TODO implement Async::Ready(None)
+    fn poll(&mut self) -> Async<Option<Self::Item>> {
         match self.0.state.get() {
             TimestampsEnum::Changed => {
                 self.0.state.set(TimestampsEnum::NotChanged);
                 // TODO make this more efficient ?
-                State::Changed(self.0.global.borrow().value.clone())
+                Async::Ready(Some(self.0.global.borrow().value.clone()))
             },
             TimestampsEnum::First => {
                 self.0.state.set(TimestampsEnum::NotChanged);
-                State::Changed(None)
+                Async::Ready(Some(None))
             },
             TimestampsEnum::NotChanged => {
                 *self.0.task.borrow_mut() = Some(task::current());
-                State::NotChanged
+                Async::NotReady
             },
         }
     }
@@ -266,88 +267,84 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
         let mut is_done = true;
 
         // TODO is this loop correct ?
-        while let Some(mut signal) = self.signal.take() {
-            match signal.poll() {
-                Async::Ready(Some(change)) => {
-                    self.signal = Some(signal);
+        while let Some(result) = self.signal.as_mut().map(|signal| signal.poll()) {
+            match result {
+                Async::Ready(Some(change)) => return match change {
+                    // TODO maybe it should play remove / insert animations for this ?
+                    VecChange::Replace { values } => {
+                        self.animations = Vec::with_capacity(values.len());
 
-                    return match change {
-                        // TODO maybe it should play remove / insert animations for this ?
-                        VecChange::Replace { values } => {
-                            self.animations = Vec::with_capacity(values.len());
+                        Async::Ready(Some(VecChange::Replace {
+                            values: values.into_iter().map(|value| {
+                                let state = AnimatedMapState {
+                                    animation: MutableAnimation::new_with_initial(self.duration, Percentage::new_unchecked(1.0)),
+                                    removing: None,
+                                };
 
-                            Async::Ready(Some(VecChange::Replace {
-                                values: values.into_iter().map(|value| {
-                                    let state = AnimatedMapState {
-                                        animation: MutableAnimation::new_with_initial(self.duration, Percentage::new_unchecked(1.0)),
-                                        removing: None,
-                                    };
+                                let value = (self.callback)(value, state.animation.signal());
 
-                                    let value = (self.callback)(value, state.animation.signal());
+                                self.animations.push(state);
 
-                                    self.animations.push(state);
+                                value
+                            }).collect()
+                        }))
+                    },
 
-                                    value
-                                }).collect()
-                            }))
-                        },
+                    VecChange::InsertAt { index, value } => {
+                        let index = self.find_index(index).unwrap_or_else(|| self.animations.len());
+                        let state = self.animated_state();
+                        let value = (self.callback)(value, state.animation.signal());
+                        self.animations.insert(index, state);
+                        Async::Ready(Some(VecChange::InsertAt { index, value }))
+                    },
 
-                        VecChange::InsertAt { index, value } => {
-                            let index = self.find_index(index).unwrap_or_else(|| self.animations.len());
-                            let state = self.animated_state();
-                            let value = (self.callback)(value, state.animation.signal());
-                            self.animations.insert(index, state);
-                            Async::Ready(Some(VecChange::InsertAt { index, value }))
-                        },
+                    VecChange::Push { value } => {
+                        let state = self.animated_state();
+                        let value = (self.callback)(value, state.animation.signal());
+                        self.animations.push(state);
+                        Async::Ready(Some(VecChange::Push { value }))
+                    },
 
-                        VecChange::Push { value } => {
-                            let state = self.animated_state();
-                            let value = (self.callback)(value, state.animation.signal());
-                            self.animations.push(state);
-                            Async::Ready(Some(VecChange::Push { value }))
-                        },
+                    VecChange::UpdateAt { index, value } => {
+                        let index = self.find_index(index).expect("Could not find value");
+                        let state = &self.animations[index];
+                        let value = (self.callback)(value, state.animation.signal());
+                        Async::Ready(Some(VecChange::UpdateAt { index, value }))
+                    },
 
-                        VecChange::UpdateAt { index, value } => {
-                            let index = self.find_index(index).expect("Could not find value");
-                            let state = &self.animations[index];
-                            let value = (self.callback)(value, state.animation.signal());
-                            Async::Ready(Some(VecChange::UpdateAt { index, value }))
-                        },
+                    VecChange::RemoveAt { index } => {
+                        let index = self.find_index(index).expect("Could not find value");
 
-                        VecChange::RemoveAt { index } => {
-                            let index = self.find_index(index).expect("Could not find value");
+                        if self.should_remove(index) {
+                            self.remove_index(index)
 
-                            if self.should_remove(index) {
-                                self.remove_index(index)
+                        } else {
+                            continue;
+                        }
+                    },
 
-                            } else {
-                                continue;
-                            }
-                        },
+                    VecChange::Pop {} => {
+                        let index = self.find_last_index().expect("Cannot pop from empty vec");
 
-                        VecChange::Pop {} => {
-                            let index = self.find_last_index().expect("Cannot pop from empty vec");
+                        if self.should_remove(index) {
+                            self.remove_index(index)
 
-                            if self.should_remove(index) {
-                                self.remove_index(index)
+                        } else {
+                            continue;
+                        }
+                    },
 
-                            } else {
-                                continue;
-                            }
-                        },
-
-                        // TODO maybe it should play remove animation for this ?
-                        VecChange::Clear {} => {
-                            self.animations = vec![];
-                            Async::Ready(Some(VecChange::Clear {}))
-                        },
-                    }
+                    // TODO maybe it should play remove animation for this ?
+                    VecChange::Clear {} => {
+                        self.animations.clear();
+                        Async::Ready(Some(VecChange::Clear {}))
+                    },
                 },
                 Async::Ready(None) => {
+                    self.signal = None;
                     break;
                 },
                 Async::NotReady => {
-                    self.signal = Some(signal);
                     is_done = false;
                     break;
                 },
@@ -457,7 +454,6 @@ pub mod unsync {
         animating: RefCell<Option<DiscardOnDrop<CancelableFutureHandle>>>,
     }
 
-    #[derive(Clone)]
     pub struct MutableAnimation(Rc<MutableAnimationState>);
 
     impl MutableAnimation {
@@ -496,7 +492,8 @@ pub mod unsync {
                     if duration > 0.0 {
                         let duration = (end - start).abs() * duration;
 
-                        let state = self.clone();
+                        // TODO a bit gross
+                        let state = MutableAnimation(self.0.clone());
 
                         let mut starting_time = None;
 
