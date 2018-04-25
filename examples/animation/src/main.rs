@@ -6,16 +6,16 @@ extern crate dominator;
 extern crate futures_signals;
 
 use std::rc::Rc;
-use futures_signals::signal::Signal;
-use futures_signals::signal_vec::unsync::MutableVec;
+use futures_signals::signal::SignalExt;
+use futures_signals::signal_vec::MutableVec;
 use dominator::traits::*;
 use dominator::Dom;
 use dominator::events::{MouseOverEvent, MouseOutEvent};
 use dominator::animation::{Percentage, easing};
-use dominator::animation::unsync::MutableAnimation;
+use dominator::animation::{MutableAnimation, AnimatedMapBroadcaster};
 
 
-fn make_animated_box<A>(value: u32, t: A) -> Dom where A: Signal<Item = Percentage> + Clone + 'static {
+fn make_animated_box(value: u32, broadcaster: AnimatedMapBroadcaster) -> Dom {
     let animation = Rc::new(MutableAnimation::new(3000.0));
 
     let hover_animation = Rc::new(MutableAnimation::new(300.0));
@@ -47,53 +47,46 @@ fn make_animated_box<A>(value: u32, t: A) -> Dom where A: Signal<Item = Percenta
 
         style("border-radius", "10px");
 
-        style("width", animation.signal()
+        style_signal("width", animation.signal()
             .map(|t| easing::in_out(t, easing::cubic))
-            .map(|t| Some(format!("{}px", t.range_inclusive(167.0, 500.0))))
-            .dynamic());
+            .map(|t| Some(format!("{}px", t.range_inclusive(167.0, 500.0)))));
 
         style("position", "relative");
 
-        style("margin-left", animation.signal()
+        style_signal("margin-left", animation.signal()
             .map(|t| t.invert())
             .map(|t| easing::in_out(t, easing::cubic))
-            .map(|t| Some(format!("{}px", t.range_inclusive(20.0, 0.0))))
-            .dynamic());
+            .map(|t| Some(format!("{}px", t.range_inclusive(20.0, 0.0)))));
 
-        style("left", t.clone()
+        style_signal("left", broadcaster.signal()
             .map(|t| easing::in_out(t, easing::cubic))
-            .map(|t| Some(format!("{}px", t.range_inclusive(100.0, 0.0))))
-            .dynamic());
+            .map(|t| Some(format!("{}px", t.range_inclusive(100.0, 0.0)))));
 
-        style("height",
-            map_ref! {
-                let animation = t.clone().map(|t| easing::in_out(t, easing::cubic)),
-                let hover = hover_animation.signal().map(|t| easing::out(t, easing::cubic)) =>
-                Some(format!("{}px", animation.range_inclusive(0.0, hover.range_inclusive(5.0, 15.0))))
-            }
-            .dynamic());
+        style_signal("height", map_ref! {
+            let animation = broadcaster.signal().map(|t| easing::in_out(t, easing::cubic)),
+            let hover = hover_animation.signal().map(|t| easing::out(t, easing::cubic)) =>
+            Some(format!("{}px", animation.range_inclusive(0.0, hover.range_inclusive(5.0, 15.0))))
+        });
 
-        style("background-color", animation.signal()
+        style_signal("background-color", animation.signal()
             .map(|t| easing::in_out(t, easing::cubic))
             .map(move |t| Some(format!("hsl({}, {}%, {}%)",
                 t.range_inclusive(low, high),
                 t.range_inclusive(50.0, 100.0),
-                t.range_inclusive(50.0, 100.0))))
-            .dynamic());
+                t.range_inclusive(50.0, 100.0)))));
 
         style("border-style", "solid");
 
-        style("border-width", t.map(|t| easing::in_out(t, easing::cubic))
-            .map(|t| Some(format!("{}px", t.range_inclusive(0.0, 5.0))))
-            .dynamic());
+        style_signal("border-width", broadcaster.signal()
+            .map(|t| easing::in_out(t, easing::cubic))
+            .map(|t| Some(format!("{}px", t.range_inclusive(0.0, 5.0)))));
 
-        style("border-color", animation.signal()
+        style_signal("border-color", animation.signal()
             .map(|t| easing::in_out(t, easing::cubic))
             .map(move |t| Some(format!("hsl({}, {}%, {}%)",
                 t.range_inclusive(high, low),
                 t.range_inclusive(100.0, 50.0),
-                t.range_inclusive(100.0, 50.0))))
-            .dynamic());
+                t.range_inclusive(100.0, 50.0)))));
     })
 }
 
@@ -148,26 +141,24 @@ fn main() {
         })
     );*/
 
-    for _ in 0..7 {
+    for _ in 0..1 {
         dominator::append_dom(&dominator::body(),
             html!("div", {
                 style("display", "flex");
 
                 children(&mut [
                     html!("div", {
-                        children(state.boxes.signal_vec()
+                        children_signal_vec(state.boxes.signal_vec()
                             .animated_map(2000.0, |value, t| {
                                 make_animated_box(value, t)
-                            })
-                            .dynamic());
+                            }));
                     }),
 
                     html!("div", {
-                        children(state.boxes.signal_vec()
+                        children_signal_vec(state.boxes.signal_vec()
                             .animated_map(2000.0, |value, t| {
                                 make_animated_box(value, t)
-                            })
-                            .dynamic());
+                            }));
                     }),
                 ]);
             })

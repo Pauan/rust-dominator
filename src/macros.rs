@@ -4,8 +4,8 @@ macro_rules! html {
         html!($kind => $t, {})
     };
     ($kind:expr => $t:ty, { $( $name:ident( $( $args:expr ),* ); )* }) => {{
-        let a: $crate::HtmlBuilder<$t> = $crate::HtmlBuilder::new($kind)$(.$name($($args),*))*;
-        let b: $crate::Dom = ::std::convert::Into::into(a);
+        let a: $crate::DomBuilder<$t> = $crate::DomBuilder::new($crate::create_element_ns($kind, $crate::HTML_NAMESPACE))$(.$name($($args),*))*;
+        let b: $crate::Dom = $crate::DomBuilder::into_dom(a);
         b
     }};
 

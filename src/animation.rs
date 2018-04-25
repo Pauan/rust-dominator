@@ -1,13 +1,14 @@
-use self::unsync::MutableAnimation;
 use std::rc::{Rc, Weak};
-use std::cell::{Cell, RefCell};
-use futures::{Async, task};
-use futures::future::Future;
-use futures::task::Task;
-use futures_signals::signal::{Signal, WaitFor};
-use futures_signals::signal::unsync::MutableSignal;
-use futures_signals::signal_vec::{SignalVec, VecChange};
+use std::cell::RefCell;
+use futures_core::Async;
+use futures_core::future::Future;
+use futures_core::task::{Context, Waker};
+use futures_signals::CancelableFutureHandle;
+use futures_signals::signal::{Signal, SignalExt, WaitFor, MutableSignal, Mutable};
+use futures_signals::signal_vec::{SignalVec, VecDiff};
 use stdweb::Value;
+use discard::DiscardOnDrop;
+use operations::spawn_future;
 
 
 // TODO generalize this so it works for any target, not just JS
@@ -46,14 +47,17 @@ impl Drop for Raf {
 }
 
 
-struct TimestampsGlobal {
+struct TimestampsInner {
     raf: Option<Raf>,
-    value: Option<f64>,
     // TODO make this more efficient
-    states: Vec<Weak<TimestampsState>>,
+    states: Vec<Weak<RefCell<TimestampsState>>>,
 }
 
-#[derive(Clone, Copy)]
+struct TimestampsGlobal {
+    inner: RefCell<TimestampsInner>,
+    value: Rc<RefCell<Option<f64>>>,
+}
+
 enum TimestampsEnum {
     First,
     Changed,
@@ -61,75 +65,83 @@ enum TimestampsEnum {
 }
 
 struct TimestampsState {
-    state: Cell<TimestampsEnum>,
-    task: RefCell<Option<Task>>,
-    global: Rc<RefCell<TimestampsGlobal>>,
+    state: TimestampsEnum,
+    waker: Option<Waker>,
 }
 
-// TODO make this more efficient
-pub struct Timestamps(Rc<TimestampsState>);
+pub struct Timestamps {
+    state: Rc<RefCell<TimestampsState>>,
+    // TODO verify that there aren't any Rc cycles
+    value: Rc<RefCell<Option<f64>>>,
+}
 
 impl Signal for Timestamps {
     type Item = Option<f64>;
 
     // TODO implement Async::Ready(None)
-    fn poll(&mut self) -> Async<Option<Self::Item>> {
-        match self.0.state.get() {
+    fn poll_change(&mut self, cx: &mut Context) -> Async<Option<Self::Item>> {
+        let mut lock = self.state.borrow_mut();
+
+        match lock.state {
             TimestampsEnum::Changed => {
-                self.0.state.set(TimestampsEnum::NotChanged);
-                // TODO make this more efficient ?
-                Async::Ready(Some(self.0.global.borrow().value.clone()))
+                lock.state = TimestampsEnum::NotChanged;
+                Async::Ready(Some(*self.value.borrow()))
             },
             TimestampsEnum::First => {
-                self.0.state.set(TimestampsEnum::NotChanged);
+                lock.state = TimestampsEnum::NotChanged;
                 Async::Ready(Some(None))
             },
             TimestampsEnum::NotChanged => {
-                *self.0.task.borrow_mut() = Some(task::current());
-                Async::NotReady
+                lock.waker = Some(cx.waker().clone());
+                Async::Pending
             },
         }
     }
 }
 
 thread_local! {
-    static TIMESTAMPS: Rc<RefCell<TimestampsGlobal>> = Rc::new(RefCell::new(TimestampsGlobal {
-        raf: None,
-        value: None,
-        states: vec![],
-    }));
+    static TIMESTAMPS: Rc<TimestampsGlobal> = Rc::new(TimestampsGlobal {
+        inner: RefCell::new(TimestampsInner {
+            raf: None,
+            states: vec![],
+        }),
+        value: Rc::new(RefCell::new(None)),
+    });
 }
 
 pub fn timestamps() -> Timestamps {
-    TIMESTAMPS.with(|timestamps| {
-        let state = Rc::new(TimestampsState {
-            state: Cell::new(TimestampsEnum::First),
-            task: RefCell::new(None),
-            global: timestamps.clone(),
-        });
+    TIMESTAMPS.with(|global| {
+        let timestamps = Timestamps {
+            state: Rc::new(RefCell::new(TimestampsState {
+                state: TimestampsEnum::First,
+                waker: None,
+            })),
+            value: global.value.clone(),
+        };
 
         {
-            let mut lock = timestamps.borrow_mut();
+            let mut lock = global.inner.borrow_mut();
 
-            lock.states.push(Rc::downgrade(&state));
+            lock.states.push(Rc::downgrade(&timestamps.state));
 
             if let None = lock.raf {
-                let timestamps = timestamps.clone();
+                let global = global.clone();
 
                 lock.raf = Some(Raf::new(move |time| {
-                    let mut lock = timestamps.borrow_mut();
+                    let mut lock = global.inner.borrow_mut();
+                    let mut value = global.value.borrow_mut();
 
-                    lock.value = Some(time);
+                    *value = Some(time);
 
                     lock.states.retain(|state| {
                         if let Some(state) = state.upgrade() {
-                            state.state.set(TimestampsEnum::Changed);
+                            let mut lock = state.borrow_mut();
 
-                            let mut lock = state.task.borrow_mut();
+                            lock.state = TimestampsEnum::Changed;
 
-                            if let Some(task) = lock.take() {
+                            if let Some(waker) = lock.waker.take() {
                                 drop(lock);
-                                task.notify();
+                                waker.wake();
                             }
 
                             true
@@ -141,31 +153,32 @@ pub fn timestamps() -> Timestamps {
 
                     if lock.states.len() == 0 {
                         lock.raf = None;
+                        // TODO is this a good idea ?
                         lock.states = vec![];
                     }
                 }));
             }
         }
 
-        Timestamps(state)
+        timestamps
     })
 }
 
 
 pub trait AnimatedSignalVec: SignalVec {
-    type AnimatedSignal: Signal<Item = Percentage>;
+    type Animation;
 
     fn animated_map<A, F>(self, duration: f64, f: F) -> AnimatedMap<Self, F>
-        where F: FnMut(Self::Item, Self::AnimatedSignal) -> A,
+        where F: FnMut(Self::Item, Self::Animation) -> A,
               Self: Sized;
 }
 
 impl<S: SignalVec> AnimatedSignalVec for S {
-    type AnimatedSignal = MutableSignal<Percentage>;
+    type Animation = AnimatedMapBroadcaster;
 
     #[inline]
     fn animated_map<A, F>(self, duration: f64, f: F) -> AnimatedMap<Self, F>
-        where F: FnMut(Self::Item, Self::AnimatedSignal) -> A {
+        where F: FnMut(Self::Item, Self::Animation) -> A {
         AnimatedMap {
             duration: duration,
             animations: vec![],
@@ -176,9 +189,20 @@ impl<S: SignalVec> AnimatedSignalVec for S {
 }
 
 
+pub struct AnimatedMapBroadcaster(MutableAnimation);
+
+impl AnimatedMapBroadcaster {
+    // TODO it should return a custom type
+    #[inline]
+    pub fn signal(&self) -> MutableAnimationSignal {
+        self.0.signal()
+    }
+}
+
+
 struct AnimatedMapState {
     animation: MutableAnimation,
-    removing: Option<WaitFor<MutableSignal<Percentage>>>,
+    removing: Option<WaitFor<MutableAnimationSignal>>,
 }
 
 // TODO move this into signals crate and also generalize it to work with any future, not just animations
@@ -191,7 +215,7 @@ pub struct AnimatedMap<A, B> {
 
 impl<A, F, S> AnimatedMap<S, F>
     where S: SignalVec,
-          F: FnMut(S::Item, MutableSignal<Percentage>) -> A {
+          F: FnMut(S::Item, AnimatedMapBroadcaster) -> A {
 
     fn animated_state(&self) -> AnimatedMapState {
         let state = AnimatedMapState {
@@ -204,25 +228,25 @@ impl<A, F, S> AnimatedMap<S, F>
         state
     }
 
-    fn remove_index(&mut self, index: usize) -> Async<Option<VecChange<A>>> {
+    fn remove_index(&mut self, index: usize) -> Async<Option<VecDiff<A>>> {
         if index == (self.animations.len() - 1) {
             self.animations.pop();
-            Async::Ready(Some(VecChange::Pop {}))
+            Async::Ready(Some(VecDiff::Pop {}))
 
         } else {
             self.animations.remove(index);
-            Async::Ready(Some(VecChange::RemoveAt { index }))
+            Async::Ready(Some(VecDiff::RemoveAt { index }))
         }
     }
 
-    fn should_remove(&mut self, index: usize) -> bool {
+    fn should_remove(&mut self, cx: &mut Context, index: usize) -> bool {
         let state = &mut self.animations[index];
 
         state.animation.animate_to(Percentage::new_unchecked(0.0));
 
         let mut future = state.animation.signal().wait_for(Percentage::new_unchecked(0.0));
 
-        if future.poll().unwrap().is_ready() {
+        if future.poll(cx).unwrap().is_ready() {
             true
 
         } else {
@@ -259,29 +283,29 @@ impl<A, F, S> AnimatedMap<S, F>
 
 impl<A, F, S> SignalVec for AnimatedMap<S, F>
     where S: SignalVec,
-          F: FnMut(S::Item, MutableSignal<Percentage>) -> A {
+          F: FnMut(S::Item, AnimatedMapBroadcaster) -> A {
     type Item = A;
 
     // TODO this can probably be implemented more efficiently
-    fn poll(&mut self) -> Async<Option<VecChange<Self::Item>>> {
+    fn poll_vec_change(&mut self, cx: &mut Context) -> Async<Option<VecDiff<Self::Item>>> {
         let mut is_done = true;
 
         // TODO is this loop correct ?
-        while let Some(result) = self.signal.as_mut().map(|signal| signal.poll()) {
+        while let Some(result) = self.signal.as_mut().map(|signal| signal.poll_vec_change(cx)) {
             match result {
                 Async::Ready(Some(change)) => return match change {
                     // TODO maybe it should play remove / insert animations for this ?
-                    VecChange::Replace { values } => {
+                    VecDiff::Replace { values } => {
                         self.animations = Vec::with_capacity(values.len());
 
-                        Async::Ready(Some(VecChange::Replace {
+                        Async::Ready(Some(VecDiff::Replace {
                             values: values.into_iter().map(|value| {
                                 let state = AnimatedMapState {
                                     animation: MutableAnimation::new_with_initial(self.duration, Percentage::new_unchecked(1.0)),
                                     removing: None,
                                 };
 
-                                let value = (self.callback)(value, state.animation.signal());
+                                let value = (self.callback)(value, AnimatedMapBroadcaster(state.animation.raw_clone()));
 
                                 self.animations.push(state);
 
@@ -290,32 +314,46 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
                         }))
                     },
 
-                    VecChange::InsertAt { index, value } => {
+                    VecDiff::InsertAt { index, value } => {
                         let index = self.find_index(index).unwrap_or_else(|| self.animations.len());
                         let state = self.animated_state();
-                        let value = (self.callback)(value, state.animation.signal());
+                        let value = (self.callback)(value, AnimatedMapBroadcaster(state.animation.raw_clone()));
                         self.animations.insert(index, state);
-                        Async::Ready(Some(VecChange::InsertAt { index, value }))
+                        Async::Ready(Some(VecDiff::InsertAt { index, value }))
                     },
 
-                    VecChange::Push { value } => {
+                    VecDiff::Push { value } => {
                         let state = self.animated_state();
-                        let value = (self.callback)(value, state.animation.signal());
+                        let value = (self.callback)(value, AnimatedMapBroadcaster(state.animation.raw_clone()));
                         self.animations.push(state);
-                        Async::Ready(Some(VecChange::Push { value }))
+                        Async::Ready(Some(VecDiff::Push { value }))
                     },
 
-                    VecChange::UpdateAt { index, value } => {
+                    VecDiff::UpdateAt { index, value } => {
                         let index = self.find_index(index).expect("Could not find value");
                         let state = &self.animations[index];
-                        let value = (self.callback)(value, state.animation.signal());
-                        Async::Ready(Some(VecChange::UpdateAt { index, value }))
+                        let value = (self.callback)(value, AnimatedMapBroadcaster(state.animation.raw_clone()));
+                        Async::Ready(Some(VecDiff::UpdateAt { index, value }))
                     },
 
-                    VecChange::RemoveAt { index } => {
+                    // TODO test this
+                    // TODO should this be treated as a removal + insertion ?
+                    VecDiff::Move { old_index, new_index } => {
+                        let old_index = self.find_index(old_index).expect("Could not find value");
+
+                        let state = self.animations.remove(old_index);
+
+                        let new_index = self.find_index(new_index).unwrap_or_else(|| self.animations.len());
+
+                        self.animations.insert(new_index, state);
+
+                        Async::Ready(Some(VecDiff::Move { old_index, new_index }))
+                    },
+
+                    VecDiff::RemoveAt { index } => {
                         let index = self.find_index(index).expect("Could not find value");
 
-                        if self.should_remove(index) {
+                        if self.should_remove(cx, index) {
                             self.remove_index(index)
 
                         } else {
@@ -323,10 +361,10 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
                         }
                     },
 
-                    VecChange::Pop {} => {
+                    VecDiff::Pop {} => {
                         let index = self.find_last_index().expect("Cannot pop from empty vec");
 
-                        if self.should_remove(index) {
+                        if self.should_remove(cx, index) {
                             self.remove_index(index)
 
                         } else {
@@ -335,16 +373,16 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
                     },
 
                     // TODO maybe it should play remove animation for this ?
-                    VecChange::Clear {} => {
+                    VecDiff::Clear {} => {
                         self.animations.clear();
-                        Async::Ready(Some(VecChange::Clear {}))
+                        Async::Ready(Some(VecDiff::Clear {}))
                     },
                 },
                 Async::Ready(None) => {
                     self.signal = None;
                     break;
                 },
-                Async::NotReady => {
+                Async::Pending => {
                     is_done = false;
                     break;
                 },
@@ -354,11 +392,11 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
         let mut is_removing = false;
 
         // TODO make this more efficient (e.g. using a similar strategy as FuturesUnordered)
-        // This uses rposition so that way it will return VecChange::Pop in more situations
+        // This uses rposition so that way it will return VecDiff::Pop in more situations
         let index = self.animations.iter_mut().rposition(|state| {
             if let Some(ref mut future) = state.removing {
                 is_removing = true;
-                future.poll().unwrap().is_ready()
+                future.poll(cx).unwrap().is_ready()
 
             } else {
                 false
@@ -373,7 +411,7 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
                 Async::Ready(None)
 
             } else {
-                Async::NotReady
+                Async::Pending
             },
         }
     }
@@ -436,153 +474,185 @@ fn range_inclusive(percentage: f64, low: f64, high: f64) -> f64 {
 }
 
 
-pub mod unsync {
-    use super::{Percentage, range_inclusive, timestamps};
-    use operations::spawn_future;
-    use std::rc::Rc;
-    use std::cell::{Cell, RefCell};
-    use futures_signals::signal::{Signal, CancelableFutureHandle};
-    use futures_signals::signal::unsync::{Mutable, MutableSignal};
-    use discard::DiscardOnDrop;
+pub struct MutableAnimationSignal(MutableSignal<Percentage>);
+
+impl Signal for MutableAnimationSignal {
+    type Item = Percentage;
+
+    #[inline]
+    fn poll_change(&mut self, cx: &mut Context) -> Async<Option<Self::Item>> {
+        self.0.poll_change(cx)
+    }
+}
 
 
-    struct MutableAnimationState {
-        playing: Cell<bool>,
-        duration: Cell<f64>,
-        value: Mutable<Percentage>,
-        end: Cell<Percentage>,
-        animating: RefCell<Option<DiscardOnDrop<CancelableFutureHandle>>>,
+struct MutableAnimationState {
+    playing: bool,
+    duration: f64,
+    end: Percentage,
+    animating: Option<DiscardOnDrop<CancelableFutureHandle>>,
+}
+
+struct MutableAnimationInner {
+    state: RefCell<MutableAnimationState>,
+    value: Mutable<Percentage>,
+}
+
+pub struct MutableAnimation {
+    inner: Rc<MutableAnimationInner>,
+}
+
+impl MutableAnimation {
+    #[inline]
+    pub fn new_with_initial(duration: f64, initial: Percentage) -> Self {
+        debug_assert!(duration >= 0.0);
+
+        Self {
+            inner: Rc::new(MutableAnimationInner {
+                state: RefCell::new(MutableAnimationState {
+                    playing: true,
+                    duration: duration,
+                    end: initial,
+                    animating: None,
+                }),
+                value: Mutable::new(initial),
+            }),
+        }
     }
 
-    pub struct MutableAnimation(Rc<MutableAnimationState>);
+    #[inline]
+    pub fn new(duration: f64) -> Self {
+        Self::new_with_initial(duration, Percentage::new_unchecked(0.0))
+    }
 
-    impl MutableAnimation {
-        #[inline]
-        pub fn new_with_initial(duration: f64, initial: Percentage) -> Self {
-            debug_assert!(duration >= 0.0);
-
-            MutableAnimation(Rc::new(MutableAnimationState {
-                playing: Cell::new(true),
-                duration: Cell::new(duration),
-                value: Mutable::new(initial),
-                end: Cell::new(initial),
-                animating: RefCell::new(None),
-            }))
+    #[inline]
+    fn raw_clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
         }
+    }
 
-        #[inline]
-        pub fn new(duration: f64) -> Self {
-            Self::new_with_initial(duration, Percentage::new_unchecked(0.0))
-        }
+    #[inline]
+    fn stop_animating(lock: &mut MutableAnimationState) {
+        lock.animating = None;
+    }
 
-        #[inline]
-        fn stop_animating(&self) {
-            *self.0.animating.borrow_mut() = None;
-        }
+    fn start_animating(&self, lock: &mut MutableAnimationState) {
+        if lock.playing {
+            // TODO use Copy constraint to make value.get() faster ?
+            let start: f64 = self.inner.value.get().into();
+            let end: f64 = lock.end.into();
 
-        fn start_animating(&self) {
-            if self.0.playing.get() {
-                // TODO use Copy constraint to make value.get() faster ?
-                let start: f64 = self.0.value.get().into();
-                let end: f64 = self.0.end.get().into();
+            if start != end {
+                if lock.duration > 0.0 {
+                    let duration = (end - start).abs() * lock.duration;
 
-                if start != end {
-                    let duration = self.0.duration.get();
+                    let state = self.raw_clone();
 
-                    if duration > 0.0 {
-                        let duration = (end - start).abs() * duration;
+                    let mut starting_time = None;
 
-                        // TODO a bit gross
-                        let state = MutableAnimation(self.0.clone());
+                    lock.animating = Some(spawn_future(
+                        timestamps()
+                            .for_each(move |current_time| {
+                                if let Some(current_time) = current_time {
+                                    let starting_time = *starting_time.get_or_insert(current_time);
 
-                        let mut starting_time = None;
+                                    let diff = (current_time - starting_time) / duration;
 
-                        *self.0.animating.borrow_mut() = Some(spawn_future(
-                            timestamps()
-                                .map(move |current_time| {
-                                    if let Some(current_time) = current_time {
-                                        let starting_time = *starting_time.get_or_insert(current_time);
-
-                                        let diff = (current_time - starting_time) / duration;
-
-                                        // TODO don't update if the new value is the same as the old value
-                                        if diff >= 1.0 {
-                                            state.stop_animating();
-                                            state.0.value.set(Percentage::new_unchecked(end));
-                                            true
-
-                                        } else {
-                                            state.0.value.set(Percentage::new_unchecked(range_inclusive(diff, start, end)));
-                                            false
+                                    // TODO don't update if the new value is the same as the old value
+                                    if diff >= 1.0 {
+                                        {
+                                            let mut lock = state.inner.state.borrow_mut();
+                                            Self::stop_animating(&mut lock);
                                         }
+                                        state.inner.value.set(Percentage::new_unchecked(end));
 
                                     } else {
-                                        false
+                                        state.inner.value.set(Percentage::new_unchecked(range_inclusive(diff, start, end)));
                                     }
-                                })
-                                .wait_for(true)
-                        ));
+                                }
 
-                    } else {
-                        self.stop_animating();
-                        self.0.value.set(Percentage::new_unchecked(end));
-                    }
+                                Ok(())
+                            })
+                    ));
 
                 } else {
-                    // TODO is this necessary ?
-                    self.stop_animating();
+                    Self::stop_animating(lock);
+                    self.inner.value.set(Percentage::new_unchecked(end));
                 }
+
+            } else {
+                // TODO is this necessary ?
+                Self::stop_animating(lock);
             }
         }
+    }
 
-        pub fn set_duration(&self, duration: f64) {
-            debug_assert!(duration >= 0.0);
+    pub fn set_duration(&self, duration: f64) {
+        debug_assert!(duration >= 0.0);
 
-            if self.0.duration.get() != duration {
-                self.0.duration.set(duration);
-                self.start_animating();
+        let mut lock = self.inner.state.borrow_mut();
+
+        if lock.duration != duration {
+            lock.duration = duration;
+            self.start_animating(&mut lock);
+        }
+    }
+
+    #[inline]
+    pub fn pause(&self) {
+        let mut lock = self.inner.state.borrow_mut();
+
+        if lock.playing {
+            lock.playing = false;
+            Self::stop_animating(&mut lock);
+        }
+    }
+
+    #[inline]
+    pub fn play(&self) {
+        let mut lock = self.inner.state.borrow_mut();
+
+        if !lock.playing {
+            lock.playing = true;
+            self.start_animating(&mut lock);
+        }
+    }
+
+    fn _jump_to(mut lock: &mut MutableAnimationState, mutable: &Mutable<Percentage>, end: Percentage) {
+        Self::stop_animating(&mut lock);
+
+        lock.end = end;
+
+        // TODO use Copy constraint to make value.get() faster ?
+        if mutable.get() != end {
+            mutable.set(end);
+        }
+    }
+
+    pub fn jump_to(&self, end: Percentage) {
+        let mut lock = self.inner.state.borrow_mut();
+
+        Self::_jump_to(&mut lock, &self.inner.value, end);
+    }
+
+    pub fn animate_to(&self, end: Percentage) {
+        let mut lock = self.inner.state.borrow_mut();
+
+        if lock.end != end {
+            if lock.duration <= 0.0 {
+                Self::_jump_to(&mut lock, &self.inner.value, end);
+
+            } else {
+                lock.end = end;
+                self.start_animating(&mut lock);
             }
         }
+    }
 
-        #[inline]
-        pub fn pause(&self) {
-            self.0.playing.set(false);
-            self.stop_animating();
-        }
-
-        #[inline]
-        pub fn play(&self) {
-            self.0.playing.set(true);
-            self.start_animating();
-        }
-
-        pub fn jump_to(&self, end: Percentage) {
-            self.stop_animating();
-
-            self.0.end.set(end);
-
-            // TODO use Copy constraint to make value.get() faster ?
-            if self.0.value.get() != end {
-                self.0.value.set(end);
-            }
-        }
-
-        pub fn animate_to(&self, end: Percentage) {
-            if self.0.end.get() != end {
-                if self.0.duration.get() <= 0.0 {
-                    self.jump_to(end);
-
-                } else {
-                    self.0.end.set(end);
-                    self.start_animating();
-                }
-            }
-        }
-
-        #[inline]
-        pub fn signal(&self) -> MutableSignal<Percentage> {
-            self.0.value.signal()
-        }
+    #[inline]
+    pub fn signal(&self) -> MutableAnimationSignal {
+        MutableAnimationSignal(self.inner.value.signal())
     }
 }
 

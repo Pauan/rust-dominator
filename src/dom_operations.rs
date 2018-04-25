@@ -10,6 +10,19 @@ pub fn create_element_ns<A: IElement>(name: &str, namespace: &str) -> A
     js!( return document.createElementNS(@{namespace}, @{name}); ).try_into().unwrap()
 }
 
+// TODO make this more efficient
+#[inline]
+pub fn move_from_to<A: INode>(parent: &A, old_index: u32, new_index: u32) {
+    js! { @(no_return)
+        var parent = @{parent.as_ref()};
+        // TODO verify that it exists ?
+        var child = parent.childNodes[@{old_index}];
+        parent.removeChild(child);
+        parent.insertBefore(child, parent.childNodes[@{new_index}]);
+    }
+}
+
+// TODO make this more efficient
 #[inline]
 pub fn insert_at<A: INode, B: INode>(parent: &A, index: u32, child: &B) {
     js! { @(no_return)
@@ -18,6 +31,7 @@ pub fn insert_at<A: INode, B: INode>(parent: &A, index: u32, child: &B) {
     }
 }
 
+// TODO make this more efficient
 #[inline]
 pub fn update_at<A: INode, B: INode>(parent: &A, index: u32, child: &B) {
     js! { @(no_return)
@@ -26,6 +40,7 @@ pub fn update_at<A: INode, B: INode>(parent: &A, index: u32, child: &B) {
     }
 }
 
+// TODO make this more efficient
 #[inline]
 pub fn remove_at<A: INode>(parent: &A, index: u32) {
     js! { @(no_return)
@@ -40,6 +55,23 @@ pub fn set_text(element: &TextNode, value: &str) {
     js! { @(no_return)
         // http://jsperf.com/textnode-performance
         @{element}.data = @{value};
+    }
+}
+
+// TODO this should be in stdweb
+// TODO check that the style *actually* was changed
+// TODO handle browser prefixes
+#[inline]
+pub fn set_style<A: AsRef<Reference>>(element: &A, name: &str, value: &str, important: bool) {
+    if important {
+        js! { @(no_return)
+            @{element.as_ref()}.style.setProperty(@{name}, @{value}, "important");
+        }
+
+    } else {
+        js! { @(no_return)
+            @{element.as_ref()}.style.setProperty(@{name}, @{value}, "");
+        }
     }
 }
 
@@ -60,22 +92,23 @@ pub fn set_focused<A: IHtmlElement>(element: &A, focused: bool) {
 }
 
 #[inline]
-pub fn toggle_class<A: IElement>(element: &A, name: &str, toggle: bool) {
+pub fn add_class<A: IElement>(element: &A, name: &str) {
     js! { @(no_return)
-        @{element.as_ref()}.classList.toggle(@{name}, @{toggle});
-    }
-}
-
-
-#[inline]
-fn _set_attribute_ns<A: IElement>(element: &A, name: &str, value: &str, namespace: &str) {
-    js! { @(no_return)
-        @{element.as_ref()}.setAttributeNS(@{namespace}, @{name}, @{value});
+        @{element.as_ref()}.classList.add(@{name});
     }
 }
 
 #[inline]
-fn _set_attribute<A: IElement>(element: &A, name: &str, value: &str) {
+pub fn remove_class<A: IElement>(element: &A, name: &str) {
+    js! { @(no_return)
+        @{element.as_ref()}.classList.remove(@{name});
+    }
+}
+
+
+// TODO check that the attribute *actually* was changed
+#[inline]
+pub fn set_attribute<A: IElement>(element: &A, name: &str, value: &str) {
     js! { @(no_return)
         @{element.as_ref()}.setAttribute(@{name}, @{value});
     }
@@ -83,33 +116,24 @@ fn _set_attribute<A: IElement>(element: &A, name: &str, value: &str) {
 
 // TODO check that the attribute *actually* was changed
 #[inline]
-pub fn set_attribute<A: IElement>(element: &A, name: &str, value: &str, namespace: Option<&str>) {
-    match namespace {
-        Some(namespace) => _set_attribute_ns(element, name, value, namespace),
-        None => _set_attribute(element, name, value),
+pub fn set_attribute_ns<A: IElement>(element: &A, namespace: &str, name: &str, value: &str) {
+    js! { @(no_return)
+        @{element.as_ref()}.setAttributeNS(@{namespace}, @{name}, @{value});
     }
 }
 
 
 #[inline]
-fn _remove_attribute_ns<A: IElement>(element: &A, name: &str, namespace: &str) {
+pub fn remove_attribute_ns<A: IElement>(element: &A, namespace: &str, name: &str) {
     js! { @(no_return)
         @{element.as_ref()}.removeAttributeNS(@{namespace}, @{name});
     }
 }
 
 #[inline]
-fn _remove_attribute<A: IElement>(element: &A, name: &str) {
+pub fn remove_attribute<A: IElement>(element: &A, name: &str) {
     js! { @(no_return)
         @{element.as_ref()}.removeAttribute(@{name});
-    }
-}
-
-#[inline]
-pub fn remove_attribute<A: IElement>(element: &A, name: &str, namespace: Option<&str>) {
-    match namespace {
-        Some(namespace) => _remove_attribute_ns(element, name, namespace),
-        None => _remove_attribute(element, name),
     }
 }
 
@@ -117,7 +141,7 @@ pub fn remove_attribute<A: IElement>(element: &A, name: &str, namespace: Option<
 // TODO check that the property *actually* was changed ?
 // TODO better type checks ?
 #[inline]
-pub fn set_property<A: AsRef<Reference>, B: JsSerialize>(obj: &A, name: &str, value: &B) {
+pub fn set_property<A: AsRef<Reference>, B: JsSerialize>(obj: &A, name: &str, value: B) {
     js! { @(no_return)
         @{obj.as_ref()}[@{name}] = @{value};
     }

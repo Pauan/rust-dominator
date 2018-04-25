@@ -5,6 +5,7 @@ authors = ["Pauan <pcxunlimited@gmail.com>"]
 
 [dependencies]
 dominator = { path = "../.." }
+#futures-signals = { path = "../../../rust-signals" }
 futures-signals = { git = "https://github.com/Pauan/rust-signals" }
 
 [dependencies.stdweb]

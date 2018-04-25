@@ -1,47 +1,24 @@
-use std;
-use stdweb::{Reference, Value, ReferenceType};
+use stdweb::{Reference, Value, JsSerialize};
 use stdweb::unstable::{TryFrom, TryInto};
-use stdweb::web::{IEventTarget, INode, IElement, IHtmlElement, HtmlElement, Node};
+use stdweb::web::{IEventTarget, INode, IElement, IHtmlElement, HtmlElement, Node, window, TextNode};
 use stdweb::web::event::ConcreteEvent;
 use callbacks::Callbacks;
 use traits::*;
+use operations;
+use operations::for_each;
 use dom_operations;
-use operations::{BoxDiscard, spawn_future};
-use futures::future::Future;
+use operations::{ValueDiscard, FnDiscard, spawn_future};
+use futures_signals::signal::IntoSignal;
+use futures_signals::signal_vec::IntoSignalVec;
+use futures_core::Never;
+use futures_core::future::Future;
 use discard::{Discard, DiscardOnDrop};
-
-
-pub struct Dynamic<A>(pub(crate) A);
-
-
-// TODO this should be in stdweb
-pub trait IStyle: ReferenceType {
-    // TODO check that the style *actually* was changed
-    // TODO handle browser prefixes
-    #[inline]
-    fn set_style(&self, name: &str, value: &str, important: bool) {
-        if important {
-            js! { @(no_return)
-                @{self.as_ref()}.style.setProperty(@{name}, @{value}, "important");
-            }
-
-        } else {
-            js! { @(no_return)
-                @{self.as_ref()}.style.setProperty(@{name}, @{value}, "");
-            }
-        }
-    }
-}
-
-impl<A: IHtmlElement> IStyle for A {}
 
 
 // TODO this should be in stdweb
 #[derive(Clone, Debug, PartialEq, Eq, ReferenceType)]
 #[reference(instance_of = "CSSStyleRule")]
 pub struct CssStyleRule(Reference);
-
-impl IStyle for CssStyleRule {}
 
 
 // https://developer.mozilla.org/en-US/docs/Web/API/Document/createElementNS#Valid%20Namespace%20URIs
@@ -86,8 +63,33 @@ pub fn append_dom<A: INode>(parent: &A, mut dom: Dom) -> DomHandle {
 
 
 #[inline]
-pub fn text<A: Text>(value: A) -> Dom {
-    value.into_dom()
+pub fn text(value: &str) -> Dom {
+    Dom::new(js!( return document.createTextNode(@{value}); ).try_into().unwrap())
+}
+
+
+// TODO should this inline ?
+pub fn text_signal<A, B>(value: B) -> Dom
+    where A: AsStr,
+          B: IntoSignal<Item = A>,
+          B::Signal: 'static {
+
+    let element: TextNode = js!( return document.createTextNode(""); ).try_into().unwrap();
+
+    let mut callbacks = Callbacks::new();
+
+    {
+        let element = element.clone();
+
+        callbacks.after_remove(for_each(value.into_signal(), move |value| {
+            dom_operations::set_text(&element, value.as_str());
+        }));
+    }
+
+    Dom {
+        element: element.into(),
+        callbacks: callbacks,
+    }
 }
 
 
@@ -119,80 +121,66 @@ impl Dom {
 
         let mut dom = initializer(&mut state);
 
-        // TODO make this more efficient somehow ? what if the value is already on the heap ?
-        dom.callbacks.after_remove(BoxDiscard::new(state));
+        dom.callbacks.after_remove(ValueDiscard::new(state));
 
         dom
     }
 }
 
 
-pub struct HtmlBuilder<A> {
+struct EventListenerHandle<A> where A: AsRef<Reference> {
+    event: &'static str,
+    element: A,
+    listener: Value,
+}
+
+impl<A> Discard for EventListenerHandle<A> where A: AsRef<Reference> {
+    #[inline]
+    fn discard(self) {
+        js! { @(no_return)
+            var listener = @{&self.listener};
+            @{self.element.as_ref()}.removeEventListener(@{self.event}, listener);
+            listener.drop();
+        }
+    }
+}
+
+
+// TODO create HTML / SVG specific versions of this ?
+#[inline]
+pub fn create_element_ns<A: IElement>(name: &str, namespace: &str) -> A
+    where <A as TryFrom<Value>>::Error: ::std::fmt::Debug {
+    dom_operations::create_element_ns(name, namespace)
+}
+
+
+pub struct DomBuilder<A> {
     element: A,
     callbacks: Callbacks,
     // TODO verify this with static types instead ?
     has_children: bool,
 }
 
-impl<A> HtmlBuilder<A> {
+impl<A> DomBuilder<A> {
     #[inline]
-    pub fn future<F>(mut self, future: F) -> Self where F: Future<Item = (), Error = ()> + 'static {
-        self.callbacks.after_remove(DiscardOnDrop::leak(spawn_future(future)));
-        self
-    }
-}
-
-// TODO add in SVG nodes
-impl<A: IElement> HtmlBuilder<A>
-    where <A as TryFrom<Value>>::Error: std::fmt::Debug {
-
-    #[inline]
-    pub fn new(name: &str) -> Self {
+    pub fn new(value: A) -> Self {
         Self {
-            element: dom_operations::create_element_ns(name, HTML_NAMESPACE),
+            element: value,
             callbacks: Callbacks::new(),
             has_children: false,
         }
     }
-}
 
-impl<A: AsRef<Reference> + Clone + 'static> HtmlBuilder<A> {
-    #[inline]
-    pub fn property<B: Property>(mut self, name: &str, value: B) -> Self {
-        value.set_property(&self.element, &mut self.callbacks, name);
-        self
-    }
-}
-
-struct EventListenerHandle {
-    event: &'static str,
-    element: Reference,
-    listener: Value,
-}
-
-impl Discard for EventListenerHandle {
-    #[inline]
-    fn discard(self) {
-        js! { @(no_return)
-            var listener = @{&self.listener};
-            @{&self.element}.removeEventListener(@{self.event}, listener);
-            listener.drop();
-        }
-    }
-}
-
-impl<A: IEventTarget> HtmlBuilder<A> {
     // TODO maybe inline this ?
     // TODO replace with element.add_event_listener
-    fn _event<T, F>(&mut self, listener: F)
-        where T: ConcreteEvent,
+    fn _event<B, T, F>(&mut self, element: B, listener: F)
+        where B: IEventTarget + 'static,
+              T: ConcreteEvent,
               F: FnMut(T) + 'static {
-
-        let element = self.element.as_ref().clone();
 
         let listener = js!(
             var listener = @{listener};
-            @{&element}.addEventListener(@{T::EVENT_TYPE}, listener);
+            @{element.as_ref()}.addEventListener(@{T::EVENT_TYPE}, listener);
             return listener;
         );
 
@@ -203,73 +191,329 @@ impl<A: IEventTarget> HtmlBuilder<A> {
         });
     }
 
+    // TODO add this to the StylesheetBuilder and ClassBuilder too
+    #[inline]
+    pub fn global_event<T, F>(mut self, listener: F) -> Self
+        where T: ConcreteEvent,
+              F: FnMut(T) + 'static {
+        self._event(window(), listener);
+        self
+    }
+
+    #[inline]
+    pub fn future<F>(mut self, future: F) -> Self where F: Future<Item = (), Error = Never> + 'static {
+        self.callbacks.after_remove(DiscardOnDrop::leak(spawn_future(future)));
+        self
+    }
+
+    #[inline]
+    pub fn mixin<B: Mixin<Self>>(self, mixin: B) -> Self {
+        mixin.apply(self)
+    }
+}
+
+impl<A: Clone + 'static> DomBuilder<A> {
+    #[inline]
+    pub fn after_inserted<F>(mut self, f: F) -> Self where F: FnOnce(A) + 'static {
+        let element = self.element.clone();
+        self.callbacks.after_insert(move |_| f(element));
+        self
+    }
+
+    #[inline]
+    pub fn after_removed<F>(mut self, f: F) -> Self where F: FnOnce(A) + 'static {
+        let element = self.element.clone();
+        self.callbacks.after_remove(FnDiscard::new(move || f(element)));
+        self
+    }
+}
+
+impl<A: Into<Node>> DomBuilder<A> {
+    #[inline]
+    pub fn into_dom(self) -> Dom {
+        Dom {
+            element: self.element.into(),
+            callbacks: self.callbacks,
+        }
+    }
+}
+
+// TODO make this JsSerialize rather than AsRef<Reference> ?
+impl<A: AsRef<Reference>> DomBuilder<A> {
+    #[inline]
+    pub fn property<B: JsSerialize>(self, name: &str, value: B) -> Self {
+        dom_operations::set_property(&self.element, name, value);
+        self
+    }
+}
+
+impl<A: AsRef<Reference> + Clone + 'static> DomBuilder<A> {
+    fn set_property_signal<B, C>(&mut self, name: &str, value: C)
+        where B: JsSerialize,
+              C: IntoSignal<Item = B>,
+              C::Signal: 'static {
+
+        let element = self.element.clone();
+        let name = name.to_owned();
+
+        self.callbacks.after_remove(for_each(value.into_signal(), move |value| {
+            dom_operations::set_property(&element, &name, value);
+        }));
+    }
+
+    #[inline]
+    pub fn property_signal<B, C>(mut self, name: &str, value: C) -> Self
+        where B: JsSerialize,
+              C: IntoSignal<Item = B>,
+              C::Signal: 'static {
+
+        self.set_property_signal(name, value);
+        self
+    }
+}
+
+impl<A: IEventTarget + Clone + 'static> DomBuilder<A> {
     #[inline]
     pub fn event<T, F>(mut self, listener: F) -> Self
         where T: ConcreteEvent,
               F: FnMut(T) + 'static {
-        self._event(listener);
+        // TODO is this clone correct ?
+        let element = self.element.clone();
+        self._event(element, listener);
         self
     }
 }
 
-impl<A: INode + Clone + 'static> HtmlBuilder<A> {
+impl<A: INode> DomBuilder<A> {
+    // TODO figure out how to make this owned rather than &mut
     #[inline]
-    pub fn children<B: Children>(mut self, children: B) -> Self {
+    pub fn children<'a, B: IntoIterator<Item = &'a mut Dom>>(mut self, children: B) -> Self {
         assert_eq!(self.has_children, false);
         self.has_children = true;
 
-        children.insert_children(&self.element, &mut self.callbacks);
+        operations::insert_children_iter(&self.element, &mut self.callbacks, children);
         self
     }
 }
 
-impl<A: IElement + Clone + 'static> HtmlBuilder<A> {
+impl<A: INode + Clone + 'static> DomBuilder<A> {
     #[inline]
-    pub fn attribute<B: Attribute>(mut self, name: &str, value: B) -> Self {
-        value.set_attribute(&self.element, &mut self.callbacks, name, None);
-        self
-    }
+    pub fn children_signal_vec<B>(mut self, children: B) -> Self
+        where B: IntoSignalVec<Item = Dom>,
+              B::SignalVec: 'static {
 
-    #[inline]
-    pub fn attribute_namespace<B: Attribute>(mut self, name: &str, value: B, namespace: &str) -> Self {
-        value.set_attribute(&self.element, &mut self.callbacks, name, Some(namespace));
-        self
-    }
+        assert_eq!(self.has_children, false);
+        self.has_children = true;
 
-    #[inline]
-    pub fn class<B: Class>(mut self, name: &str, value: B) -> Self {
-        value.toggle_class(&self.element, &mut self.callbacks, name);
+        operations::insert_children_signal_vec(&self.element, &mut self.callbacks, children);
         self
     }
 }
 
-impl<A: IHtmlElement + Clone + 'static> HtmlBuilder<A> {
+impl<A: IElement> DomBuilder<A> {
     #[inline]
-    pub fn style<B: Style>(mut self, name: &str, value: B) -> Self {
-        value.set_style(&self.element, &mut self.callbacks, name, false);
+    pub fn attribute(self, name: &str, value: &str) -> Self {
+        dom_operations::set_attribute(&self.element, name, value);
         self
     }
 
     #[inline]
-    pub fn style_important<B: Style>(mut self, name: &str, value: B) -> Self {
-        value.set_style(&self.element, &mut self.callbacks, name, true);
+    pub fn attribute_namespace(self, namespace: &str, name: &str, value: &str) -> Self {
+        dom_operations::set_attribute_ns(&self.element, namespace, name, value);
         self
     }
 
     #[inline]
-    pub fn focused<B: Focused>(mut self, value: B) -> Self {
-        value.toggle_focused(&self.element, &mut self.callbacks);
+    pub fn class(self, name: &str) -> Self {
+        dom_operations::add_class(&self.element, name);
         self
     }
 }
 
-impl<A: Into<Node>> From<HtmlBuilder<A>> for Dom {
+impl<A: IElement + Clone + 'static> DomBuilder<A> {
+    fn set_attribute_signal<B, C>(&mut self, name: &str, value: C)
+        where B: AsOptionStr,
+              C: IntoSignal<Item = B>,
+              C::Signal: 'static {
+
+        let element = self.element.clone();
+        let name = name.to_owned();
+
+        self.callbacks.after_remove(for_each(value.into_signal(), move |value| {
+            match value.as_option_str() {
+                Some(value) => dom_operations::set_attribute(&element, &name, value),
+                None => dom_operations::remove_attribute(&element, &name),
+            }
+        }));
+    }
+
+
     #[inline]
-    fn from(dom: HtmlBuilder<A>) -> Self {
-        Self {
-            element: dom.element.into(),
-            callbacks: dom.callbacks,
+    pub fn attribute_signal<B, C>(mut self, name: &str, value: C) -> Self
+        where B: AsOptionStr,
+              C: IntoSignal<Item = B>,
+              C::Signal: 'static {
+
+        self.set_attribute_signal(name, value);
+        self
+    }
+
+    fn set_attribute_namespace_signal<B, C>(&mut self, namespace: &str, name: &str, value: C)
+        where B: AsOptionStr,
+              C: IntoSignal<Item = B>,
+              C::Signal: 'static {
+
+        let element = self.element.clone();
+        let name = name.to_owned();
+        let namespace = namespace.to_owned();
+
+        self.callbacks.after_remove(for_each(value.into_signal(), move |value| {
+            match value.as_option_str() {
+                Some(value) => dom_operations::set_attribute_ns(&element, &namespace, &name, value),
+                None => dom_operations::remove_attribute_ns(&element, &namespace, &name),
+            }
+        }));
+    }
+
+    #[inline]
+    pub fn attribute_namespace_signal<B, C>(mut self, namespace: &str, name: &str, value: C) -> Self
+        where B: AsOptionStr,
+              C: IntoSignal<Item = B>,
+              C::Signal: 'static {
+
+        self.set_attribute_namespace_signal(namespace, name, value);
+        self
+    }
+
+
+    fn set_class_signal<B>(&mut self, name: &str, value: B)
+        where B: IntoSignal<Item = bool>,
+              B::Signal: 'static {
+
+        let element = self.element.clone();
+        let name = name.to_owned();
+
+        self.callbacks.after_remove(for_each(value.into_signal(), move |value| {
+            if value {
+                dom_operations::add_class(&element, &name);
+
+            } else {
+                dom_operations::remove_class(&element, &name);
+            }
+        }));
+    }
+
+    #[inline]
+    pub fn class_signal<B>(mut self, name: &str, value: B) -> Self
+        where B: IntoSignal<Item = bool>,
+              B::Signal: 'static {
+
+        self.set_class_signal(name, value);
+        self
+    }
+}
+
+impl<A: IHtmlElement> DomBuilder<A> {
+    #[inline]
+    pub fn style(self, name: &str, value: &str) -> Self {
+        dom_operations::set_style(&self.element, name, value, false);
+        self
+    }
+
+    #[inline]
+    pub fn style_important(self, name: &str, value: &str) -> Self {
+        dom_operations::set_style(&self.element, name, value, true);
+        self
+    }
+}
+
+impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
+    fn set_style_signal<B, C>(&mut self, name: &str, value: C, important: bool)
+        where B: AsOptionStr,
+              C: IntoSignal<Item = B>,
+              C::Signal: 'static {
+
+        let element = self.element.clone();
+        let name = name.to_owned();
+
+        self.callbacks.after_remove(for_each(value.into_signal(), move |value| {
+            dom_operations::set_style(&element, &name, value.as_option_str().unwrap_or(""), important);
+        }));
+    }
+
+    #[inline]
+    pub fn style_signal<B, C>(mut self, name: &str, value: C) -> Self
+        where B: AsOptionStr,
+              C: IntoSignal<Item = B>,
+              C::Signal: 'static {
+
+        self.set_style_signal(name, value, false);
+        self
+    }
+
+    #[inline]
+    pub fn style_important_signal<B, C>(mut self, name: &str, value: C) -> Self
+        where B: AsOptionStr,
+              C: IntoSignal<Item = B>,
+              C::Signal: 'static {
+
+        self.set_style_signal(name, value, true);
+        self
+    }
+
+
+    // TODO remove the `value` argument ?
+    #[inline]
+    pub fn focused(mut self, value: bool) -> Self {
+        let element = self.element.clone();
+
+        // This needs to use `after_insert` because calling `.focus()` on an element before it is in the DOM has no effect
+        self.callbacks.after_insert(move |_| {
+            dom_operations::set_focused(&element, value);
+        });
+
+        self
+    }
+
+
+    fn set_focused_signal<B>(&mut self, value: B)
+        where B: IntoSignal<Item = bool> + 'static {
+
+        let element = self.element.clone();
+
+        // This needs to use `after_insert` because calling `.focus()` on an element before it is in the DOM has no effect
+        self.callbacks.after_insert(move |callbacks| {
+            // TODO verify that this is correct under all circumstances
+            callbacks.after_remove(for_each(value.into_signal(), move |value| {
+                dom_operations::set_focused(&element, value);
+            }));
+        });
+    }
+
+    #[inline]
+    pub fn focused_signal<B>(mut self, value: B) -> Self
+        where B: IntoSignal<Item = bool> + 'static {
+
+        self.set_focused_signal(value);
+        self
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::{create_element_ns, DomBuilder, HTML_NAMESPACE};
+    use stdweb::web::{HtmlElement, IHtmlElement};
+
+    #[test]
+    fn mixin() {
+        let a: DomBuilder<HtmlElement> = DomBuilder::new(create_element_ns("div", HTML_NAMESPACE));
+
+        fn my_mixin<A: IHtmlElement>(builder: DomBuilder<A>) -> DomBuilder<A> {
+            builder.style("foo", "bar")
         }
+
+        a.mixin(my_mixin);
     }
 }
 
@@ -308,14 +552,48 @@ impl StylesheetBuilder {
     }
 
     #[inline]
-    pub fn style<B: Style>(mut self, name: &str, value: B) -> Self {
-        value.set_style(&self.element, &mut self.callbacks, name, false);
+    pub fn style(self, name: &str, value: &str) -> Self {
+        dom_operations::set_style(&self.element, name, value, false);
         self
     }
 
     #[inline]
-    pub fn style_important<B: Style>(mut self, name: &str, value: B) -> Self {
-        value.set_style(&self.element, &mut self.callbacks, name, true);
+    pub fn style_important(self, name: &str, value: &str) -> Self {
+        dom_operations::set_style(&self.element, name, value, true);
+        self
+    }
+
+
+    fn set_style_signal<B, C>(&mut self, name: &str, value: C, important: bool)
+        where B: AsOptionStr,
+              C: IntoSignal<Item = B>,
+              C::Signal: 'static {
+
+        let element = self.element.clone();
+        let name = name.to_owned();
+
+        self.callbacks.after_remove(for_each(value.into_signal(), move |value| {
+            dom_operations::set_style(&element, &name, value.as_option_str().unwrap_or(""), important);
+        }));
+    }
+
+    #[inline]
+    pub fn style_signal<B, C>(mut self, name: &str, value: C) -> Self
+        where B: AsOptionStr,
+              C: IntoSignal<Item = B>,
+              C::Signal: 'static {
+
+        self.set_style_signal(name, value, false);
+        self
+    }
+
+    #[inline]
+    pub fn style_important_signal<B, C>(mut self, name: &str, value: C) -> Self
+        where B: AsOptionStr,
+              C: IntoSignal<Item = B>,
+              C::Signal: 'static {
+
+        self.set_style_signal(name, value, true);
         self
     }
 
@@ -365,14 +643,34 @@ impl ClassBuilder {
     }
 
     #[inline]
-    pub fn style<B: Style>(mut self, name: &str, value: B) -> Self {
+    pub fn style(mut self, name: &str, value: &str) -> Self {
         self.stylesheet = self.stylesheet.style(name, value);
         self
     }
 
     #[inline]
-    pub fn style_important<B: Style>(mut self, name: &str, value: B) -> Self {
+    pub fn style_important(mut self, name: &str, value: &str) -> Self {
         self.stylesheet = self.stylesheet.style_important(name, value);
+        self
+    }
+
+    #[inline]
+    pub fn style_signal<B, C>(mut self, name: &str, value: C) -> Self
+        where B: AsOptionStr,
+              C: IntoSignal<Item = B>,
+              C::Signal: 'static {
+
+        self.stylesheet = self.stylesheet.style_signal(name, value);
+        self
+    }
+
+    #[inline]
+    pub fn style_important_signal<B, C>(mut self, name: &str, value: C) -> Self
+        where B: AsOptionStr,
+              C: IntoSignal<Item = B>,
+              C::Signal: 'static {
+
+        self.stylesheet = self.stylesheet.style_important_signal(name, value);
         self
     }
 

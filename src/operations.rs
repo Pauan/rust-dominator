@@ -1,34 +1,35 @@
 use std::rc::Rc;
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
+use std::mem::ManuallyDrop;
 use stdweb::PromiseFuture;
 use discard::{Discard, DiscardOnDrop};
-use stdweb::{Reference, JsSerialize};
-use stdweb::web::TextNode;
-use futures_signals::signal::{Signal, cancelable_future, CancelableFutureHandle};
-use futures_signals::signal_vec::{VecChange, SignalVec};
+use futures_signals::{cancelable_future, CancelableFutureHandle};
+use futures_signals::signal::{Signal, SignalExt};
+use futures_signals::signal_vec::{VecDiff, SignalVec, SignalVecExt, IntoSignalVec};
 use dom_operations;
-use dom::{Dom, IStyle};
+use dom::Dom;
 use callbacks::Callbacks;
 use std::iter::IntoIterator;
-use stdweb::traits::{INode, IElement, IHtmlElement};
-use futures::future::Future;
+use stdweb::traits::INode;
+use futures_core::Never;
+use futures_core::future::Future;
 
 
 // TODO this should probably be in stdweb
 #[inline]
 pub fn spawn_future<F>(future: F) -> DiscardOnDrop<CancelableFutureHandle>
-    where F: Future<Item = (), Error = ()> + 'static {
+    where F: Future<Item = (), Error = Never> + 'static {
     // TODO make this more efficient ?
     let (handle, future) = cancelable_future(future, |_| ());
 
-    PromiseFuture::spawn(future);
+    PromiseFuture::spawn_local(future);
 
     handle
 }
 
 
 #[inline]
-fn for_each<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
+pub fn for_each<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
     where A: Signal + 'static,
           B: FnMut(A::Item) + 'static {
 
@@ -42,150 +43,12 @@ fn for_each<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
 #[inline]
 fn for_each_vec<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
     where A: SignalVec + 'static,
-          B: FnMut(VecChange<A::Item>) + 'static {
+          B: FnMut(VecDiff<A::Item>) + 'static {
 
     DiscardOnDrop::leak(spawn_future(signal.for_each(move |value| {
         callback(value);
         Ok(())
     })))
-}
-
-
-// TODO inline this ?
-pub fn set_text_signal<A>(element: &TextNode, callbacks: &mut Callbacks, signal: A)
-    where A: Signal<Item = String> + 'static {
-
-    let element = element.clone();
-
-    let handle = for_each(signal, move |value| {
-        dom_operations::set_text(&element, &value);
-    });
-
-    callbacks.after_remove(handle);
-}
-
-
-// TODO inline this ?
-pub fn set_property_signal<'a, A, B, C>(element: &A, callbacks: &mut Callbacks, name: &str, signal: C)
-    where A: AsRef<Reference> + Clone + 'static,
-          B: JsSerialize,
-          C: Signal<Item = B> + 'static {
-
-    let element = element.clone();
-    let name = name.to_owned();
-
-    let handle = for_each(signal, move |value| {
-        dom_operations::set_property(&element, &name, &value);
-    });
-
-    callbacks.after_remove(handle);
-}
-
-#[inline]
-pub fn set_property_str<A: AsRef<Reference>, B: JsSerialize>(element: &A, name: &str, value: &B) {
-    dom_operations::set_property(element, name, value)
-}
-
-
-// TODO inline this ?
-pub fn set_attribute_signal<A, B>(element: &A, callbacks: &mut Callbacks, name: &str, signal: B, namespace: Option<&str>)
-    where A: IElement + Clone + 'static,
-          B: Signal<Item = Option<String>> + 'static {
-
-    let element = element.clone();
-    let name = name.to_owned();
-    let namespace = namespace.map(|x| x.to_owned());
-
-    let handle = for_each(signal, move |value| {
-        // TODO figure out a way to avoid this
-        let namespace = namespace.as_ref().map(|x| x.as_str());
-
-        match value {
-            Some(value) => dom_operations::set_attribute(&element, &name, &value, namespace),
-            None => dom_operations::remove_attribute(&element, &name, namespace),
-        }
-    });
-
-    callbacks.after_remove(handle);
-}
-
-#[inline]
-pub fn set_attribute_str<A: IElement>(element: &A, name: &str, value: &str, namespace: Option<&str>) {
-    dom_operations::set_attribute(element, name, value, namespace)
-}
-
-
-// TODO inline this ?
-pub fn toggle_class_signal<A, B>(element: &A, callbacks: &mut Callbacks, name: &str, signal: B)
-    where A: IElement + Clone + 'static,
-          B: Signal<Item = bool> + 'static {
-
-    let element = element.clone();
-    let name = name.to_owned();
-
-    let handle = for_each(signal, move |value| {
-        dom_operations::toggle_class(&element, &name, value);
-    });
-
-    callbacks.after_remove(handle);
-}
-
-#[inline]
-pub fn toggle_class_bool<A: IElement>(element: &A, name: &str, value: bool) {
-    dom_operations::toggle_class(element, name, value)
-}
-
-
-// TODO inline this ?
-pub fn set_style_signal<A, B>(element: &A, callbacks: &mut Callbacks, name: &str, signal: B, important: bool)
-    where A: IStyle + Clone + 'static,
-          B: Signal<Item = Option<String>> + 'static {
-
-    let element = element.clone();
-    let name = name.to_owned();
-
-    let handle = for_each(signal, move |value| {
-        match value {
-            Some(value) => element.set_style(&name, &value, important),
-            None => element.set_style(&name, "", important),
-        }
-    });
-
-    callbacks.after_remove(handle);
-}
-
-#[inline]
-pub fn set_style_str<A: IStyle>(element: &A, name: &str, value: &str, important: bool) {
-    element.set_style(name, value, important)
-}
-
-
-// TODO inline this ?
-pub fn set_focused_signal<A, B>(element: &A, callbacks: &mut Callbacks, signal: B)
-    where A: IHtmlElement + Clone + 'static,
-          B: Signal<Item = bool> + 'static {
-
-    let element = element.clone();
-
-    // This needs to use `after_insert` because calling `.focus()` on an element before it is in the DOM has no effect
-    callbacks.after_insert(move |callbacks| {
-        let handle = for_each(signal, move |value| {
-            dom_operations::set_focused(&element, value);
-        });
-
-        // TODO verify that this is correct under all circumstances
-        callbacks.after_remove(handle);
-    });
-}
-
-#[inline]
-pub fn set_focused_bool<A: IHtmlElement + Clone + 'static>(element: &A, callbacks: &mut Callbacks, value: bool) {
-    let element = element.clone();
-
-    // This needs to use `after_insert` because calling `.focus()` on an element before it is in the DOM has no effect
-    callbacks.after_insert(move |_| {
-        dom_operations::set_focused(&element, value);
-    });
 }
 
 
@@ -230,100 +93,96 @@ pub fn insert_children_iter<'a, A: INode, B: IntoIterator<Item = &'a mut Dom>>(e
 
 // TODO move this into the discard crate
 // TODO verify that this is correct and doesn't leak memory or cause memory safety
-pub struct RcDiscard<A>(*const A);
+pub struct ValueDiscard<A>(ManuallyDrop<A>);
 
-impl<A> RcDiscard<A> {
+impl<A> ValueDiscard<A> {
     #[inline]
-    pub fn new(value: Rc<A>) -> Self {
-        RcDiscard(Rc::into_raw(value))
+    pub fn new(value: A) -> Self {
+        ValueDiscard(ManuallyDrop::new(value))
     }
 }
 
-impl<A> Discard for RcDiscard<A> {
+impl<A> Discard for ValueDiscard<A> {
     #[inline]
     fn discard(self) {
-        unsafe {
-            Rc::from_raw(self.0);
-        }
+        // TODO verify that this works
+        ManuallyDrop::into_inner(self.0);
     }
 }
 
 
 // TODO move this into the discard crate
-// TODO verify that this is correct and doesn't leak memory or cause memory safety
-pub struct BoxDiscard<A>(*mut A);
+// TODO replace this with an impl for FnOnce() ?
+pub struct FnDiscard<A>(A);
 
-impl<A> BoxDiscard<A> {
+impl<A> FnDiscard<A> where A: FnOnce() {
     #[inline]
-    pub fn new(value: A) -> Self {
-        Self::from_box(Box::new(value))
-    }
-
-    #[inline]
-    pub fn from_box(value: Box<A>) -> Self {
-        BoxDiscard(Box::into_raw(value))
+    pub fn new(f: A) -> Self {
+        FnDiscard(f)
     }
 }
 
-impl<A> Discard for BoxDiscard<A> {
+impl<A> Discard for FnDiscard<A> where A: FnOnce() {
     #[inline]
     fn discard(self) {
-        unsafe {
-            Box::from_raw(self.0);
-        }
+        self.0();
     }
 }
 
 
 pub fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, signal: B)
     where A: INode + Clone + 'static,
-          B: SignalVec<Item = Dom> + 'static {
+          B: IntoSignalVec<Item = Dom>,
+          B::SignalVec: 'static {
 
     let element = element.clone();
 
     // TODO does this create a new struct type every time ?
     struct State {
-        is_inserted: Cell<bool>,
-        children: RefCell<Vec<Dom>>,
+        is_inserted: bool,
+        children: Vec<Dom>,
     }
 
     // TODO use two separate Rcs ?
-    let state = Rc::new(State {
-        is_inserted: Cell::new(false),
-        children: RefCell::new(vec![]),
-    });
+    let state = Rc::new(RefCell::new(State {
+        is_inserted: false,
+        children: vec![],
+    }));
 
     {
         let state = state.clone();
 
         callbacks.after_insert(move |_| {
-            if !state.is_inserted.replace(true) {
-                let mut children = state.children.borrow_mut();
+            let mut state = state.borrow_mut();
 
-                for dom in children.iter_mut() {
+            if !state.is_inserted {
+                state.is_inserted = true;
+
+                for dom in state.children.iter_mut() {
                     dom.callbacks.trigger_after_insert();
                 }
             }
         });
     }
 
-    let handle = for_each_vec(signal, move |change| {
+    // TODO verify that this will drop `children`
+    callbacks.after_remove(for_each_vec(signal.into_signal_vec(), move |change| {
+        let mut state = state.borrow_mut();
+
         match change {
-            VecChange::Replace { values } => {
+            VecDiff::Replace { values } => {
                 dom_operations::remove_all_children(&element);
 
-                let mut children = state.children.borrow_mut();
-
-                for dom in children.drain(..) {
+                for dom in state.children.drain(..) {
                     dom.callbacks.discard();
                 }
 
-                *children = values;
+                state.children = values;
 
-                let is_inserted = state.is_inserted.get();
+                let is_inserted = state.is_inserted;
 
                 // TODO use document fragment ?
-                for dom in children.iter_mut() {
+                for dom in state.children.iter_mut() {
                     dom.callbacks.leak();
 
                     element.append_child(&dom.element);
@@ -334,83 +193,83 @@ pub fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, 
                 }
             },
 
-            VecChange::InsertAt { index, mut value } => {
+            VecDiff::InsertAt { index, mut value } => {
                 // TODO better usize -> u32 conversion
                 dom_operations::insert_at(&element, index as u32, &value.element);
 
                 value.callbacks.leak();
 
-                if state.is_inserted.get() {
+                if state.is_inserted {
                     value.callbacks.trigger_after_insert();
                 }
 
                 // TODO figure out a way to move this to the top
-                state.children.borrow_mut().insert(index, value);
+                state.children.insert(index, value);
             },
 
-            VecChange::Push { mut value } => {
+            VecDiff::Push { mut value } => {
                 element.append_child(&value.element);
 
                 value.callbacks.leak();
 
-                if state.is_inserted.get() {
+                if state.is_inserted {
                     value.callbacks.trigger_after_insert();
                 }
 
                 // TODO figure out a way to move this to the top
-                state.children.borrow_mut().push(value);
+                state.children.push(value);
             },
 
-            VecChange::UpdateAt { index, mut value } => {
+            VecDiff::UpdateAt { index, mut value } => {
                 // TODO better usize -> u32 conversion
                 dom_operations::update_at(&element, index as u32, &value.element);
 
                 value.callbacks.leak();
 
-                if state.is_inserted.get() {
+                if state.is_inserted {
                     value.callbacks.trigger_after_insert();
                 }
 
                 // TODO figure out a way to move this to the top
-                let mut children = state.children.borrow_mut();
-
                 // TODO test this
-                ::std::mem::swap(&mut children[index], &mut value);
+                ::std::mem::swap(&mut state.children[index], &mut value);
 
                 value.callbacks.discard();
             },
 
-            VecChange::RemoveAt { index } => {
+            VecDiff::Move { old_index, new_index } => {
+                let value = state.children.remove(old_index);
+
+                state.children.insert(new_index, value);
+
+                // TODO better usize -> u32 conversion
+                dom_operations::move_from_to(&element, old_index as u32, new_index as u32);
+            },
+
+            VecDiff::RemoveAt { index } => {
                 // TODO better usize -> u32 conversion
                 dom_operations::remove_at(&element, index as u32);
 
-                state.children.borrow_mut().remove(index).callbacks.discard();
+                state.children.remove(index).callbacks.discard();
             },
 
-            VecChange::Pop {} => {
-                let mut children = state.children.borrow_mut();
-
-                let index = children.len() - 1;
+            VecDiff::Pop {} => {
+                let index = state.children.len() - 1;
 
                 // TODO create remove_last_child function ?
                 // TODO better usize -> u32 conversion
                 dom_operations::remove_at(&element, index as u32);
 
-                children.pop().unwrap().callbacks.discard();
+                state.children.pop().unwrap().callbacks.discard();
             },
 
-            VecChange::Clear {} => {
+            VecDiff::Clear {} => {
                 dom_operations::remove_all_children(&element);
 
-                let mut children = state.children.borrow_mut();
-
-                for dom in children.drain(..) {
+                for dom in state.children.drain(..) {
                     dom.callbacks.discard();
                 }
             },
         }
-    });
-
-    // TODO verify that this will drop `children`
-    callbacks.after_remove(handle);
+    }));
 }

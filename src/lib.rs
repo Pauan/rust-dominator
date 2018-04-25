@@ -10,7 +10,7 @@ extern crate stdweb_derive;
 extern crate lazy_static;
 
 extern crate discard;
-extern crate futures;
+extern crate futures_core;
 extern crate futures_signals;
 
 
