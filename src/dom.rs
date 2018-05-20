@@ -101,7 +101,7 @@ pub struct Dom {
 
 impl Dom {
     #[inline]
-    pub(crate) fn new(element: Node) -> Self {
+    pub fn new(element: Node) -> Self {
         Self {
             element,
             callbacks: Callbacks::new(),
@@ -209,6 +209,15 @@ impl<A> DomBuilder<A> {
     #[inline]
     pub fn mixin<B: Mixin<Self>>(self, mixin: B) -> Self {
         mixin.apply(self)
+    }
+}
+
+impl<A: Clone> DomBuilder<A> {
+    #[inline]
+    pub fn before_inserted<F>(self, f: F) -> Self where F: FnOnce(A) {
+        let element = self.element.clone();
+        f(element);
+        self
     }
 }
 
