@@ -461,13 +461,6 @@ impl Percentage {
     }
 }
 
-impl Into<f64> for Percentage {
-    #[inline]
-    fn into(self) -> f64 {
-        self.0
-    }
-}
-
 #[inline]
 fn range_inclusive(percentage: f64, low: f64, high: f64) -> f64 {
     low + (percentage * (high - low))
@@ -540,8 +533,8 @@ impl MutableAnimation {
     fn start_animating(&self, lock: &mut MutableAnimationState) {
         if lock.playing {
             // TODO use Copy constraint to make value.get() faster ?
-            let start: f64 = self.inner.value.get().into();
-            let end: f64 = lock.end.into();
+            let start: f64 = self.inner.value.get().into_f64();
+            let end: f64 = lock.end.into_f64();
 
             if start != end {
                 if lock.duration > 0.0 {
@@ -659,7 +652,6 @@ impl MutableAnimation {
 
 pub mod easing {
     use super::Percentage;
-
 
     // TODO should this use map rather than map_unchecked ?
     #[inline]

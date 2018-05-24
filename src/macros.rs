@@ -1,20 +1,36 @@
 #[macro_export]
-macro_rules! html {
-    ($kind:expr => $t:ty) => {
-        html!($kind => $t, {})
+macro_rules! builder {
+    ($namespace:expr, $default:ty, $kind:expr => $t:ty) => {
+        builder!($namespace, $default, $kind => $t, {})
     };
-    ($kind:expr => $t:ty, { $( $name:ident( $( $args:expr ),* ); )* }) => {{
-        let a: $crate::DomBuilder<$t> = $crate::DomBuilder::new($crate::create_element_ns($kind, $crate::HTML_NAMESPACE))$(.$name($($args),*))*;
+    ($namespace:expr, $default:ty, $kind:expr => $t:ty, { $( $name:ident( $( $args:expr ),* ); )* }) => {{
+        let a: $crate::DomBuilder<$t> = $crate::DomBuilder::new($crate::create_element_ns($kind, $namespace))$(.$name($($args),*))*;
         let b: $crate::Dom = $crate::DomBuilder::into_dom(a);
         b
     }};
 
-    ($kind:expr) => {
-        html!($kind => $crate::HtmlElement)
+    ($namespace:expr, $default:ty, $kind:expr) => {
+        builder!($namespace, $default, $kind => $default)
     };
-    ($kind:expr, { $( $name:ident( $( $args:expr ),* ); )* }) => {{
-        html!($kind => $crate::HtmlElement, { $( $name( $( $args ),* ); )* })
-    }};
+    ($namespace:expr, $default:ty, $kind:expr, { $( $name:ident( $( $args:expr ),* ); )* }) => {
+        builder!($namespace, $default, $kind => $default, { $( $name( $( $args ),* ); )* })
+    };
+}
+
+
+#[macro_export]
+macro_rules! html {
+    ($($args:tt)+) => {
+        builder!($crate::HTML_NAMESPACE, $crate::HtmlElement, $($args)+)
+    };
+}
+
+
+#[macro_export]
+macro_rules! svg {
+    ($($args:tt)+) => {
+        builder!($crate::SVG_NAMESPACE, $crate::SvgElement, $($args)+)
+    };
 }
 
 
@@ -23,17 +39,17 @@ macro_rules! stylesheet {
     ($rule:expr) => {
         stylesheet!($rule, {})
     };
-    ($rule:expr, { $( $name:ident( $( $args:expr ),* ); )* }) => {{
+    ($rule:expr, { $( $name:ident( $( $args:expr ),* ); )* }) => {
         $crate::StylesheetBuilder::new($rule)$(.$name($($args),*))*.done()
-    }};
+    };
 }
 
 
 #[macro_export]
 macro_rules! class {
-    ($( $name:ident( $( $args:expr ),* ); )*) => {{
+    ($( $name:ident( $( $args:expr ),* ); )*) => {
         $crate::ClassBuilder::new()$(.$name($($args),*))*.done()
-    }};
+    };
 }
 
 

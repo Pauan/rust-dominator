@@ -1,6 +1,6 @@
 use stdweb::{Reference, Value, JsSerialize};
 use stdweb::unstable::{TryFrom, TryInto};
-use stdweb::web::{IEventTarget, INode, IElement, IHtmlElement, HtmlElement, Node, window, TextNode};
+use stdweb::web::{IEventTarget, INode, IElement, IHtmlElement, HtmlElement, Node, window, TextNode, EventTarget, Element};
 use stdweb::web::event::ConcreteEvent;
 use callbacks::Callbacks;
 use traits::*;
@@ -19,6 +19,15 @@ use discard::{Discard, DiscardOnDrop};
 #[derive(Clone, Debug, PartialEq, Eq, ReferenceType)]
 #[reference(instance_of = "CSSStyleRule")]
 pub struct CssStyleRule(Reference);
+
+
+/// A reference to an SVG Element.
+///
+/// [(JavaScript docs)](https://developer.mozilla.org/en-US/docs/Web/API/SVGElement)
+#[derive(Clone, Debug, PartialEq, Eq, ReferenceType)]
+#[reference(instance_of = "SVGElement")]
+#[reference(subclass_of(EventTarget, Node, Element))]
+pub struct SvgElement(Reference);
 
 
 // https://developer.mozilla.org/en-US/docs/Web/API/Document/createElementNS#Valid%20Namespace%20URIs
