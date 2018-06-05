@@ -36,6 +36,20 @@ pub trait AsOptionStr {
     fn as_option_str(&self) -> Option<&str>;
 }
 
+impl AsOptionStr for String {
+    #[inline]
+    fn as_option_str(&self) -> Option<&str> {
+        Some(self)
+    }
+}
+
+impl<'a> AsOptionStr for &'a str {
+    #[inline]
+    fn as_option_str(&self) -> Option<&str> {
+        Some(self)
+    }
+}
+
 impl AsOptionStr for Option<String> {
     #[inline]
     fn as_option_str(&self) -> Option<&str> {
