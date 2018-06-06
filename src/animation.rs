@@ -1,3 +1,4 @@
+use std::fmt;
 use std::rc::{Rc, Weak};
 use std::cell::RefCell;
 use futures_core::Async;
@@ -493,6 +494,19 @@ struct MutableAnimationInner {
 
 pub struct MutableAnimation {
     inner: Rc<MutableAnimationInner>,
+}
+
+impl fmt::Debug for MutableAnimation {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let state = self.inner.state.borrow();
+
+        fmt.debug_struct("MutableAnimation")
+            .field("playing", &state.playing)
+            .field("duration", &state.duration)
+            .field("current", &self.inner.value.get())
+            .field("end", &state.end)
+            .finish()
+    }
 }
 
 impl MutableAnimation {
