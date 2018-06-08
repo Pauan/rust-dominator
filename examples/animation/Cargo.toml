@@ -9,7 +9,7 @@ dominator = { path = "../.." }
 futures-signals = { git = "https://github.com/Pauan/rust-signals" }
 
 [dependencies.stdweb]
-#version = "0.4.0"
-git = "https://github.com/koute/stdweb"
+version = "0.4.6"
+#git = "https://github.com/koute/stdweb"
 #path = "../../../stdweb"
 features = ["experimental_features_which_may_break_on_minor_version_bumps"]
