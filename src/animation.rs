@@ -460,6 +460,24 @@ impl Percentage {
     pub fn into_f64(self) -> f64 {
         self.0
     }
+
+    pub fn as_option_end(self) -> Option<Self> {
+        if self.0 == 1.0 {
+            None
+
+        } else {
+            Some(self)
+        }
+    }
+
+    pub fn as_option_start(self) -> Option<Self> {
+        if self.0 == 0.0 {
+            None
+
+        } else {
+            Some(self)
+        }
+    }
 }
 
 #[inline]
