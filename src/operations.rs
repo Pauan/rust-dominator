@@ -171,10 +171,13 @@ pub fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, 
 
         match change {
             VecDiff::Replace { values } => {
-                dom_operations::remove_all_children(&element);
+                // TODO is this correct ?
+                if state.children.len() > 0 {
+                    dom_operations::remove_all_children(&element);
 
-                for dom in state.children.drain(..) {
-                    dom.callbacks.discard();
+                    for dom in state.children.drain(..) {
+                        dom.callbacks.discard();
+                    }
                 }
 
                 state.children = values;
@@ -264,10 +267,14 @@ pub fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, 
             },
 
             VecDiff::Clear {} => {
-                dom_operations::remove_all_children(&element);
+                // TODO is this correct ?
+                // TODO is this needed, or is it guaranteed by VecDiff ?
+                if state.children.len() > 0 {
+                    dom_operations::remove_all_children(&element);
 
-                for dom in state.children.drain(..) {
-                    dom.callbacks.discard();
+                    for dom in state.children.drain(..) {
+                        dom.callbacks.discard();
+                    }
                 }
             },
         }

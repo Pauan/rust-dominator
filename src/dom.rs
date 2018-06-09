@@ -163,6 +163,35 @@ pub fn create_element_ns<A: IElement>(name: &str, namespace: &str) -> A
 }
 
 
+fn set_option_str<A, B, C, F>(element: &A, callbacks: &mut Callbacks, value: C, mut f: F)
+    where A: Clone + 'static,
+          B: AsOptionStr,
+          C: IntoSignal<Item = B>,
+          C::Signal: 'static,
+          F: FnMut(&A, Option<&str>) + 'static {
+
+    let element = element.clone();
+
+    let mut is_set = false;
+
+    callbacks.after_remove(for_each(value.into_signal(), move |value| {
+        let value = value.as_option_str();
+
+        if value.is_some() {
+            is_set = true;
+
+        } else if is_set {
+            is_set = false;
+
+        } else {
+            return;
+        }
+
+        f(&element, value);
+    }));
+}
+
+
 pub struct DomBuilder<A> {
     element: A,
     callbacks: Callbacks,
@@ -354,15 +383,14 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
               C: IntoSignal<Item = B>,
               C::Signal: 'static {
 
-        let element = self.element.clone();
         let name = name.to_owned();
 
-        self.callbacks.after_remove(for_each(value.into_signal(), move |value| {
-            match value.as_option_str() {
-                Some(value) => dom_operations::set_attribute(&element, &name, value),
-                None => dom_operations::remove_attribute(&element, &name),
+        set_option_str(&self.element, &mut self.callbacks, value, move |element, value| {
+            match value {
+                Some(value) => dom_operations::set_attribute(element, &name, value),
+                None => dom_operations::remove_attribute(element, &name),
             }
-        }));
+        });
     }
 
 
@@ -381,16 +409,15 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
               C: IntoSignal<Item = B>,
               C::Signal: 'static {
 
-        let element = self.element.clone();
         let name = name.to_owned();
         let namespace = namespace.to_owned();
 
-        self.callbacks.after_remove(for_each(value.into_signal(), move |value| {
-            match value.as_option_str() {
-                Some(value) => dom_operations::set_attribute_ns(&element, &namespace, &name, value),
-                None => dom_operations::remove_attribute_ns(&element, &namespace, &name),
+        set_option_str(&self.element, &mut self.callbacks, value, move |element, value| {
+            match value {
+                Some(value) => dom_operations::set_attribute_ns(element, &namespace, &name, value),
+                None => dom_operations::remove_attribute_ns(element, &namespace, &name),
             }
-        }));
+        });
     }
 
     #[inline]
@@ -411,12 +438,20 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
         let element = self.element.clone();
         let name = name.to_owned();
 
+        let mut is_set = false;
+
         self.callbacks.after_remove(for_each(value.into_signal(), move |value| {
             if value {
-                dom_operations::add_class(&element, &name);
+                if !is_set {
+                    is_set = true;
+                    dom_operations::add_class(&element, &name);
+                }
 
             } else {
-                dom_operations::remove_class(&element, &name);
+                if is_set {
+                    is_set = false;
+                    dom_operations::remove_class(&element, &name);
+                }
             }
         }));
     }
@@ -451,12 +486,11 @@ impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
               C: IntoSignal<Item = B>,
               C::Signal: 'static {
 
-        let element = self.element.clone();
         let name = name.to_owned();
 
-        self.callbacks.after_remove(for_each(value.into_signal(), move |value| {
-            dom_operations::set_style(&element, &name, value.as_option_str().unwrap_or(""), important);
-        }));
+        set_option_str(&self.element, &mut self.callbacks, value, move |element, value| {
+            dom_operations::set_style(element, &name, value.unwrap_or(""), important);
+        });
     }
 
     #[inline]
@@ -487,6 +521,7 @@ impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
 
         // This needs to use `after_insert` because calling `.focus()` on an element before it is in the DOM has no effect
         self.callbacks.after_insert(move |_| {
+            // TODO avoid updating if the focused state hasn't changed ?
             dom_operations::set_focused(&element, value);
         });
 
@@ -503,6 +538,7 @@ impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
         self.callbacks.after_insert(move |callbacks| {
             // TODO verify that this is correct under all circumstances
             callbacks.after_remove(for_each(value.into_signal(), move |value| {
+                // TODO avoid updating if the focused state hasn't changed ?
                 dom_operations::set_focused(&element, value);
             }));
         });
@@ -587,12 +623,11 @@ impl StylesheetBuilder {
               C: IntoSignal<Item = B>,
               C::Signal: 'static {
 
-        let element = self.element.clone();
         let name = name.to_owned();
 
-        self.callbacks.after_remove(for_each(value.into_signal(), move |value| {
-            dom_operations::set_style(&element, &name, value.as_option_str().unwrap_or(""), important);
-        }));
+        set_option_str(&self.element, &mut self.callbacks, value, move |element, value| {
+            dom_operations::set_style(element, &name, value.unwrap_or(""), important);
+        });
     }
 
     #[inline]
