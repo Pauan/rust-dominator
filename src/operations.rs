@@ -1,5 +1,4 @@
-use std::rc::Rc;
-use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 use std::mem::ManuallyDrop;
 use stdweb::PromiseFuture;
 use discard::{Discard, DiscardOnDrop};
@@ -143,8 +142,8 @@ pub fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, 
         children: Vec<Dom>,
     }
 
-    // TODO use two separate Rcs ?
-    let state = Rc::new(RefCell::new(State {
+    // TODO use two separate Arcs ?
+    let state = Arc::new(Mutex::new(State {
         is_inserted: false,
         children: vec![],
     }));
@@ -153,7 +152,7 @@ pub fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, 
         let state = state.clone();
 
         callbacks.after_insert(move |_| {
-            let mut state = state.borrow_mut();
+            let mut state = state.lock().unwrap();
 
             if !state.is_inserted {
                 state.is_inserted = true;
@@ -167,7 +166,7 @@ pub fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, 
 
     // TODO verify that this will drop `children`
     callbacks.after_remove(for_each_vec(signal.into_signal_vec(), move |change| {
-        let mut state = state.borrow_mut();
+        let mut state = state.lock().unwrap();
 
         match change {
             VecDiff::Replace { values } => {

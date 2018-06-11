@@ -1,6 +1,5 @@
 use std::fmt;
-use std::rc::{Rc, Weak};
-use std::cell::RefCell;
+use std::sync::{Arc, Weak, Mutex, RwLock};
 use futures_core::Async;
 use futures_core::future::Future;
 use futures_core::task::{Context, Waker};
@@ -51,12 +50,12 @@ impl Drop for Raf {
 struct TimestampsInner {
     raf: Option<Raf>,
     // TODO make this more efficient
-    states: Vec<Weak<RefCell<TimestampsState>>>,
+    states: Vec<Weak<Mutex<TimestampsState>>>,
 }
 
 struct TimestampsGlobal {
-    inner: RefCell<TimestampsInner>,
-    value: Rc<RefCell<Option<f64>>>,
+    inner: Mutex<TimestampsInner>,
+    value: Arc<RwLock<Option<f64>>>,
 }
 
 enum TimestampsEnum {
@@ -71,9 +70,9 @@ struct TimestampsState {
 }
 
 pub struct Timestamps {
-    state: Rc<RefCell<TimestampsState>>,
-    // TODO verify that there aren't any Rc cycles
-    value: Rc<RefCell<Option<f64>>>,
+    state: Arc<Mutex<TimestampsState>>,
+    // TODO verify that there aren't any Arc cycles
+    value: Arc<RwLock<Option<f64>>>,
 }
 
 impl Signal for Timestamps {
@@ -81,12 +80,12 @@ impl Signal for Timestamps {
 
     // TODO implement Async::Ready(None)
     fn poll_change(&mut self, cx: &mut Context) -> Async<Option<Self::Item>> {
-        let mut lock = self.state.borrow_mut();
+        let mut lock = self.state.lock().unwrap();
 
         match lock.state {
             TimestampsEnum::Changed => {
                 lock.state = TimestampsEnum::NotChanged;
-                Async::Ready(Some(*self.value.borrow()))
+                Async::Ready(Some(*self.value.read().unwrap()))
             },
             TimestampsEnum::First => {
                 lock.state = TimestampsEnum::NotChanged;
@@ -100,69 +99,67 @@ impl Signal for Timestamps {
     }
 }
 
-thread_local! {
-    static TIMESTAMPS: Rc<TimestampsGlobal> = Rc::new(TimestampsGlobal {
-        inner: RefCell::new(TimestampsInner {
+lazy_static! {
+    static ref TIMESTAMPS: Arc<TimestampsGlobal> = Arc::new(TimestampsGlobal {
+        inner: Mutex::new(TimestampsInner {
             raf: None,
             states: vec![],
         }),
-        value: Rc::new(RefCell::new(None)),
+        value: Arc::new(RwLock::new(None)),
     });
 }
 
 pub fn timestamps() -> Timestamps {
-    TIMESTAMPS.with(|global| {
-        let timestamps = Timestamps {
-            state: Rc::new(RefCell::new(TimestampsState {
-                state: TimestampsEnum::First,
-                waker: None,
-            })),
-            value: global.value.clone(),
-        };
+    let timestamps = Timestamps {
+        state: Arc::new(Mutex::new(TimestampsState {
+            state: TimestampsEnum::First,
+            waker: None,
+        })),
+        value: TIMESTAMPS.value.clone(),
+    };
 
-        {
-            let mut lock = global.inner.borrow_mut();
+    {
+        let mut lock = TIMESTAMPS.inner.lock().unwrap();
 
-            lock.states.push(Rc::downgrade(&timestamps.state));
+        lock.states.push(Arc::downgrade(&timestamps.state));
 
-            if let None = lock.raf {
-                let global = global.clone();
+        if let None = lock.raf {
+            let global = TIMESTAMPS.clone();
 
-                lock.raf = Some(Raf::new(move |time| {
-                    let mut lock = global.inner.borrow_mut();
-                    let mut value = global.value.borrow_mut();
+            lock.raf = Some(Raf::new(move |time| {
+                let mut lock = global.inner.lock().unwrap();
+                let mut value = global.value.write().unwrap();
 
-                    *value = Some(time);
+                *value = Some(time);
 
-                    lock.states.retain(|state| {
-                        if let Some(state) = state.upgrade() {
-                            let mut lock = state.borrow_mut();
+                lock.states.retain(|state| {
+                    if let Some(state) = state.upgrade() {
+                        let mut lock = state.lock().unwrap();
 
-                            lock.state = TimestampsEnum::Changed;
+                        lock.state = TimestampsEnum::Changed;
 
-                            if let Some(waker) = lock.waker.take() {
-                                drop(lock);
-                                waker.wake();
-                            }
-
-                            true
-
-                        } else {
-                            false
+                        if let Some(waker) = lock.waker.take() {
+                            drop(lock);
+                            waker.wake();
                         }
-                    });
 
-                    if lock.states.len() == 0 {
-                        lock.raf = None;
-                        // TODO is this a good idea ?
-                        lock.states = vec![];
+                        true
+
+                    } else {
+                        false
                     }
-                }));
-            }
-        }
+                });
 
-        timestamps
-    })
+                if lock.states.len() == 0 {
+                    lock.raf = None;
+                    // TODO is this a good idea ?
+                    lock.states = vec![];
+                }
+            }));
+        }
+    }
+
+    timestamps
 }
 
 
@@ -497,17 +494,17 @@ struct MutableAnimationState {
 }
 
 struct MutableAnimationInner {
-    state: RefCell<MutableAnimationState>,
+    state: Mutex<MutableAnimationState>,
     value: Mutable<Percentage>,
 }
 
 pub struct MutableAnimation {
-    inner: Rc<MutableAnimationInner>,
+    inner: Arc<MutableAnimationInner>,
 }
 
 impl fmt::Debug for MutableAnimation {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let state = self.inner.state.borrow();
+        let state = self.inner.state.lock().unwrap();
 
         fmt.debug_struct("MutableAnimation")
             .field("playing", &state.playing)
@@ -524,8 +521,8 @@ impl MutableAnimation {
         debug_assert!(duration >= 0.0);
 
         Self {
-            inner: Rc::new(MutableAnimationInner {
-                state: RefCell::new(MutableAnimationState {
+            inner: Arc::new(MutableAnimationInner {
+                state: Mutex::new(MutableAnimationState {
                     playing: true,
                     duration: duration,
                     end: initial,
@@ -578,7 +575,7 @@ impl MutableAnimation {
                                     // TODO don't update if the new value is the same as the old value
                                     if diff >= 1.0 {
                                         {
-                                            let mut lock = state.inner.state.borrow_mut();
+                                            let mut lock = state.inner.state.lock().unwrap();
                                             Self::stop_animating(&mut lock);
                                         }
                                         state.inner.value.set(Percentage::new_unchecked(end));
@@ -607,7 +604,7 @@ impl MutableAnimation {
     pub fn set_duration(&self, duration: f64) {
         debug_assert!(duration >= 0.0);
 
-        let mut lock = self.inner.state.borrow_mut();
+        let mut lock = self.inner.state.lock().unwrap();
 
         if lock.duration != duration {
             lock.duration = duration;
@@ -617,7 +614,7 @@ impl MutableAnimation {
 
     #[inline]
     pub fn pause(&self) {
-        let mut lock = self.inner.state.borrow_mut();
+        let mut lock = self.inner.state.lock().unwrap();
 
         if lock.playing {
             lock.playing = false;
@@ -627,7 +624,7 @@ impl MutableAnimation {
 
     #[inline]
     pub fn play(&self) {
-        let mut lock = self.inner.state.borrow_mut();
+        let mut lock = self.inner.state.lock().unwrap();
 
         if !lock.playing {
             lock.playing = true;
@@ -647,13 +644,13 @@ impl MutableAnimation {
     }
 
     pub fn jump_to(&self, end: Percentage) {
-        let mut lock = self.inner.state.borrow_mut();
+        let mut lock = self.inner.state.lock().unwrap();
 
         Self::_jump_to(&mut lock, &self.inner.value, end);
     }
 
     pub fn animate_to(&self, end: Percentage) {
-        let mut lock = self.inner.state.borrow_mut();
+        let mut lock = self.inner.state.lock().unwrap();
 
         if lock.end != end {
             if lock.duration <= 0.0 {
