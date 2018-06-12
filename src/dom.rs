@@ -34,6 +34,9 @@ pub struct SvgElement(Reference);
 pub const HTML_NAMESPACE: &str = "http://www.w3.org/1999/xhtml";
 pub const SVG_NAMESPACE: &str = "http://www.w3.org/2000/svg";
 
+// 32-bit signed int
+pub const HIGHEST_ZINDEX: &str = "2147483647";
+
 
 // TODO this should be in stdweb
 // TODO this should return HtmlBodyElement

@@ -202,7 +202,7 @@ fn main() {
                                 if event.key() == "Enter" {
                                     event.prevent_default();
 
-                                    let trimmed = state.new_todo_title.with_ref(|x| trim(&x));
+                                    let trimmed = trim(&state.new_todo_title.lock_ref());
 
                                     if let Some(title) = trimmed {
                                         state.new_todo_title.set("".to_owned());
@@ -287,7 +287,7 @@ fn main() {
                                                     Filter::All => true,
                                                 }
                                             )
-                                            .map_dedupe(|show| !*show));
+                                            .dedupe_map(|show| !*show));
 
                                         children(&mut [
                                             html!("div", {
