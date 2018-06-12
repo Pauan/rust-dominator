@@ -255,6 +255,12 @@ impl<A> DomBuilder<A> {
 
 impl<A: Clone> DomBuilder<A> {
     #[inline]
+    pub fn with_element<B, F>(self, f: F) -> B where F: FnOnce(Self, A) -> B {
+        let element = self.element.clone();
+        f(self, element)
+    }
+
+    #[inline]
     pub fn before_inserted<F>(self, f: F) -> Self where F: FnOnce(A) {
         let element = self.element.clone();
         f(element);
