@@ -563,24 +563,6 @@ impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
 }
 
 
-#[cfg(test)]
-mod tests {
-    use super::{create_element_ns, DomBuilder, HTML_NAMESPACE};
-    use stdweb::web::{HtmlElement, IHtmlElement};
-
-    #[test]
-    fn mixin() {
-        let a: DomBuilder<HtmlElement> = DomBuilder::new(create_element_ns("div", HTML_NAMESPACE));
-
-        fn my_mixin<A: IHtmlElement>(builder: DomBuilder<A>) -> DomBuilder<A> {
-            builder.style("foo", "bar")
-        }
-
-        a.mixin(my_mixin);
-    }
-}
-
-
 // TODO better warning message for must_use
 #[must_use]
 pub struct StylesheetBuilder {
@@ -741,5 +723,79 @@ impl ClassBuilder {
     pub fn done(self) -> String {
         self.stylesheet.done();
         self.class_name
+    }
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::{create_element_ns, DomBuilder, HTML_NAMESPACE, text_signal};
+    use std::rc::Rc;
+    use std::borrow::Cow;
+    use std::sync::Arc;
+    use futures_signals::signal::always;
+    use stdweb::web::{HtmlElement, IHtmlElement};
+
+    #[test]
+    fn mixin() {
+        let a: DomBuilder<HtmlElement> = DomBuilder::new(create_element_ns("div", HTML_NAMESPACE));
+
+        fn my_mixin<A: IHtmlElement>(builder: DomBuilder<A>) -> DomBuilder<A> {
+            builder.style("foo", "bar")
+        }
+
+        a.mixin(my_mixin);
+    }
+
+    #[test]
+    fn text_signal_types() {
+        text_signal(always("foo"));
+        text_signal(always("foo".to_owned()));
+        text_signal(always(Arc::new("foo")));
+        text_signal(always(Arc::new("foo".to_owned())));
+        text_signal(always(Rc::new("foo")));
+        text_signal(always(Rc::new("foo".to_owned())));
+        text_signal(always(Box::new("foo")));
+        text_signal(always(Box::new("foo".to_owned())));
+        text_signal(always(Cow::Borrowed(&"foo")));
+        text_signal(always(Cow::Owned::<String>("foo".to_owned())));
+    }
+
+    #[test]
+    fn style_signal_types() {
+        let _a: DomBuilder<HtmlElement> = DomBuilder::new(create_element_ns("div", HTML_NAMESPACE))
+            .style_signal("foo", always("bar"))
+            .style_signal("foo", always("bar".to_owned()))
+            .style_signal("foo", always(Arc::new("bar")))
+            .style_signal("foo", always(Arc::new("bar".to_owned())))
+            .style_signal("foo", always(Rc::new("bar")))
+            .style_signal("foo", always(Rc::new("bar".to_owned())))
+            .style_signal("foo", always(Box::new("bar")))
+            .style_signal("foo", always(Box::new("bar".to_owned())))
+            .style_signal("foo", always(Cow::Borrowed(&"bar")))
+            .style_signal("foo", always(Cow::Owned::<String>("bar".to_owned())))
+
+            .style_signal("foo", always(Some("bar")))
+            .style_signal("foo", always(Some("bar".to_owned())))
+            .style_signal("foo", always(Some(Arc::new("bar"))))
+            .style_signal("foo", always(Some(Arc::new("bar".to_owned()))))
+            .style_signal("foo", always(Some(Rc::new("bar"))))
+            .style_signal("foo", always(Some(Rc::new("bar".to_owned()))))
+            .style_signal("foo", always(Some(Box::new("bar"))))
+            .style_signal("foo", always(Some(Box::new("bar".to_owned()))))
+            .style_signal("foo", always(Some(Cow::Borrowed(&"bar"))))
+            .style_signal("foo", always(Some(Cow::Owned::<String>("bar".to_owned()))))
+
+            /*.style_signal("foo", always(Arc::new(Some("bar"))))
+            .style_signal("foo", always(Arc::new(Some("bar".to_owned()))))
+            .style_signal("foo", always(Rc::new(Some("bar"))))
+            .style_signal("foo", always(Rc::new(Some("bar".to_owned()))))
+            .style_signal("foo", always(Box::new(Some("bar"))))
+            .style_signal("foo", always(Box::new(Some("bar".to_owned()))))
+            .style_signal("foo", always(Cow::Borrowed(&Some("bar"))))
+            .style_signal("foo", always(Cow::Owned::<Option<String>>(Some("bar".to_owned()))))*/
+
+            ;
     }
 }
