@@ -249,11 +249,13 @@ fn main() {
                             event(clone!(state => move |event: ChangeEvent| {
                                 let checked = !get_checked(&event);
 
-                                state.todo_list.with_slice(|todo_list| {
+                                {
+                                    let todo_list = state.todo_list.lock_slice();
+
                                     for todo in todo_list.iter() {
                                         todo.completed.set(checked);
                                     }
-                                });
+                                }
 
                                 state.serialize();
                             }));
