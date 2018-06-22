@@ -1,6 +1,5 @@
-use std::sync::Arc;
-use std::rc::Rc;
-use std::borrow::Cow;
+use dom::DerefFn;
+use std::ops::Deref;
 
 pub use animation::AnimatedSignalVec;
 
@@ -18,83 +17,131 @@ impl<A, F> Mixin<A> for F where F: Fn(A) -> A {
 
 
 // TODO figure out a way to implement this for all of AsRef / Borrow / etc.
-pub trait AsStr {
-    fn as_str(&self) -> &str;
+pub trait IntoStr {
+    type Output: Deref<Target = str>;
+
+    fn into_str(self) -> Self::Output;
 }
 
-impl AsStr for String {
-    #[inline]
-    fn as_str(&self) -> &str {
-        self.as_str()
-    }
-}
+impl IntoStr for String {
+    type Output = Self;
 
-impl<A: AsStr> AsStr for Box<A> {
     #[inline]
-    fn as_str(&self) -> &str {
-        (**self).as_str()
-    }
-}
-
-impl<A: AsStr> AsStr for Arc<A> {
-    #[inline]
-    fn as_str(&self) -> &str {
-        (**self).as_str()
-    }
-}
-
-impl<A: AsStr> AsStr for Rc<A> {
-    #[inline]
-    fn as_str(&self) -> &str {
-        (**self).as_str()
-    }
-}
-
-impl<'a, A: AsStr + Clone> AsStr for Cow<'a, A> {
-    #[inline]
-    fn as_str(&self) -> &str {
-        (**self).as_str()
-    }
-}
-
-impl AsStr for str {
-    #[inline]
-    fn as_str(&self) -> &str {
+    fn into_str(self) -> Self::Output {
         self
     }
 }
 
-impl<'a> AsStr for &'a str {
+impl<'a> IntoStr for &'a str {
+    type Output = Self;
+
     #[inline]
-    fn as_str(&self) -> &str {
+    fn into_str(self) -> Self::Output {
         self
     }
 }
 
-impl<'a> AsStr for &'a mut str {
+impl<'a> IntoStr for &'a mut str {
+    type Output = Self;
+
     #[inline]
-    fn as_str(&self) -> &str {
+    fn into_str(self) -> Self::Output {
         self
     }
 }
+
+impl<A, B> IntoStr for DerefFn<A, B> where B: Fn(&A) -> &str {
+    type Output = Self;
+
+    #[inline]
+    fn into_str(self) -> Self::Output {
+        self
+    }
+}
+
+
+/*pub trait DerefStr {
+    type Output: Deref<Target = str>;
+
+    fn deref_str(&self) -> Self::Output;
+}
+
+impl DerefStr for String {
+    type Output = Self;
+
+    #[inline]
+    fn deref_str(&self) -> Self::Output {
+        self
+    }
+}
+
+impl<'a> DerefStr for &'a str {
+    type Output = &'a str;
+
+    #[inline]
+    fn deref_str(&self) -> Self::Output {
+        self
+    }
+}
+
+impl<A, B> DerefStr for DerefFn<A, B> where B: Fn(&A) -> &str {
+    type Output = Self;
+
+    #[inline]
+    fn deref_str(&self) -> Self::Output {
+        self
+    }
+}
+
+
+pub trait DerefOptionStr {
+    type Output: Deref<Target = str>;
+
+    fn deref_option_str(&self) -> Option<Self::Output>;
+}
+
+impl<A: DerefStr> DerefOptionStr for A {
+    type Output = A::Output;
+
+    #[inline]
+    fn deref_option_str(&self) -> Option<Self::Output> {
+        Some(self.deref_str())
+    }
+}
+
+impl<A: DerefStr> DerefOptionStr for Option<A> {
+    type Output = A::Output;
+
+    #[inline]
+    fn deref_option_str(&self) -> Option<Self::Output> {
+        self.map(|x| x.deref_str())
+    }
+}*/
+
 
 
 // TODO figure out a way to implement this for all of AsRef / Borrow / etc.
-pub trait AsOptionStr {
-    fn as_option_str(&self) -> Option<&str>;
+pub trait IntoOptionStr {
+    type Output: Deref<Target = str>;
+
+    fn into_option_str(self) -> Option<Self::Output>;
 }
 
-impl<A: AsStr> AsOptionStr for A {
+impl<A: IntoStr> IntoOptionStr for A {
+    type Output = A::Output;
+
     #[inline]
-    fn as_option_str(&self) -> Option<&str> {
-        Some(self.as_str())
+    fn into_option_str(self) -> Option<Self::Output> {
+        Some(self.into_str())
     }
 }
 
-impl<A: AsStr> AsOptionStr for Option<A> {
+impl<A: IntoStr> IntoOptionStr for Option<A> {
+    type Output = A::Output;
+
     #[inline]
-    fn as_option_str(&self) -> Option<&str> {
-        self.as_ref().map(|x| x.as_str())
+    fn into_option_str(self) -> Option<Self::Output> {
+        self.map(|x| x.into_str())
     }
 }
 
