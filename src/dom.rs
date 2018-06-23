@@ -525,7 +525,10 @@ impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
         let name = name.to_owned();
 
         set_option_str(&self.element, &mut self.callbacks, value, move |element, value| {
-            dom_operations::set_style(element, &name, value.unwrap_or(""), important);
+            match value {
+                Some(value) => dom_operations::set_style(element, &name, value, important),
+                None => dom_operations::remove_style(element, &name),
+            }
         });
     }
 
@@ -644,7 +647,10 @@ impl StylesheetBuilder {
         let name = name.to_owned();
 
         set_option_str(&self.element, &mut self.callbacks, value, move |element, value| {
-            dom_operations::set_style(element, &name, value.unwrap_or(""), important);
+            match value {
+                Some(value) => dom_operations::set_style(element, &name, value, important),
+                None => dom_operations::remove_style(element, &name),
+            }
         });
     }
 

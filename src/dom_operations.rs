@@ -59,19 +59,41 @@ pub fn set_text(element: &TextNode, value: &str) {
 }
 
 // TODO this should be in stdweb
-// TODO check that the style *actually* was changed
 // TODO handle browser prefixes
+#[cfg(debug_assertions)]
+pub fn set_style<A: AsRef<Reference>>(element: &A, name: &str, value: &str, important: bool) {
+    let is_correct: bool = js!(
+        var element = @{element.as_ref()};
+        var name = @{name};
+        var value = @{value};
+        var old_value = element.style.getPropertyValue(name);
+
+        if (old_value !== value) {
+            element.style.setProperty(name, value, (@{important} ? "important" : ""));
+            return element.style.getPropertyValue(name) !== old_value;
+
+        } else {
+            return true;
+        }
+    ).try_into().unwrap();
+
+    assert!(is_correct, "style is incorrect: {} = {}", name, value);
+}
+
+#[cfg(not(debug_assertions))]
 #[inline]
 pub fn set_style<A: AsRef<Reference>>(element: &A, name: &str, value: &str, important: bool) {
-    if important {
-        js! { @(no_return)
-            @{element.as_ref()}.style.setProperty(@{name}, @{value}, "important");
-        }
+    js! { @(no_return)
+        @{element.as_ref()}.style.setProperty(@{name}, @{value}, (@{important} ? "important" : ""));
+    }
+}
 
-    } else {
-        js! { @(no_return)
-            @{element.as_ref()}.style.setProperty(@{name}, @{value}, "");
-        }
+// TODO this should be in stdweb
+// TODO handle browser prefixes
+#[inline]
+pub fn remove_style<A: AsRef<Reference>>(element: &A, name: &str) {
+    js! { @(no_return)
+        @{element.as_ref()}.style.removeProperty(@{name});
     }
 }
 
