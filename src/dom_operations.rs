@@ -70,19 +70,18 @@ fn set_style_raw<A: AsRef<Reference>>(element: &A, name: &str, value: &str, impo
 // TODO handle browser prefixes
 #[cfg(debug_assertions)]
 pub fn set_style<A: AsRef<Reference>>(element: &A, name: &str, value: &str, important: bool) {
+    assert!(value != "");
+
     #[inline]
     fn get_style<A: AsRef<Reference>>(element: &A, name: &str) -> String {
         js!( return @{element.as_ref()}.style.getPropertyValue(@{name}); ).try_into().unwrap()
     }
 
-    let old_value = get_style(element, name);
+    remove_style(element, name);
+    set_style_raw(element, name, value, important);
 
-    if old_value != value {
-        set_style_raw(element, name, value, important);
-
-        if get_style(element, name) == old_value {
-            panic!("style is incorrect:\n  name: {}\n  old value: {}\n  new value: {}", name, old_value, value);
-        }
+    if get_style(element, name) == "" {
+        panic!("style is incorrect:\n  name: {}\n  value: {}", name, value);
     }
 }
 
