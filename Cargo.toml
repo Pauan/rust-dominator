@@ -23,3 +23,9 @@ version = "0.4.6"
 #git = "https://github.com/koute/stdweb"
 #path = "../stdweb"
 features = ["experimental_features_which_may_break_on_minor_version_bumps"]
+
+[profile.release]
+debug-assertions = true
+
+[profile.bench]
+debug-assertions = true

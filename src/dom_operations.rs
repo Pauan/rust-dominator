@@ -58,34 +58,38 @@ pub fn set_text(element: &TextNode, value: &str) {
     }
 }
 
+
+#[inline]
+fn set_style_raw<A: AsRef<Reference>>(element: &A, name: &str, value: &str, important: bool) {
+    js! { @(no_return)
+        @{element.as_ref()}.style.setProperty(@{name}, @{value}, (@{important} ? "important" : ""));
+    }
+}
+
 // TODO this should be in stdweb
 // TODO handle browser prefixes
 #[cfg(debug_assertions)]
 pub fn set_style<A: AsRef<Reference>>(element: &A, name: &str, value: &str, important: bool) {
-    let is_correct: bool = js!(
-        var element = @{element.as_ref()};
-        var name = @{name};
-        var value = @{value};
-        var old_value = element.style.getPropertyValue(name);
+    #[inline]
+    fn get_style<A: AsRef<Reference>>(element: &A, name: &str) -> String {
+        js!( return @{element.as_ref()}.style.getPropertyValue(@{name}); ).try_into().unwrap()
+    }
 
-        if (old_value !== value) {
-            element.style.setProperty(name, value, (@{important} ? "important" : ""));
-            return element.style.getPropertyValue(name) !== old_value;
+    let old_value = get_style(element, name);
 
-        } else {
-            return true;
+    if old_value != value {
+        set_style_raw(element, name, value, important);
+
+        if get_style(element, name) == old_value {
+            panic!("style is incorrect:\n  name: {}\n  old value: {}\n  new value: {}", name, old_value, value);
         }
-    ).try_into().unwrap();
-
-    assert!(is_correct, "style is incorrect: {} = {}", name, value);
+    }
 }
 
 #[cfg(not(debug_assertions))]
 #[inline]
 pub fn set_style<A: AsRef<Reference>>(element: &A, name: &str, value: &str, important: bool) {
-    js! { @(no_return)
-        @{element.as_ref()}.style.setProperty(@{name}, @{value}, (@{important} ? "important" : ""));
-    }
+    set_style_raw(element, name, value, important);
 }
 
 // TODO this should be in stdweb

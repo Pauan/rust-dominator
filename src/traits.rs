@@ -17,6 +17,7 @@ impl<A, F> Mixin<A> for F where F: Fn(A) -> A {
 
 
 // TODO figure out a way to implement this for all of AsRef / Borrow / etc.
+// TODO implementations for &String and &mut String
 pub trait IntoStr {
     type Output: Deref<Target = str>;
 
