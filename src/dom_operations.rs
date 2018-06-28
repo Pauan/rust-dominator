@@ -60,6 +60,11 @@ pub fn set_text(element: &TextNode, value: &str) {
 
 
 #[inline]
+fn get_style<A: AsRef<Reference>>(element: &A, name: &str) -> String {
+    js!( return @{element.as_ref()}.style.getPropertyValue(@{name}); ).try_into().unwrap()
+}
+
+#[inline]
 fn set_style_raw<A: AsRef<Reference>>(element: &A, name: &str, value: &str, important: bool) {
     js! { @(no_return)
         @{element.as_ref()}.style.setProperty(@{name}, @{value}, (@{important} ? "important" : ""));
@@ -67,28 +72,14 @@ fn set_style_raw<A: AsRef<Reference>>(element: &A, name: &str, value: &str, impo
 }
 
 // TODO this should be in stdweb
-// TODO handle browser prefixes
-#[cfg(debug_assertions)]
-pub fn set_style<A: AsRef<Reference>>(element: &A, name: &str, value: &str, important: bool) {
+// TODO maybe use cfg(debug_assertions) ?
+pub fn try_set_style<A: AsRef<Reference>>(element: &A, name: &str, value: &str, important: bool) -> bool {
     assert!(value != "");
-
-    #[inline]
-    fn get_style<A: AsRef<Reference>>(element: &A, name: &str) -> String {
-        js!( return @{element.as_ref()}.style.getPropertyValue(@{name}); ).try_into().unwrap()
-    }
 
     remove_style(element, name);
     set_style_raw(element, name, value, important);
 
-    if get_style(element, name) == "" {
-        panic!("style is incorrect:\n  name: {}\n  value: {}", name, value);
-    }
-}
-
-#[cfg(not(debug_assertions))]
-#[inline]
-pub fn set_style<A: AsRef<Reference>>(element: &A, name: &str, value: &str, important: bool) {
-    set_style_raw(element, name, value, important);
+    get_style(element, name) != ""
 }
 
 // TODO this should be in stdweb

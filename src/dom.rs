@@ -504,49 +504,50 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
 
 impl<A: IHtmlElement> DomBuilder<A> {
     #[inline]
-    pub fn style(self, name: &str, value: &str) -> Self {
-        dom_operations::set_style(&self.element, name, value, false);
+    pub fn style<B: StyleName>(self, name: B, value: &str) -> Self {
+        name.set_style(&self.element, value, false);
         self
     }
 
     #[inline]
-    pub fn style_important(self, name: &str, value: &str) -> Self {
-        dom_operations::set_style(&self.element, name, value, true);
+    pub fn style_important<B: StyleName>(self, name: B, value: &str) -> Self {
+        name.set_style(&self.element, value, true);
         self
     }
 }
 
 impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
-    fn set_style_signal<B, C>(&mut self, name: &str, value: C, important: bool)
-        where B: IntoOptionStr,
-              C: IntoSignal<Item = B>,
-              C::Signal: 'static {
-
-        let name = name.to_owned();
+    fn set_style_signal<B, C, D>(&mut self, name: B, value: D, important: bool)
+        where B: StyleName + 'static,
+              C: IntoOptionStr,
+              D: IntoSignal<Item = C>,
+              D::Signal: 'static {
 
         set_option_str(&self.element, &mut self.callbacks, value, move |element, value| {
             match value {
-                Some(value) => dom_operations::set_style(element, &name, value, important),
-                None => dom_operations::remove_style(element, &name),
+                Some(value) => name.set_style(element, value, important),
+                None => name.remove_style(element),
             }
         });
     }
 
     #[inline]
-    pub fn style_signal<B, C>(mut self, name: &str, value: C) -> Self
-        where B: IntoOptionStr,
-              C: IntoSignal<Item = B>,
-              C::Signal: 'static {
+    pub fn style_signal<B, C, D>(mut self, name: B, value: D) -> Self
+        where B: StyleName + 'static,
+              C: IntoOptionStr,
+              D: IntoSignal<Item = C>,
+              D::Signal: 'static {
 
         self.set_style_signal(name, value, false);
         self
     }
 
     #[inline]
-    pub fn style_important_signal<B, C>(mut self, name: &str, value: C) -> Self
-        where B: IntoOptionStr,
-              C: IntoSignal<Item = B>,
-              C::Signal: 'static {
+    pub fn style_important_signal<B, C, D>(mut self, name: B, value: D) -> Self
+        where B: StyleName + 'static,
+              C: IntoOptionStr,
+              D: IntoSignal<Item = C>,
+              D::Signal: 'static {
 
         self.set_style_signal(name, value, true);
         self
@@ -627,48 +628,49 @@ impl StylesheetBuilder {
     }
 
     #[inline]
-    pub fn style(self, name: &str, value: &str) -> Self {
-        dom_operations::set_style(&self.element, name, value, false);
+    pub fn style<B: StyleName>(self, name: B, value: &str) -> Self {
+        name.set_style(&self.element, value, false);
         self
     }
 
     #[inline]
-    pub fn style_important(self, name: &str, value: &str) -> Self {
-        dom_operations::set_style(&self.element, name, value, true);
+    pub fn style_important<B: StyleName>(self, name: B, value: &str) -> Self {
+        name.set_style(&self.element, value, true);
         self
     }
 
 
-    fn set_style_signal<B, C>(&mut self, name: &str, value: C, important: bool)
-        where B: IntoOptionStr,
-              C: IntoSignal<Item = B>,
-              C::Signal: 'static {
-
-        let name = name.to_owned();
+    fn set_style_signal<B, C, D>(&mut self, name: B, value: D, important: bool)
+        where B: StyleName + 'static,
+              C: IntoOptionStr,
+              D: IntoSignal<Item = C>,
+              D::Signal: 'static {
 
         set_option_str(&self.element, &mut self.callbacks, value, move |element, value| {
             match value {
-                Some(value) => dom_operations::set_style(element, &name, value, important),
-                None => dom_operations::remove_style(element, &name),
+                Some(value) => name.set_style(element, value, important),
+                None => name.remove_style(element),
             }
         });
     }
 
     #[inline]
-    pub fn style_signal<B, C>(mut self, name: &str, value: C) -> Self
-        where B: IntoOptionStr,
-              C: IntoSignal<Item = B>,
-              C::Signal: 'static {
+    pub fn style_signal<B, C, D>(mut self, name: B, value: D) -> Self
+        where B: StyleName + 'static,
+              C: IntoOptionStr,
+              D: IntoSignal<Item = C>,
+              D::Signal: 'static {
 
         self.set_style_signal(name, value, false);
         self
     }
 
     #[inline]
-    pub fn style_important_signal<B, C>(mut self, name: &str, value: C) -> Self
-        where B: IntoOptionStr,
-              C: IntoSignal<Item = B>,
-              C::Signal: 'static {
+    pub fn style_important_signal<B, C, D>(mut self, name: B, value: D) -> Self
+        where B: StyleName + 'static,
+              C: IntoOptionStr,
+              D: IntoSignal<Item = C>,
+              D::Signal: 'static {
 
         self.set_style_signal(name, value, true);
         self
@@ -720,32 +722,34 @@ impl ClassBuilder {
     }
 
     #[inline]
-    pub fn style(mut self, name: &str, value: &str) -> Self {
+    pub fn style<B: StyleName>(mut self, name: B, value: &str) -> Self {
         self.stylesheet = self.stylesheet.style(name, value);
         self
     }
 
     #[inline]
-    pub fn style_important(mut self, name: &str, value: &str) -> Self {
+    pub fn style_important<B: StyleName>(mut self, name: B, value: &str) -> Self {
         self.stylesheet = self.stylesheet.style_important(name, value);
         self
     }
 
     #[inline]
-    pub fn style_signal<B, C>(mut self, name: &str, value: C) -> Self
-        where B: IntoOptionStr,
-              C: IntoSignal<Item = B>,
-              C::Signal: 'static {
+    pub fn style_signal<B, C, D>(mut self, name: B, value: D) -> Self
+        where B: StyleName + 'static,
+              C: IntoOptionStr,
+              D: IntoSignal<Item = C>,
+              D::Signal: 'static {
 
         self.stylesheet = self.stylesheet.style_signal(name, value);
         self
     }
 
     #[inline]
-    pub fn style_important_signal<B, C>(mut self, name: &str, value: C) -> Self
-        where B: IntoOptionStr,
-              C: IntoSignal<Item = B>,
-              C::Signal: 'static {
+    pub fn style_important_signal<B, C, D>(mut self, name: B, value: D) -> Self
+        where B: StyleName + 'static,
+              C: IntoOptionStr,
+              D: IntoSignal<Item = C>,
+              D::Signal: 'static {
 
         self.stylesheet = self.stylesheet.style_important_signal(name, value);
         self
@@ -799,35 +803,18 @@ mod tests {
             .style_signal("foo", always("bar"))
             .style_signal("foo", always("bar".to_owned()))
             .style_signal("foo", always("bar".to_owned()).map(|x| DerefFn::new(x, |x| x.as_str())))
-            //.style_signal("foo", always(Arc::new("bar")))
-            //.style_signal("foo", always(Arc::new("bar".to_owned())))
-            //.style_signal("foo", always(Rc::new("bar")))
-            //.style_signal("foo", always(Rc::new("bar".to_owned())))
-            //.style_signal("foo", always(Box::new("bar")))
-            //.style_signal("foo", always(Box::new("bar".to_owned())))
-            //.style_signal("foo", always(Cow::Borrowed(&"bar")))
-            //.style_signal("foo", always(Cow::Owned::<String>("bar".to_owned())))
+
+            .style_signal(["-moz-foo", "-webkit-foo", "foo"], always("bar"))
+            .style_signal(["-moz-foo", "-webkit-foo", "foo"], always("bar".to_owned()))
+            .style_signal(["-moz-foo", "-webkit-foo", "foo"], always("bar".to_owned()).map(|x| DerefFn::new(x, |x| x.as_str())))
 
             .style_signal("foo", always(Some("bar")))
             .style_signal("foo", always(Some("bar".to_owned())))
             .style_signal("foo", always("bar".to_owned()).map(|x| Some(DerefFn::new(x, |x| x.as_str()))))
-            //.style_signal("foo", always(Some(Arc::new("bar"))))
-            //.style_signal("foo", always(Some(Arc::new("bar".to_owned()))))
-            //.style_signal("foo", always(Some(Rc::new("bar"))))
-            //.style_signal("foo", always(Some(Rc::new("bar".to_owned()))))
-            //.style_signal("foo", always(Some(Box::new("bar"))))
-            //.style_signal("foo", always(Some(Box::new("bar".to_owned()))))
-            //.style_signal("foo", always(Some(Cow::Borrowed(&"bar"))))
-            //.style_signal("foo", always(Some(Cow::Owned::<String>("bar".to_owned()))))
 
-            /*.style_signal("foo", always(Arc::new(Some("bar"))))
-            .style_signal("foo", always(Arc::new(Some("bar".to_owned()))))
-            .style_signal("foo", always(Rc::new(Some("bar"))))
-            .style_signal("foo", always(Rc::new(Some("bar".to_owned()))))
-            .style_signal("foo", always(Box::new(Some("bar"))))
-            .style_signal("foo", always(Box::new(Some("bar".to_owned()))))
-            .style_signal("foo", always(Cow::Borrowed(&Some("bar"))))
-            .style_signal("foo", always(Cow::Owned::<Option<String>>(Some("bar".to_owned()))))*/
+            .style_signal(["-moz-foo", "-webkit-foo", "foo"], always(Some("bar")))
+            .style_signal(["-moz-foo", "-webkit-foo", "foo"], always(Some("bar".to_owned())))
+            .style_signal(["-moz-foo", "-webkit-foo", "foo"], always("bar".to_owned()).map(|x| Some(DerefFn::new(x, |x| x.as_str()))))
 
             ;
     }
