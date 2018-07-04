@@ -15,6 +15,7 @@ stdweb-derive = "0.4.0"
 lazy_static = "1.0.0"
 discard = "1.0.3"
 futures-core = "0.2.0"
+futures-channel = "0.2.1"
 #futures-signals = { path = "../rust-signals" }
 futures-signals = { git = "https://github.com/Pauan/rust-signals" }
 
@@ -29,6 +30,3 @@ debug-assertions = true
 
 [profile.bench]
 debug-assertions = true
-
-[features]
-debug-mode = []

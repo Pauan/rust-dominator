@@ -12,6 +12,7 @@ extern crate lazy_static;
 
 extern crate discard;
 extern crate futures_core;
+extern crate futures_channel;
 extern crate futures_signals;
 
 
