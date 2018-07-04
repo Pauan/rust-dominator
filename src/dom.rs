@@ -502,30 +502,34 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
     }
 
     // TODO generalize IntoOptionStr ?
-    #[inline]
-    pub fn scroll_left_signal<B>(mut self, signal: B) -> Self where B: IntoSignal<Item = Option<f64>>, B::Signal: 'static {
+    fn set_scroll_signal<B, F>(&mut self, signal: B, mut f: F)
+        where B: IntoSignal<Item = Option<f64>>,
+              B::Signal: 'static,
+              F: FnMut(&A, f64) + 'static {
+
         let element = self.element.clone();
 
-        self.callbacks.after_remove(for_each(signal.into_signal(), move |value| {
-            if let Some(value) = value {
-                element.set_scroll_left(value);
-            }
-        }));
+        let signal = signal.into_signal();
 
+        // This needs to use `after_insert` because scrolling an element before it is in the DOM has no effect
+        self.callbacks.after_insert(move |callbacks| {
+            callbacks.after_remove(for_each(signal, move |value| {
+                if let Some(value) = value {
+                    f(&element, value);
+                }
+            }));
+        });
+    }
+
+    #[inline]
+    pub fn scroll_left_signal<B>(mut self, signal: B) -> Self where B: IntoSignal<Item = Option<f64>>, B::Signal: 'static {
+        self.set_scroll_signal(signal, IElement::set_scroll_left);
         self
     }
 
-    // TODO generalize IntoOptionStr ?
     #[inline]
     pub fn scroll_top_signal<B>(mut self, signal: B) -> Self where B: IntoSignal<Item = Option<f64>>, B::Signal: 'static {
-        let element = self.element.clone();
-
-        self.callbacks.after_remove(for_each(signal.into_signal(), move |value| {
-            if let Some(value) = value {
-                element.set_scroll_top(value);
-            }
-        }));
-
+        self.set_scroll_signal(signal, IElement::set_scroll_top);
         self
     }
 }
@@ -598,14 +602,17 @@ impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
 
 
     fn set_focused_signal<B>(&mut self, value: B)
-        where B: IntoSignal<Item = bool> + 'static {
+        where B: IntoSignal<Item = bool>,
+              B::Signal: 'static {
 
         let element = self.element.clone();
+
+        let value = value.into_signal();
 
         // This needs to use `after_insert` because calling `.focus()` on an element before it is in the DOM has no effect
         self.callbacks.after_insert(move |callbacks| {
             // TODO verify that this is correct under all circumstances
-            callbacks.after_remove(for_each(value.into_signal(), move |value| {
+            callbacks.after_remove(for_each(value, move |value| {
                 // TODO avoid updating if the focused state hasn't changed ?
                 dom_operations::set_focused(&element, value);
             }));
@@ -614,7 +621,8 @@ impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
 
     #[inline]
     pub fn focused_signal<B>(mut self, value: B) -> Self
-        where B: IntoSignal<Item = bool> + 'static {
+        where B: IntoSignal<Item = bool>,
+              B::Signal: 'static {
 
         self.set_focused_signal(value);
         self
