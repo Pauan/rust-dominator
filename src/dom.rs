@@ -500,6 +500,34 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
         self.set_class_signal(name, value);
         self
     }
+
+    // TODO generalize IntoOptionStr ?
+    #[inline]
+    pub fn scroll_left_signal<B>(mut self, signal: B) -> Self where B: IntoSignal<Item = Option<f64>>, B::Signal: 'static {
+        let element = self.element.clone();
+
+        self.callbacks.after_remove(for_each(signal.into_signal(), move |value| {
+            if let Some(value) = value {
+                element.set_scroll_left(value);
+            }
+        }));
+
+        self
+    }
+
+    // TODO generalize IntoOptionStr ?
+    #[inline]
+    pub fn scroll_top_signal<B>(mut self, signal: B) -> Self where B: IntoSignal<Item = Option<f64>>, B::Signal: 'static {
+        let element = self.element.clone();
+
+        self.callbacks.after_remove(for_each(signal.into_signal(), move |value| {
+            if let Some(value) = value {
+                element.set_scroll_top(value);
+            }
+        }));
+
+        self
+    }
 }
 
 impl<A: IHtmlElement> DomBuilder<A> {

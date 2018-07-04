@@ -5,14 +5,14 @@ use stdweb::web::{TextNode, INode, IHtmlElement, IElement};
 
 
 #[inline]
-pub fn create_element_ns<A: IElement>(name: &str, namespace: &str) -> A
+pub(crate) fn create_element_ns<A: IElement>(name: &str, namespace: &str) -> A
     where <A as TryFrom<Value>>::Error: std::fmt::Debug {
     js!( return document.createElementNS(@{namespace}, @{name}); ).try_into().unwrap()
 }
 
 // TODO make this more efficient
 #[inline]
-pub fn move_from_to<A: INode>(parent: &A, old_index: u32, new_index: u32) {
+pub(crate) fn move_from_to<A: INode>(parent: &A, old_index: u32, new_index: u32) {
     js! { @(no_return)
         var parent = @{parent.as_ref()};
         // TODO verify that it exists ?
@@ -24,7 +24,7 @@ pub fn move_from_to<A: INode>(parent: &A, old_index: u32, new_index: u32) {
 
 // TODO make this more efficient
 #[inline]
-pub fn insert_at<A: INode, B: INode>(parent: &A, index: u32, child: &B) {
+pub(crate) fn insert_at<A: INode, B: INode>(parent: &A, index: u32, child: &B) {
     js! { @(no_return)
         var parent = @{parent.as_ref()};
         parent.insertBefore(@{child.as_ref()}, parent.childNodes[@{index}]);
@@ -33,7 +33,7 @@ pub fn insert_at<A: INode, B: INode>(parent: &A, index: u32, child: &B) {
 
 // TODO make this more efficient
 #[inline]
-pub fn update_at<A: INode, B: INode>(parent: &A, index: u32, child: &B) {
+pub(crate) fn update_at<A: INode, B: INode>(parent: &A, index: u32, child: &B) {
     js! { @(no_return)
         var parent = @{parent.as_ref()};
         parent.replaceChild(@{child.as_ref()}, parent.childNodes[@{index}]);
@@ -42,7 +42,7 @@ pub fn update_at<A: INode, B: INode>(parent: &A, index: u32, child: &B) {
 
 // TODO make this more efficient
 #[inline]
-pub fn remove_at<A: INode>(parent: &A, index: u32) {
+pub(crate) fn remove_at<A: INode>(parent: &A, index: u32) {
     js! { @(no_return)
         var parent = @{parent.as_ref()};
         parent.removeChild(parent.childNodes[@{index}]);
@@ -51,7 +51,7 @@ pub fn remove_at<A: INode>(parent: &A, index: u32) {
 
 // TODO this should be in stdweb
 #[inline]
-pub fn set_text(element: &TextNode, value: &str) {
+pub(crate) fn set_text(element: &TextNode, value: &str) {
     js! { @(no_return)
         // http://jsperf.com/textnode-performance
         @{element}.data = @{value};
@@ -73,7 +73,7 @@ fn set_style_raw<A: AsRef<Reference>>(element: &A, name: &str, value: &str, impo
 
 // TODO this should be in stdweb
 // TODO maybe use cfg(debug_assertions) ?
-pub fn try_set_style<A: AsRef<Reference>>(element: &A, name: &str, value: &str, important: bool) -> bool {
+pub(crate) fn try_set_style<A: AsRef<Reference>>(element: &A, name: &str, value: &str, important: bool) -> bool {
     assert!(value != "");
 
     remove_style(element, name);
@@ -85,7 +85,7 @@ pub fn try_set_style<A: AsRef<Reference>>(element: &A, name: &str, value: &str, 
 // TODO this should be in stdweb
 // TODO handle browser prefixes
 #[inline]
-pub fn remove_style<A: AsRef<Reference>>(element: &A, name: &str) {
+pub(crate) fn remove_style<A: AsRef<Reference>>(element: &A, name: &str) {
     js! { @(no_return)
         @{element.as_ref()}.style.removeProperty(@{name});
     }
@@ -94,7 +94,7 @@ pub fn remove_style<A: AsRef<Reference>>(element: &A, name: &str) {
 // TODO replace with element.focus() and element.blur()
 // TODO make element.focus() and element.blur() inline
 #[inline]
-pub fn set_focused<A: IHtmlElement>(element: &A, focused: bool) {
+pub(crate) fn set_focused<A: IHtmlElement>(element: &A, focused: bool) {
     js! { @(no_return)
         var element = @{element.as_ref()};
 
@@ -108,14 +108,14 @@ pub fn set_focused<A: IHtmlElement>(element: &A, focused: bool) {
 }
 
 #[inline]
-pub fn add_class<A: IElement>(element: &A, name: &str) {
+pub(crate) fn add_class<A: IElement>(element: &A, name: &str) {
     js! { @(no_return)
         @{element.as_ref()}.classList.add(@{name});
     }
 }
 
 #[inline]
-pub fn remove_class<A: IElement>(element: &A, name: &str) {
+pub(crate) fn remove_class<A: IElement>(element: &A, name: &str) {
     js! { @(no_return)
         @{element.as_ref()}.classList.remove(@{name});
     }
@@ -124,7 +124,7 @@ pub fn remove_class<A: IElement>(element: &A, name: &str) {
 
 // TODO check that the attribute *actually* was changed
 #[inline]
-pub fn set_attribute<A: IElement>(element: &A, name: &str, value: &str) {
+pub(crate) fn set_attribute<A: IElement>(element: &A, name: &str, value: &str) {
     js! { @(no_return)
         @{element.as_ref()}.setAttribute(@{name}, @{value});
     }
@@ -132,7 +132,7 @@ pub fn set_attribute<A: IElement>(element: &A, name: &str, value: &str) {
 
 // TODO check that the attribute *actually* was changed
 #[inline]
-pub fn set_attribute_ns<A: IElement>(element: &A, namespace: &str, name: &str, value: &str) {
+pub(crate) fn set_attribute_ns<A: IElement>(element: &A, namespace: &str, name: &str, value: &str) {
     js! { @(no_return)
         @{element.as_ref()}.setAttributeNS(@{namespace}, @{name}, @{value});
     }
@@ -140,14 +140,14 @@ pub fn set_attribute_ns<A: IElement>(element: &A, namespace: &str, name: &str, v
 
 
 #[inline]
-pub fn remove_attribute_ns<A: IElement>(element: &A, namespace: &str, name: &str) {
+pub(crate) fn remove_attribute_ns<A: IElement>(element: &A, namespace: &str, name: &str) {
     js! { @(no_return)
         @{element.as_ref()}.removeAttributeNS(@{namespace}, @{name});
     }
 }
 
 #[inline]
-pub fn remove_attribute<A: IElement>(element: &A, name: &str) {
+pub(crate) fn remove_attribute<A: IElement>(element: &A, name: &str) {
     js! { @(no_return)
         @{element.as_ref()}.removeAttribute(@{name});
     }
@@ -157,7 +157,7 @@ pub fn remove_attribute<A: IElement>(element: &A, name: &str) {
 // TODO check that the property *actually* was changed ?
 // TODO better type checks ?
 #[inline]
-pub fn set_property<A: AsRef<Reference>, B: JsSerialize>(obj: &A, name: &str, value: B) {
+pub(crate) fn set_property<A: AsRef<Reference>, B: JsSerialize>(obj: &A, name: &str, value: B) {
     js! { @(no_return)
         @{obj.as_ref()}[@{name}] = @{value};
     }
@@ -167,7 +167,7 @@ pub fn set_property<A: AsRef<Reference>, B: JsSerialize>(obj: &A, name: &str, va
 // TODO make this work on Nodes, not just Elements
 // TODO is this the most efficient way to remove all children ?
 #[inline]
-pub fn remove_all_children<A: INode>(element: &A) {
+pub(crate) fn remove_all_children<A: INode>(element: &A) {
     js! { @(no_return)
         @{element.as_ref()}.innerHTML = "";
     }

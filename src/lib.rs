@@ -1,4 +1,5 @@
 #![recursion_limit="128"]
+#![warn(unreachable_pub)]
 
 #[macro_use]
 extern crate stdweb;

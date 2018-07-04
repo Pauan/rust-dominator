@@ -16,7 +16,7 @@ use futures_core::future::Future;
 
 // TODO this should probably be in stdweb
 #[inline]
-pub fn spawn_future<F>(future: F) -> DiscardOnDrop<CancelableFutureHandle>
+pub(crate) fn spawn_future<F>(future: F) -> DiscardOnDrop<CancelableFutureHandle>
     where F: Future<Item = (), Error = Never> + 'static {
     // TODO make this more efficient ?
     let (handle, future) = cancelable_future(future, |_| ());
@@ -28,7 +28,7 @@ pub fn spawn_future<F>(future: F) -> DiscardOnDrop<CancelableFutureHandle>
 
 
 #[inline]
-pub fn for_each<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
+pub(crate) fn for_each<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
     where A: Signal + 'static,
           B: FnMut(A::Item) + 'static {
 
@@ -80,7 +80,7 @@ pub fn insert_children_signal<A, B, C>(element: &A, callbacks: &mut Callbacks, s
 }*/
 
 #[inline]
-pub fn insert_children_iter<'a, A: INode, B: IntoIterator<Item = &'a mut Dom>>(element: &A, callbacks: &mut Callbacks, value: B) {
+pub(crate) fn insert_children_iter<'a, A: INode, B: IntoIterator<Item = &'a mut Dom>>(element: &A, callbacks: &mut Callbacks, value: B) {
     for dom in value.into_iter() {
         callbacks.after_insert.append(&mut dom.callbacks.after_insert);
         callbacks.after_remove.append(&mut dom.callbacks.after_remove);
@@ -92,11 +92,11 @@ pub fn insert_children_iter<'a, A: INode, B: IntoIterator<Item = &'a mut Dom>>(e
 
 // TODO move this into the discard crate
 // TODO verify that this is correct and doesn't leak memory or cause memory safety
-pub struct ValueDiscard<A>(ManuallyDrop<A>);
+pub(crate) struct ValueDiscard<A>(ManuallyDrop<A>);
 
 impl<A> ValueDiscard<A> {
     #[inline]
-    pub fn new(value: A) -> Self {
+    pub(crate) fn new(value: A) -> Self {
         ValueDiscard(ManuallyDrop::new(value))
     }
 }
@@ -112,11 +112,11 @@ impl<A> Discard for ValueDiscard<A> {
 
 // TODO move this into the discard crate
 // TODO replace this with an impl for FnOnce() ?
-pub struct FnDiscard<A>(A);
+pub(crate) struct FnDiscard<A>(A);
 
 impl<A> FnDiscard<A> where A: FnOnce() {
     #[inline]
-    pub fn new(f: A) -> Self {
+    pub(crate) fn new(f: A) -> Self {
         FnDiscard(f)
     }
 }
@@ -129,7 +129,7 @@ impl<A> Discard for FnDiscard<A> where A: FnOnce() {
 }
 
 
-pub fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, signal: B)
+pub(crate) fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, signal: B)
     where A: INode + Clone + 'static,
           B: IntoSignalVec<Item = Dom>,
           B::SignalVec: 'static {

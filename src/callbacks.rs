@@ -28,10 +28,10 @@ impl<A: Discard> IRemove for A {
 }
 
 
-pub struct InsertCallback(Box<IInsertCallback>);
+pub(crate) struct InsertCallback(Box<IInsertCallback>);
 
 // TODO is there a more efficient way of doing this ?
-pub struct RemoveCallback(Box<IRemove>);
+pub(crate) struct RemoveCallback(Box<IRemove>);
 
 impl std::fmt::Debug for InsertCallback {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -47,15 +47,15 @@ impl std::fmt::Debug for RemoveCallback {
 
 
 #[derive(Debug)]
-pub struct Callbacks {
-    pub after_insert: Vec<InsertCallback>,
-    pub after_remove: Vec<RemoveCallback>,
+pub(crate) struct Callbacks {
+    pub(crate) after_insert: Vec<InsertCallback>,
+    pub(crate) after_remove: Vec<RemoveCallback>,
     trigger_remove: bool,
 }
 
 impl Callbacks {
     #[inline]
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             after_insert: vec![],
             after_remove: vec![],
@@ -64,18 +64,18 @@ impl Callbacks {
     }
 
     #[inline]
-    pub fn after_insert<A: FnOnce(&mut Callbacks) + 'static>(&mut self, callback: A) {
+    pub(crate) fn after_insert<A: FnOnce(&mut Callbacks) + 'static>(&mut self, callback: A) {
         self.after_insert.push(InsertCallback(Box::new(callback)));
     }
 
     #[inline]
-    pub fn after_remove<A: Discard + 'static>(&mut self, value: A) {
+    pub(crate) fn after_remove<A: Discard + 'static>(&mut self, value: A) {
         self.after_remove.push(RemoveCallback(Box::new(value)));
     }
 
     // TODO runtime checks to make sure this isn't called multiple times ?
     #[inline]
-    pub fn trigger_after_insert(&mut self) {
+    pub(crate) fn trigger_after_insert(&mut self) {
         let mut callbacks = Callbacks::new();
 
         // TODO verify that this is correct
@@ -105,7 +105,7 @@ impl Callbacks {
     }
 
     #[inline]
-    pub fn leak(&mut self) {
+    pub(crate) fn leak(&mut self) {
         self.trigger_remove = false;
     }
 }
