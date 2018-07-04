@@ -99,11 +99,11 @@ pub fn append_dom<A: INode>(parent: &A, mut dom: Dom) -> DomHandle {
 }
 
 
-struct IsDomLoadedEvent {
+struct IsWindowLoadedEvent {
     callback: Value,
 }
 
-impl IsDomLoadedEvent {
+impl IsWindowLoadedEvent {
     #[inline]
     fn new<F>(callback: F) -> Self where F: FnOnce() + 'static {
         // TODO use a proper type for the event
@@ -114,39 +114,39 @@ impl IsDomLoadedEvent {
         Self {
             callback: js!(
                 var callback = @{Once(callback)};
-                document.addEventListener("DOMContentLoaded", callback, true);
+                addEventListener("load", callback, true);
                 return callback;
             ),
         }
     }
 }
 
-impl Drop for IsDomLoadedEvent {
+impl Drop for IsWindowLoadedEvent {
     fn drop(&mut self) {
         js! { @(no_return)
             var callback = @{&self.callback};
-            document.removeEventListener("DOMContentLoaded", callback, true);
+            removeEventListener("load", callback, true);
             callback.drop();
         }
     }
 }
 
-enum IsDomLoaded {
+enum IsWindowLoaded {
     Initial {},
     Pending {
         receiver: oneshot::Receiver<()>,
-        event: IsDomLoadedEvent,
+        event: IsWindowLoadedEvent,
     },
     Done {},
 }
 
-impl Signal for IsDomLoaded {
+impl Signal for IsWindowLoaded {
     type Item = bool;
 
     fn poll_change(&mut self, cx: &mut Context) -> Async<Option<Self::Item>> {
         let result = match self {
-            IsDomLoaded::Initial {} => {
-                let is_ready: bool = js!( return document.readyState !== "loading"; ).try_into().unwrap();
+            IsWindowLoaded::Initial {} => {
+                let is_ready: bool = js!( return document.readyState === "complete"; ).try_into().unwrap();
 
                 if is_ready {
                     Async::Ready(Some(true))
@@ -154,9 +154,9 @@ impl Signal for IsDomLoaded {
                 } else {
                     let (sender, receiver) = oneshot::channel();
 
-                    *self = IsDomLoaded::Pending {
+                    *self = IsWindowLoaded::Pending {
                         receiver,
-                        event: IsDomLoadedEvent::new(move || {
+                        event: IsWindowLoadedEvent::new(move || {
                             // TODO test this
                             sender.send(()).unwrap();
                         }),
@@ -165,16 +165,16 @@ impl Signal for IsDomLoaded {
                     Async::Ready(Some(false))
                 }
             },
-            IsDomLoaded::Pending { receiver, .. } => {
+            IsWindowLoaded::Pending { receiver, .. } => {
                 receiver.poll(cx).unwrap().map(|_| Some(true))
             },
-            IsDomLoaded::Done {} => {
+            IsWindowLoaded::Done {} => {
                 Async::Ready(None)
             },
         };
 
         if let Async::Ready(Some(true)) = result {
-            *self = IsDomLoaded::Done {};
+            *self = IsWindowLoaded::Done {};
         }
 
         result
@@ -182,8 +182,8 @@ impl Signal for IsDomLoaded {
 }
 
 #[inline]
-pub fn is_dom_loaded() -> impl Signal<Item = bool> {
-    IsDomLoaded::Initial {}
+pub fn is_window_loaded() -> impl Signal<Item = bool> {
+    IsWindowLoaded::Initial {}
 }
 
 
