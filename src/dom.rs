@@ -501,6 +501,7 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
         self
     }
 
+
     // TODO generalize IntoOptionStr ?
     fn set_scroll_signal<B, F>(&mut self, signal: B, mut f: F)
         where B: IntoSignal<Item = Option<f64>>,
@@ -515,6 +516,10 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
         self.callbacks.after_insert(move |callbacks| {
             callbacks.after_remove(for_each(signal, move |value| {
                 if let Some(value) = value {
+                    if cfg!(feature = "debug-mode") {
+                        console!(log, element.as_ref(), js!( return @{element.as_ref()}.parentNode; ), js!( return document.body.contains(@{element.as_ref()}); ));
+                    }
+
                     f(&element, value);
                 }
             }));

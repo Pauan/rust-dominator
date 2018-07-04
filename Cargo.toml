@@ -29,3 +29,6 @@ debug-assertions = true
 
 [profile.bench]
 debug-assertions = true
+
+[features]
+debug-mode = []
