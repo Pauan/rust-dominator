@@ -517,7 +517,7 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
             callbacks.after_remove(for_each(signal, move |value| {
                 if let Some(value) = value {
                     if cfg!(feature = "debug-mode") {
-                        console!(log, element.as_ref(), js!( return @{element.as_ref()}.parentNode; ), js!( return document.body.contains(@{element.as_ref()}); ), js!( return [].slice.call(@{element.as_ref()}.childNodes); ));
+                        console!(log, element.as_ref(), js!( return @{element.as_ref()}.parentNode; ), js!( return document.body.contains(@{element.as_ref()}); ), js!( return @{element.as_ref()}.clientHeight; ), js!( return [].slice.call(@{element.as_ref()}.childNodes).map(function (x) { return x.clientHeight; }) ));
                     }
 
                     f(&element, value);
