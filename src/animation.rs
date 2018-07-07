@@ -667,6 +667,11 @@ impl MutableAnimation {
     pub fn signal(&self) -> MutableAnimationSignal {
         MutableAnimationSignal(self.inner.value.signal())
     }
+
+    #[inline]
+    pub fn current_percentage(&self) -> Percentage {
+        self.inner.value.get()
+    }
 }
 
 
