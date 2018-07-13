@@ -474,6 +474,60 @@ fn range_inclusive(percentage: f64, low: f64, high: f64) -> f64 {
 }
 
 
+/*pub struct MutableTimestamps<F> {
+    callback: Arc<F>,
+    animating: Mutex<Option<DiscardOnDrop<CancelableFutureHandle>>>,
+}
+
+impl MutableTimestamps<F> where F: FnMut(f64) {
+    pub fn new(callback: F) -> Self {
+        Self {
+            callback: Arc::new(callback),
+            animating: Mutex::new(None),
+        }
+    }
+
+    pub fn stop(&self) {
+        let mut lock = self.animating.lock().unwrap();
+        *lock = None;
+    }
+
+    pub fn start(&self) {
+        let mut lock = self.animating.lock().unwrap();
+
+        if let None = animating {
+            let callback = self.callback.clone();
+
+            let mut starting_time = None;
+
+            *animating = Some(OnTimestampDiff::new(move |value| callback(value)));
+        }
+    }
+}*/
+
+
+pub struct OnTimestampDiff(DiscardOnDrop<CancelableFutureHandle>);
+
+impl OnTimestampDiff {
+    pub fn new<F>(mut callback: F) -> Self where F: FnMut(f64) + 'static {
+        let mut starting_time = None;
+
+        OnTimestampDiff(spawn_future(
+            timestamps()
+                .for_each(move |current_time| {
+                    if let Some(current_time) = current_time {
+                        let starting_time = *starting_time.get_or_insert(current_time);
+
+                        callback(current_time - starting_time);
+                    }
+
+                    Ok(())
+                })
+        ))
+    }
+}
+
+
 pub struct MutableAnimationSignal(MutableSignal<Percentage>);
 
 impl Signal for MutableAnimationSignal {
@@ -490,7 +544,7 @@ struct MutableAnimationState {
     playing: bool,
     duration: f64,
     end: Percentage,
-    animating: Option<DiscardOnDrop<CancelableFutureHandle>>,
+    animating: Option<OnTimestampDiff>,
 }
 
 struct MutableAnimationInner {
@@ -562,32 +616,21 @@ impl MutableAnimation {
 
                     let state = self.raw_clone();
 
-                    let mut starting_time = None;
+                    lock.animating = Some(OnTimestampDiff::new(move |diff| {
+                        let diff = diff / duration;
 
-                    lock.animating = Some(spawn_future(
-                        timestamps()
-                            .for_each(move |current_time| {
-                                if let Some(current_time) = current_time {
-                                    let starting_time = *starting_time.get_or_insert(current_time);
+                        // TODO don't update if the new value is the same as the old value
+                        if diff >= 1.0 {
+                            {
+                                let mut lock = state.inner.state.lock().unwrap();
+                                Self::stop_animating(&mut lock);
+                            }
+                            state.inner.value.set(Percentage::new_unchecked(end));
 
-                                    let diff = (current_time - starting_time) / duration;
-
-                                    // TODO don't update if the new value is the same as the old value
-                                    if diff >= 1.0 {
-                                        {
-                                            let mut lock = state.inner.state.lock().unwrap();
-                                            Self::stop_animating(&mut lock);
-                                        }
-                                        state.inner.value.set(Percentage::new_unchecked(end));
-
-                                    } else {
-                                        state.inner.value.set(Percentage::new_unchecked(range_inclusive(diff, start, end)));
-                                    }
-                                }
-
-                                Ok(())
-                            })
-                    ));
+                        } else {
+                            state.inner.value.set(Percentage::new_unchecked(range_inclusive(diff, start, end)));
+                        }
+                    }));
 
                 } else {
                     Self::stop_animating(lock);

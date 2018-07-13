@@ -28,6 +28,18 @@ impl<A, B, C> DerefFn<A, C> where B: ?Sized, C: Fn(&A) -> &B {
     pub fn new(value: A, callback: C) -> Self {
         Self { value, callback }
     }
+
+    /*pub fn map<D, E>(self, callback: E) -> DerefFn<A, impl Fn(&A) -> &D>
+        where D: ?Sized,
+              E: Fn(&B) -> &D {
+
+        let old_callback = self.callback;
+
+        DerefFn {
+            value: self.value,
+            callback: move |value| callback(old_callback(value)),
+        }
+    }*/
 }
 
 impl<A, B, C> Deref for DerefFn<A, C> where B: ?Sized, C: Fn(&A) -> &B {
