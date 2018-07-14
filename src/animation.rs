@@ -619,22 +619,22 @@ impl MutableAnimation {
                     lock.animating = Some(OnTimestampDiff::new(move |diff| {
                         let diff = diff / duration;
 
-                        // TODO don't update if the new value is the same as the old value
+                        // TODO test the performance of set_neq
                         if diff >= 1.0 {
                             {
                                 let mut lock = state.inner.state.lock().unwrap();
                                 Self::stop_animating(&mut lock);
                             }
-                            state.inner.value.set(Percentage::new_unchecked(end));
+                            state.inner.value.set_neq(Percentage::new_unchecked(end));
 
                         } else {
-                            state.inner.value.set(Percentage::new_unchecked(range_inclusive(diff, start, end)));
+                            state.inner.value.set_neq(Percentage::new_unchecked(range_inclusive(diff, start, end)));
                         }
                     }));
 
                 } else {
                     Self::stop_animating(lock);
-                    self.inner.value.set(Percentage::new_unchecked(end));
+                    self.inner.value.set_neq(Percentage::new_unchecked(end));
                 }
 
             } else {
@@ -680,10 +680,7 @@ impl MutableAnimation {
 
         lock.end = end;
 
-        // TODO use Copy constraint to make value.get() faster ?
-        if mutable.get() != end {
-            mutable.set(end);
-        }
+        mutable.set_neq(end);
     }
 
     pub fn jump_to(&self, end: Percentage) {

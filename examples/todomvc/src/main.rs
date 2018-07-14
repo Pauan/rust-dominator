@@ -82,7 +82,7 @@ impl State {
     fn update_filter(&self) {
         let hash = document().location().unwrap().hash().unwrap();
 
-        self.filter.set(match hash.as_str() {
+        self.filter.set_neq(match hash.as_str() {
             "#/active" => Filter::Active,
             "#/completed" => Filter::Completed,
             _ => Filter::All,
@@ -195,7 +195,7 @@ fn main() {
                             property_signal("value", state.new_todo_title.signal_cloned());
 
                             event(clone!(state => move |event: InputEvent| {
-                                state.new_todo_title.set(get_value(&event));
+                                state.new_todo_title.set_neq(get_value(&event));
                             }));
 
                             event(clone!(state => move |event: KeyDownEvent| {
@@ -205,7 +205,7 @@ fn main() {
                                     let trimmed = trim(&state.new_todo_title.lock_ref());
 
                                     if let Some(title) = trimmed {
-                                        state.new_todo_title.set("".to_owned());
+                                        state.new_todo_title.set_neq("".to_owned());
 
                                         let id = state.todo_id.get();
 
@@ -253,7 +253,7 @@ fn main() {
                                     let todo_list = state.todo_list.lock_slice();
 
                                     for todo in todo_list.iter() {
-                                        todo.completed.set(checked);
+                                        todo.completed.set_neq(checked);
                                     }
                                 }
 
@@ -302,14 +302,14 @@ fn main() {
                                                         property_signal("checked", todo.completed.signal());
 
                                                         event(clone!(state, todo => move |event: ChangeEvent| {
-                                                            todo.completed.set(get_checked(&event));
+                                                            todo.completed.set_neq(get_checked(&event));
                                                             state.serialize();
                                                         }));
                                                     }),
 
                                                     html!("label", {
                                                         event(clone!(todo => move |_: DoubleClickEvent| {
-                                                            todo.editing.set(Some(todo.title.get_cloned()));
+                                                            todo.editing.set_neq(Some(todo.title.get_cloned()));
                                                         }));
 
                                                         children(&mut [
@@ -348,19 +348,19 @@ fn main() {
                                                         element.blur();
 
                                                     } else if key == "Escape" {
-                                                        todo.editing.set(None);
+                                                        todo.editing.set_neq(None);
                                                     }
                                                 }));
 
                                                 event(clone!(todo => move |event: InputEvent| {
-                                                    todo.editing.set(Some(get_value(&event)));
+                                                    todo.editing.set_neq(Some(get_value(&event)));
                                                 }));
 
                                                 // TODO global_event ?
                                                 event(clone!(state, todo => move |_: BlurEvent| {
                                                     if let Some(title) = todo.editing.replace(None) {
                                                         if let Some(title) = trim(&title) {
-                                                            todo.title.set(title);
+                                                            todo.title.set_neq(title);
 
                                                         } else {
                                                             state.remove_todo(&todo);
