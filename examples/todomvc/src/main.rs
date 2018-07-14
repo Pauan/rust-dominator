@@ -129,38 +129,38 @@ fn get_checked(event: &ChangeEvent) -> bool {
 #[inline]
 fn simple(kind: &str, children: &mut [Dom]) -> Dom {
     html!(kind, {
-        children(children);
+        .children(children)
     })
 }
 
 #[inline]
 fn link(href: &str, t: &str) -> Dom {
     html!("a", {
-        attribute("href", href);
-        children(&mut [
+        .attribute("href", href)
+        .children(&mut [
             text(t),
-        ]);
+        ])
     })
 }
 
 fn filter_button(state: Rc<State>, kind: Filter) -> Dom {
     html!("a", {
-        class_signal("selected", state.filter.signal()
-            .map(clone!(kind => move |filter| filter == kind)));
+        .class_signal("selected", state.filter.signal()
+            .map(clone!(kind => move |filter| filter == kind)))
 
-        attribute("href", match kind {
+        .attribute("href", match kind {
             Filter::Active => "#/active",
             Filter::Completed => "#/completed",
             Filter::All => "#/",
-        });
+        })
 
-        children(&mut [
+        .children(&mut [
             text(match kind {
                 Filter::Active => "Active",
                 Filter::Completed => "Completed",
                 Filter::All => "All",
             })
-        ]);
+        ])
     })
 }
 
@@ -179,26 +179,26 @@ fn main() {
 
     dominator::append_dom(&body,
         html!("section", {
-            class("todoapp");
-            children(&mut [
+            .class("todoapp")
+            .children(&mut [
                 html!("header", {
-                    class("header");
-                    children(&mut [
+                    .class("header")
+                    .children(&mut [
                         simple("h1", &mut [
                             text("todos"),
                         ]),
                         html!("input", {
-                            focused(true);
-                            class("new-todo");
-                            attribute("placeholder", "What needs to be done?");
+                            .focused(true)
+                            .class("new-todo")
+                            .attribute("placeholder", "What needs to be done?")
 
-                            property_signal("value", state.new_todo_title.signal_cloned());
+                            .property_signal("value", state.new_todo_title.signal_cloned())
 
-                            event(clone!(state => move |event: InputEvent| {
+                            .event(clone!(state => move |event: InputEvent| {
                                 state.new_todo_title.set_neq(get_value(&event));
-                            }));
+                            }))
 
-                            event(clone!(state => move |event: KeyDownEvent| {
+                            .event(clone!(state => move |event: KeyDownEvent| {
                                 if event.key() == "Enter" {
                                     event.prevent_default();
 
@@ -221,32 +221,32 @@ fn main() {
                                         state.serialize();
                                     }
                                 }
-                            }));
+                            }))
                         }),
-                    ]);
+                    ])
                 }),
 
                 html!("section", {
-                    class("main");
+                    .class("main")
 
                     // Hide if it doesn't have any todos.
-                    property_signal("hidden", state.todo_list.signal_vec_cloned()
+                    .property_signal("hidden", state.todo_list.signal_vec_cloned()
                         .len()
-                        .map(|len| len == 0));
+                        .map(|len| len == 0))
 
-                    children(&mut [
+                    .children(&mut [
                         html!("input", {
-                            class("toggle-all");
-                            attribute("id", "toggle-all");
-                            attribute("type", "checkbox");
+                            .class("toggle-all")
+                            .attribute("id", "toggle-all")
+                            .attribute("type", "checkbox")
 
-                            property_signal("checked", state.todo_list.signal_vec_cloned()
+                            .property_signal("checked", state.todo_list.signal_vec_cloned()
                                 .map_signal(|todo| todo.completed.signal())
                                 .filter(|completed| !completed)
                                 .len()
-                                .map(|len| len != 0));
+                                .map(|len| len != 0))
 
-                            event(clone!(state => move |event: ChangeEvent| {
+                            .event(clone!(state => move |event: ChangeEvent| {
                                 let checked = !get_checked(&event);
 
                                 {
@@ -258,28 +258,28 @@ fn main() {
                                 }
 
                                 state.serialize();
-                            }));
+                            }))
                         }),
 
                         html!("label", {
-                            attribute("for", "toggle-all");
-                            children(&mut [
+                            .attribute("for", "toggle-all")
+                            .children(&mut [
                                 text("Mark all as complete"),
-                            ]);
+                            ])
                         }),
 
                         html!("ul", {
-                            class("todo-list");
+                            .class("todo-list")
 
-                            children_signal_vec(state.todo_list.signal_vec_cloned()
+                            .children_signal_vec(state.todo_list.signal_vec_cloned()
                                 .map(clone!(state => move |todo| {
                                     html!("li", {
-                                        class_signal("editing", todo.editing.signal_cloned()
-                                            .map(|x| x.is_some()));
+                                        .class_signal("editing", todo.editing.signal_cloned()
+                                            .map(|x| x.is_some()))
 
-                                        class_signal("completed", todo.completed.signal());
+                                        .class_signal("completed", todo.completed.signal())
 
-                                        property_signal("hidden",
+                                        .property_signal("hidden",
                                             map_ref!(
                                                 let filter = state.filter.signal(),
                                                 let completed = todo.completed.signal() =>
@@ -289,58 +289,58 @@ fn main() {
                                                     Filter::All => true,
                                                 }
                                             )
-                                            .dedupe_map(|show| !*show));
+                                            .dedupe_map(|show| !*show))
 
-                                        children(&mut [
+                                        .children(&mut [
                                             html!("div", {
-                                                class("view");
-                                                children(&mut [
+                                                .class("view")
+                                                .children(&mut [
                                                     html!("input", {
-                                                        attribute("type", "checkbox");
-                                                        class("toggle");
+                                                        .attribute("type", "checkbox")
+                                                        .class("toggle")
 
-                                                        property_signal("checked", todo.completed.signal());
+                                                        .property_signal("checked", todo.completed.signal())
 
-                                                        event(clone!(state, todo => move |event: ChangeEvent| {
+                                                        .event(clone!(state, todo => move |event: ChangeEvent| {
                                                             todo.completed.set_neq(get_checked(&event));
                                                             state.serialize();
-                                                        }));
+                                                        }))
                                                     }),
 
                                                     html!("label", {
-                                                        event(clone!(todo => move |_: DoubleClickEvent| {
+                                                        .event(clone!(todo => move |_: DoubleClickEvent| {
                                                             todo.editing.set_neq(Some(todo.title.get_cloned()));
-                                                        }));
+                                                        }))
 
-                                                        children(&mut [
+                                                        .children(&mut [
                                                             text_signal(todo.title.signal_cloned()),
-                                                        ]);
+                                                        ])
                                                     }),
 
                                                     html!("button", {
-                                                        class("destroy");
-                                                        event(clone!(state, todo => move |_: ClickEvent| {
+                                                        .class("destroy")
+                                                        .event(clone!(state, todo => move |_: ClickEvent| {
                                                             state.remove_todo(&todo);
                                                             state.serialize();
-                                                        }));
+                                                        }))
                                                     }),
-                                                ]);
+                                                ])
                                             }),
 
                                             html!("input", {
-                                                class("edit");
+                                                .class("edit")
 
-                                                property_signal("value", todo.editing.signal_cloned()
-                                                    .map(|x| x.unwrap_or_else(|| "".to_owned())));
+                                                .property_signal("value", todo.editing.signal_cloned()
+                                                    .map(|x| x.unwrap_or_else(|| "".to_owned())))
 
-                                                property_signal("hidden", todo.editing.signal_cloned()
-                                                    .map(|x| x.is_none()));
+                                                .property_signal("hidden", todo.editing.signal_cloned()
+                                                    .map(|x| x.is_none()))
 
                                                 // TODO dedupe this somehow ?
-                                                focused_signal(todo.editing.signal_cloned()
-                                                    .map(|x| x.is_some()));
+                                                .focused_signal(todo.editing.signal_cloned()
+                                                    .map(|x| x.is_some()))
 
-                                                event(clone!(todo => move |event: KeyDownEvent| {
+                                                .event(clone!(todo => move |event: KeyDownEvent| {
                                                     let key = event.key();
 
                                                     if key == "Enter" {
@@ -350,14 +350,14 @@ fn main() {
                                                     } else if key == "Escape" {
                                                         todo.editing.set_neq(None);
                                                     }
-                                                }));
+                                                }))
 
-                                                event(clone!(todo => move |event: InputEvent| {
+                                                .event(clone!(todo => move |event: InputEvent| {
                                                     todo.editing.set_neq(Some(get_value(&event)));
-                                                }));
+                                                }))
 
                                                 // TODO global_event ?
-                                                event(clone!(state, todo => move |_: BlurEvent| {
+                                                .event(clone!(state, todo => move |_: BlurEvent| {
                                                     if let Some(title) = todo.editing.replace(None) {
                                                         if let Some(title) = trim(&title) {
                                                             todo.title.set_neq(title);
@@ -368,28 +368,28 @@ fn main() {
 
                                                         state.serialize();
                                                     }
-                                                }));
+                                                }))
                                             }),
-                                        ]);
+                                        ])
                                     })
-                                })));
+                                })))
                         }),
-                    ]);
+                    ])
                 }),
 
                 html!("footer", {
-                    class("footer");
+                    .class("footer")
 
                     // Hide if it doesn't have any todos.
-                    property_signal("hidden", state.todo_list.signal_vec_cloned()
+                    .property_signal("hidden", state.todo_list.signal_vec_cloned()
                         .len()
-                        .map(|len| len == 0));
+                        .map(|len| len == 0))
 
-                    children(&mut [
+                    .children(&mut [
                         html!("span", {
-                            class("todo-count");
+                            .class("todo-count")
 
-                            children_signal_vec(state.todo_list.signal_vec_cloned()
+                            .children_signal_vec(state.todo_list.signal_vec_cloned()
                                 .map_signal(|todo| todo.completed.signal())
                                 .filter(|completed| !completed)
                                 .len()
@@ -406,11 +406,11 @@ fn main() {
                                         }),
                                     ]
                                 })
-                                .to_signal_vec());
+                                .to_signal_vec())
                         }),
                         html!("ul", {
-                            class("filters");
-                            children(&mut [
+                            .class("filters")
+                            .children(&mut [
                                 simple("li", &mut [
                                     filter_button(state.clone(), Filter::All),
                                 ]),
@@ -420,37 +420,37 @@ fn main() {
                                 simple("li", &mut [
                                     filter_button(state.clone(), Filter::Completed),
                                 ]),
-                            ]);
+                            ])
                         }),
                         html!("button", {
-                            class("clear-completed");
+                            .class("clear-completed")
 
                             // Hide if it doesn't have any completed items.
-                            property_signal("hidden", state.todo_list.signal_vec_cloned()
+                            .property_signal("hidden", state.todo_list.signal_vec_cloned()
                                 .map_signal(|todo| todo.completed.signal())
                                 .filter(|completed| *completed)
                                 .len()
-                                .map(|len| len == 0));
+                                .map(|len| len == 0))
 
-                            event(clone!(state => move |_: ClickEvent| {
+                            .event(clone!(state => move |_: ClickEvent| {
                                 state.todo_list.retain(|todo| todo.completed.get() == false);
                                 state.serialize();
-                            }));
+                            }))
 
-                            children(&mut [
+                            .children(&mut [
                                 text("Clear completed"),
-                            ]);
+                            ])
                         }),
-                    ]);
+                    ])
                 }),
-            ]);
+            ])
         }),
     );
 
     dominator::append_dom(&body,
         html!("footer", {
-            class("info");
-            children(&mut [
+            .class("info")
+            .children(&mut [
                 simple("p", &mut [
                     text("Double-click to edit a todo"),
                 ]),
@@ -462,7 +462,7 @@ fn main() {
                     text("Part of "),
                     link("http://todomvc.com", "TodoMVC"),
                 ]),
-            ]);
+            ])
         }),
     );
 }

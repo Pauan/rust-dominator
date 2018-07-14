@@ -3,7 +3,7 @@ macro_rules! builder {
     ($namespace:expr, $default:ty, $kind:expr => $t:ty) => {
         builder!($namespace, $default, $kind => $t, {})
     };
-    ($namespace:expr, $default:ty, $kind:expr => $t:ty, { $( $name:ident( $( $args:expr ),* ); )* }) => {{
+    ($namespace:expr, $default:ty, $kind:expr => $t:ty, { $(.$name:ident($($args:expr),*))* }) => {{
         let a: $crate::DomBuilder<$t> = $crate::DomBuilder::new($crate::create_element_ns($kind, $namespace))$(.$name($($args),*))*;
         let b: $crate::Dom = $crate::DomBuilder::into_dom(a);
         b
@@ -12,8 +12,8 @@ macro_rules! builder {
     ($namespace:expr, $default:ty, $kind:expr) => {
         builder!($namespace, $default, $kind => $default)
     };
-    ($namespace:expr, $default:ty, $kind:expr, { $( $name:ident( $( $args:expr ),* ); )* }) => {
-        builder!($namespace, $default, $kind => $default, { $( $name( $( $args ),* ); )* })
+    ($namespace:expr, $default:ty, $kind:expr, { $(.$name:ident($($args:expr),*))* }) => {
+        builder!($namespace, $default, $kind => $default, { $(.$name($($args),*))* })
     };
 }
 
@@ -39,7 +39,7 @@ macro_rules! stylesheet {
     ($rule:expr) => {
         stylesheet!($rule, {})
     };
-    ($rule:expr, { $( $name:ident( $( $args:expr ),* ); )* }) => {
+    ($rule:expr, { $(.$name:ident($($args:expr),*))* }) => {
         $crate::StylesheetBuilder::new($rule)$(.$name($($args),*))*.done()
     };
 }
@@ -47,7 +47,7 @@ macro_rules! stylesheet {
 
 #[macro_export]
 macro_rules! class {
-    ($( $name:ident( $( $args:expr ),* ); )*) => {
+    ($(.$name:ident($($args:expr),*))*) => {
         $crate::ClassBuilder::new()$(.$name($($args),*))*.done()
     };
 }
