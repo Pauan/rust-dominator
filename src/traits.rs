@@ -7,12 +7,12 @@ pub use animation::AnimatedSignalVec;
 
 
 pub trait Mixin<A> {
-    fn apply(&self, builder: A) -> A;
+    fn apply(self, builder: A) -> A;
 }
 
-impl<A, F> Mixin<A> for F where F: Fn(A) -> A {
+impl<A, F> Mixin<A> for F where F: FnOnce(A) -> A {
     #[inline]
-    fn apply(&self, builder: A) -> A {
+    fn apply(self, builder: A) -> A {
         self(builder)
     }
 }
