@@ -111,11 +111,13 @@ fn main() {
     let mut color = 10;
 
     let f = clone!(state => move || {
-        if state.boxes.len() >= 40 {
-            state.boxes.remove(0);
+        let mut lock = state.boxes.lock_mut();
+
+        if lock.len() >= 40 {
+            lock.remove(0);
         }
 
-        state.boxes.push(color % 360);
+        lock.push(color % 360);
         color += 10;
     });
 

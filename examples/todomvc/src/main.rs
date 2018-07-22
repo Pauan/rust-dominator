@@ -76,7 +76,7 @@ impl State {
 
     fn remove_todo(&self, todo: &Todo) {
         // TODO make this more efficient ?
-        self.todo_list.retain(|x| x.id != todo.id);
+        self.todo_list.lock_mut().retain(|x| x.id != todo.id);
     }
 
     fn update_filter(&self) {
@@ -211,7 +211,7 @@ fn main() {
 
                                         state.todo_id.set(id + 1);
 
-                                        state.todo_list.push_cloned(Rc::new(Todo {
+                                        state.todo_list.lock_mut().push_cloned(Rc::new(Todo {
                                             id: id,
                                             title: Mutable::new(title),
                                             completed: Mutable::new(false),
@@ -250,7 +250,7 @@ fn main() {
                                 let checked = !get_checked(&event);
 
                                 {
-                                    let todo_list = state.todo_list.lock_slice();
+                                    let todo_list = state.todo_list.lock_ref();
 
                                     for todo in todo_list.iter() {
                                         todo.completed.set_neq(checked);
@@ -433,7 +433,7 @@ fn main() {
                                 .map(|len| len == 0))
 
                             .event(clone!(state => move |_: ClickEvent| {
-                                state.todo_list.retain(|todo| todo.completed.get() == false);
+                                state.todo_list.lock_mut().retain(|todo| todo.completed.get() == false);
                                 state.serialize();
                             }))
 
