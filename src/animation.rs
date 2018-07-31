@@ -527,6 +527,13 @@ impl OnTimestampDiff {
     }
 }
 
+impl fmt::Debug for OnTimestampDiff {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_tuple("OnTimestampDiff")
+            .finish()
+    }
+}
+
 
 pub struct MutableAnimationSignal(MutableSignal<Percentage>);
 
