@@ -11,7 +11,7 @@ keywords = ["javascript", "dom", "reactive", "signal", "frp"]
 categories = ["web-programming", "template-engine", "wasm"]
 
 [dependencies]
-stdweb-derive = "0.4.0"
+stdweb-derive = "0.5.0"
 lazy_static = "1.0.0"
 discard = "1.0.3"
 futures-core = "0.2.0"
