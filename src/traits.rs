@@ -1,7 +1,4 @@
-use dom_operations;
-use dom::DerefFn;
-use std::ops::Deref;
-use stdweb::Reference;
+use dom::RefFn;
 
 pub use animation::AnimatedSignalVec;
 
@@ -18,129 +15,116 @@ impl<A, F> Mixin<A> for F where F: FnOnce(A) -> A {
 }
 
 
-pub trait StyleName {
-    fn set_style<A: AsRef<Reference>>(&self, element: &A, value: &str, important: bool);
-    fn remove_style<A: AsRef<Reference>>(&self, element: &A);
-}
-
-impl<'a> StyleName for &'a str {
-    #[inline]
-    fn set_style<A: AsRef<Reference>>(&self, element: &A, value: &str, important: bool) {
-        if !dom_operations::try_set_style(element, self, value, important) {
-            panic!("style is incorrect:\n  name: {}\n  value: {}", self, value);
-        }
-    }
-
-    #[inline]
-    fn remove_style<A: AsRef<Reference>>(&self, element: &A) {
-        dom_operations::remove_style(element, self);
-    }
-}
-
-
-macro_rules! array_style_name {
-    ($size:expr) => {
-        impl<'a> StyleName for [&'a str; $size] {
-            #[inline]
-            fn set_style<A: AsRef<Reference>>(&self, element: &A, value: &str, important: bool) {
-                let mut okay = false;
-
-                for name in self.iter() {
-                    if dom_operations::try_set_style(element, name, value, important) {
-                        okay = true;
-                    }
-                }
-
-                if !okay {
-                    panic!("style is incorrect:\n  names: {}\n  value: {}", self.join(", "), value);
-                }
-            }
-
-            #[inline]
-            fn remove_style<A: AsRef<Reference>>(&self, element: &A) {
-                for name in self.iter() {
-                    dom_operations::remove_style(element, name);
-                }
-            }
-        }
-    };
-}
-
-macro_rules! array_style_names {
-    ($($size:expr),*) => {
-        $(array_style_name!($size);)*
-    };
-}
-
-array_style_names!(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32);
-
-
 // TODO figure out a way to implement this for all of AsRef / Borrow / etc.
 // TODO implementations for &String and &mut String
-pub trait IntoStr {
-    type Output: Deref<Target = str>;
-
-    fn into_str(self) -> Self::Output;
+pub trait AsStr {
+    fn as_str(&self) -> &str;
 }
 
-impl IntoStr for String {
-    type Output = Self;
-
+impl AsStr for String {
     #[inline]
-    fn into_str(self) -> Self::Output {
+    fn as_str(&self) -> &str {
         self
     }
 }
 
-impl<'a> IntoStr for &'a str {
-    type Output = Self;
-
+impl<'a> AsStr for &'a str {
     #[inline]
-    fn into_str(self) -> Self::Output {
+    fn as_str(&self) -> &str {
         self
     }
 }
 
-impl<'a> IntoStr for &'a mut str {
-    type Output = Self;
-
+impl<'a> AsStr for &'a mut str {
     #[inline]
-    fn into_str(self) -> Self::Output {
+    fn as_str(&self) -> &str {
         self
     }
 }
 
-impl<A, B> IntoStr for DerefFn<A, B> where B: Fn(&A) -> &str {
-    type Output = Self;
+impl<A, C> AsStr for RefFn<A, str, C> where C: Fn(&A) -> &str {
+    #[inline]
+    fn as_str(&self) -> &str {
+        self.call_ref()
+    }
+}
+
+
+pub trait MultiStr {
+    fn any<F>(&self, f: F) -> bool where F: FnMut(&str) -> bool;
 
     #[inline]
-    fn into_str(self) -> Self::Output {
+    fn each<F>(&self, mut f: F) where F: FnMut(&str) {
+        self.any(|x| {
+            f(x);
+            false
+        });
+    }
+}
+
+impl<A> MultiStr for A where A: AsStr {
+    #[inline]
+    fn any<F>(&self, mut f: F) -> bool where F: FnMut(&str) -> bool {
+        f(self.as_str())
+    }
+}
+
+// TODO it would be great to use IntoIterator instead, and then we can replace the array implementations with it
+/*impl<'a, A> MultiStr for &'a [A] where A: AsStr {
+    #[inline]
+    fn any<F>(&self, mut f: F) -> bool where F: FnMut(&str) -> bool {
+        self.iter().any(|x| f(x.as_str()))
+    }
+}*/
+
+// TODO it would be great to use IntoIterator or Iterator instead
+/*impl<'a, A, C> MultiStr for RefFn<A, [&'a str], C> where C: Fn(&A) -> &[&'a str] {
+    #[inline]
+    fn any<F>(&self, mut f: F) -> bool where F: FnMut(&str) -> bool {
+        self.call_ref().iter().any(|x| f(x))
+    }
+}*/
+
+macro_rules! array_multi_str {
+    ($size:expr) => {
+        impl<A> MultiStr for [A; $size] where A: AsStr {
+            #[inline]
+            fn any<F>(&self, mut f: F) -> bool where F: FnMut(&str) -> bool {
+                self.iter().any(|x| f(x.as_str()))
+            }
+        }
+    };
+}
+
+macro_rules! array_multi_strs {
+    ($($size:expr),*) => {
+        $(array_multi_str!($size);)*
+    };
+}
+
+array_multi_strs!(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32);
+
+
+pub trait OptionStr {
+    type Output;
+
+    fn into_option(self) -> Option<Self::Output>;
+}
+
+impl<A> OptionStr for A where A: MultiStr {
+    type Output = A;
+
+    #[inline]
+    fn into_option(self) -> Option<A> {
+        Some(self)
+    }
+}
+
+impl<A> OptionStr for Option<A> where A: MultiStr {
+    type Output = A;
+
+    #[inline]
+    fn into_option(self) -> Option<A> {
         self
-    }
-}
-
-
-// TODO figure out a way to implement this for all of AsRef / Borrow / etc.
-pub trait IntoOptionStr {
-    type Output: Deref<Target = str>;
-
-    fn into_option_str(self) -> Option<Self::Output>;
-}
-
-impl<A: IntoStr> IntoOptionStr for A {
-    type Output = A::Output;
-
-    #[inline]
-    fn into_option_str(self) -> Option<Self::Output> {
-        Some(self.into_str())
-    }
-}
-
-impl<A: IntoStr> IntoOptionStr for Option<A> {
-    type Output = A::Output;
-
-    #[inline]
-    fn into_option_str(self) -> Option<Self::Output> {
-        self.map(|x| x.into_str())
     }
 }

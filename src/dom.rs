@@ -1,4 +1,5 @@
-use std::ops::Deref;
+use std::convert::AsRef;
+use std::marker::PhantomData;
 use stdweb::{Reference, Value, JsSerialize, Once};
 use stdweb::unstable::{TryFrom, TryInto};
 use stdweb::web::{IEventTarget, INode, IElement, IHtmlElement, HtmlElement, Node, window, TextNode, EventTarget, Element};
@@ -18,38 +19,55 @@ use futures_channel::oneshot;
 use discard::{Discard, DiscardOnDrop};
 
 
-pub struct DerefFn<A, B> {
+pub struct RefFn<A, B, C> where B: ?Sized {
     value: A,
-    callback: B,
+    callback: C,
+    return_value: PhantomData<B>,
 }
 
-impl<A, B, C> DerefFn<A, C> where B: ?Sized, C: Fn(&A) -> &B {
+impl<A, B, C> RefFn<A, B, C> where B: ?Sized, C: Fn(&A) -> &B {
     #[inline]
     pub fn new(value: A, callback: C) -> Self {
-        Self { value, callback }
+        Self {
+            value,
+            callback,
+            return_value: PhantomData,
+        }
     }
 
-    /*pub fn map<D, E>(self, callback: E) -> DerefFn<A, impl Fn(&A) -> &D>
+    #[inline]
+    pub fn call_ref(&self) -> &B {
+        (self.callback)(&self.value)
+    }
+
+    /*pub fn map<D, E>(self, callback: E) -> RefFn<A, impl Fn(&A) -> &D>
         where D: ?Sized,
               E: Fn(&B) -> &D {
 
         let old_callback = self.callback;
 
-        DerefFn {
+        RefFn {
             value: self.value,
             callback: move |value| callback(old_callback(value)),
         }
     }*/
 }
 
-impl<A, B, C> Deref for DerefFn<A, C> where B: ?Sized, C: Fn(&A) -> &B {
+/*impl<A, B, C> Deref for RefFn<A, C> where B: ?Sized, C: Fn(&A) -> &B {
     type Target = B;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        (self.callback)(&self.value)
+        self.call_ref()
     }
-}
+}*/
+
+/*impl<A, B, C> AsRef<B> for RefFn<A, C> where B: ?Sized, C: Fn(&A) -> &B {
+    #[inline]
+    fn as_ref(&self) -> &B {
+        self.call_ref()
+    }
+}*/
 
 
 // TODO this should be in stdweb
@@ -207,7 +225,7 @@ pub fn text(value: &str) -> Dom {
 
 // TODO should this inline ?
 pub fn text_signal<A, B>(value: B) -> Dom
-    where A: IntoStr,
+    where A: AsStr,
           B: IntoSignal<Item = A>,
           B::Signal: 'static {
 
@@ -219,8 +237,7 @@ pub fn text_signal<A, B>(value: B) -> Dom
         let element = element.clone();
 
         callbacks.after_remove(for_each(value.into_signal(), move |value| {
-            let value = value.into_str();
-            let value: &str = &value;
+            let value = value.as_str();
             dom_operations::set_text(&element, value);
         }));
     }
@@ -293,21 +310,19 @@ pub fn create_element_ns<A: IElement>(name: &str, namespace: &str) -> A
 }
 
 
-fn set_option_str<A, B, C, F>(element: &A, callbacks: &mut Callbacks, value: C, mut f: F)
+fn set_option<A, B, C, D, F>(element: &A, callbacks: &mut Callbacks, value: D, mut f: F)
     where A: Clone + 'static,
-          B: IntoOptionStr,
-          C: IntoSignal<Item = B>,
-          C::Signal: 'static,
-          F: FnMut(&A, Option<&str>) + 'static {
+          C: OptionStr<Output = B>,
+          D: IntoSignal<Item = C>,
+          D::Signal: 'static,
+          F: FnMut(&A, Option<B>) + 'static {
 
     let element = element.clone();
 
     let mut is_set = false;
 
     callbacks.after_remove(for_each(value.into_signal(), move |value| {
-        let value = value.into_option_str();
-        // TODO this is a bit hacky
-        let value: Option<&str> = value.as_ref().map(|x| &**x);
+        let value = value.into_option();
 
         if value.is_some() {
             is_set = true;
@@ -321,6 +336,55 @@ fn set_option_str<A, B, C, F>(element: &A, callbacks: &mut Callbacks, value: C, 
 
         f(&element, value);
     }));
+}
+
+fn set_style<A, B, C>(element: &A, name: &B, value: C, important: bool)
+    where A: AsRef<Reference>,
+          B: MultiStr,
+          C: MultiStr {
+
+    let mut names = vec![];
+    let mut values = vec![];
+
+    let okay = name.any(|name| {
+        value.any(|value| {
+            if dom_operations::try_set_style(element, name, value, important) {
+                true
+
+            } else {
+                names.push(name.to_string());
+                values.push(value.to_string());
+                false
+            }
+        })
+    });
+
+    if !okay {
+        // TODO maybe make this configurable
+        panic!("style is incorrect:\n  names: {}\n  values: {}", names.join(", "), values.join(", "));
+    }
+}
+
+fn set_style_signal<A, B, C, D, E>(element: &A, callbacks: &mut Callbacks, name: B, value: E, important: bool)
+    where A: AsRef<Reference> + Clone + 'static,
+          B: MultiStr + 'static,
+          C: MultiStr,
+          D: OptionStr<Output = C>,
+          E: IntoSignal<Item = D>,
+          E::Signal: 'static {
+
+    set_option(element, callbacks, value, move |element, value| {
+        match value {
+            Some(value) => {
+                set_style(element, &name, value, important);
+            },
+            None => {
+                name.each(|name| {
+                    dom_operations::remove_style(element, name);
+                });
+            },
+        }
+    });
 }
 
 
@@ -426,31 +490,36 @@ impl<A: Into<Node>> DomBuilder<A> {
 // TODO make this JsSerialize rather than AsRef<Reference> ?
 impl<A: AsRef<Reference>> DomBuilder<A> {
     #[inline]
-    pub fn property<B: JsSerialize>(self, name: &str, value: B) -> Self {
-        dom_operations::set_property(&self.element, name, value);
+    pub fn property<B, C>(self, name: B, value: C) -> Self where B: MultiStr, C: JsSerialize {
+        name.each(|name| {
+            dom_operations::set_property(&self.element, name, &value);
+        });
         self
     }
 }
 
 impl<A: AsRef<Reference> + Clone + 'static> DomBuilder<A> {
-    fn set_property_signal<B, C>(&mut self, name: &str, value: C)
-        where B: JsSerialize,
-              C: IntoSignal<Item = B>,
-              C::Signal: 'static {
+    fn set_property_signal<B, C, D>(&mut self, name: B, value: D)
+        where B: MultiStr + 'static,
+              C: JsSerialize,
+              D: IntoSignal<Item = C>,
+              D::Signal: 'static {
 
         let element = self.element.clone();
-        let name = name.to_owned();
 
         self.callbacks.after_remove(for_each(value.into_signal(), move |value| {
-            dom_operations::set_property(&element, &name, value);
+            name.each(|name| {
+                dom_operations::set_property(&element, name, &value);
+            });
         }));
     }
 
     #[inline]
-    pub fn property_signal<B, C>(mut self, name: &str, value: C) -> Self
-        where B: JsSerialize,
-              C: IntoSignal<Item = B>,
-              C::Signal: 'static {
+    pub fn property_signal<B, C, D>(mut self, name: B, value: D) -> Self
+        where B: MultiStr + 'static,
+              C: JsSerialize,
+              D: IntoSignal<Item = C>,
+              D::Signal: 'static {
 
         self.set_property_signal(name, value);
         self
@@ -497,84 +566,115 @@ impl<A: INode + Clone + 'static> DomBuilder<A> {
 
 impl<A: IElement> DomBuilder<A> {
     #[inline]
-    pub fn attribute(self, name: &str, value: &str) -> Self {
-        dom_operations::set_attribute(&self.element, name, value);
+    pub fn attribute<B>(self, name: B, value: &str) -> Self where B: MultiStr {
+        name.each(|name| {
+            dom_operations::set_attribute(&self.element, name, value);
+        });
         self
     }
 
     #[inline]
-    pub fn attribute_namespace(self, namespace: &str, name: &str, value: &str) -> Self {
-        dom_operations::set_attribute_ns(&self.element, namespace, name, value);
+    pub fn attribute_namespace<B>(self, namespace: &str, name: B, value: &str) -> Self where B: MultiStr {
+        name.each(|name| {
+            dom_operations::set_attribute_ns(&self.element, namespace, name, value);
+        });
         self
     }
 
     #[inline]
-    pub fn class(self, name: &str) -> Self {
-        dom_operations::add_class(&self.element, name);
+    pub fn class<B>(self, name: B) -> Self where B: MultiStr {
+        name.each(|name| {
+            dom_operations::add_class(&self.element, name);
+        });
         self
     }
 }
 
 impl<A: IElement + Clone + 'static> DomBuilder<A> {
-    fn set_attribute_signal<B, C>(&mut self, name: &str, value: C)
-        where B: IntoOptionStr,
-              C: IntoSignal<Item = B>,
-              C::Signal: 'static {
+    fn set_attribute_signal<B, C, D, E>(&mut self, name: B, value: E)
+        where B: MultiStr + 'static,
+              C: AsStr,
+              D: OptionStr<Output = C>,
+              E: IntoSignal<Item = D>,
+              E::Signal: 'static {
 
-        let name = name.to_owned();
-
-        set_option_str(&self.element, &mut self.callbacks, value, move |element, value| {
+        set_option(&self.element, &mut self.callbacks, value, move |element, value| {
             match value {
-                Some(value) => dom_operations::set_attribute(element, &name, value),
-                None => dom_operations::remove_attribute(element, &name),
+                Some(value) => {
+                    let value = value.as_str();
+
+                    name.each(|name| {
+                        dom_operations::set_attribute(element, &name, value);
+                    });
+                },
+                None => {
+                    name.each(|name| {
+                        dom_operations::remove_attribute(element, &name)
+                    });
+                },
             }
         });
     }
 
 
     #[inline]
-    pub fn attribute_signal<B, C>(mut self, name: &str, value: C) -> Self
-        where B: IntoOptionStr,
-              C: IntoSignal<Item = B>,
-              C::Signal: 'static {
+    pub fn attribute_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+        where B: MultiStr + 'static,
+              C: AsStr,
+              D: OptionStr<Output = C>,
+              E: IntoSignal<Item = D>,
+              E::Signal: 'static {
 
         self.set_attribute_signal(name, value);
         self
     }
 
-    fn set_attribute_namespace_signal<B, C>(&mut self, namespace: &str, name: &str, value: C)
-        where B: IntoOptionStr,
-              C: IntoSignal<Item = B>,
-              C::Signal: 'static {
+    fn set_attribute_namespace_signal<B, C, D, E>(&mut self, namespace: &str, name: B, value: E)
+        where B: MultiStr + 'static,
+              C: AsStr,
+              D: OptionStr<Output = C>,
+              E: IntoSignal<Item = D>,
+              E::Signal: 'static {
 
-        let name = name.to_owned();
         let namespace = namespace.to_owned();
 
-        set_option_str(&self.element, &mut self.callbacks, value, move |element, value| {
+        set_option(&self.element, &mut self.callbacks, value, move |element, value| {
             match value {
-                Some(value) => dom_operations::set_attribute_ns(element, &namespace, &name, value),
-                None => dom_operations::remove_attribute_ns(element, &namespace, &name),
+                Some(value) => {
+                    let value = value.as_str();
+
+                    name.each(|name| {
+                        dom_operations::set_attribute_ns(element, &namespace, &name, value);
+                    });
+                },
+                None => {
+                    name.each(|name| {
+                        dom_operations::remove_attribute_ns(element, &namespace, &name);
+                    });
+                },
             }
         });
     }
 
     #[inline]
-    pub fn attribute_namespace_signal<B, C>(mut self, namespace: &str, name: &str, value: C) -> Self
-        where B: IntoOptionStr,
-              C: IntoSignal<Item = B>,
-              C::Signal: 'static {
+    pub fn attribute_namespace_signal<B, C, D, E>(mut self, namespace: &str, name: B, value: E) -> Self
+        where B: MultiStr + 'static,
+              C: AsStr,
+              D: OptionStr<Output = C>,
+              E: IntoSignal<Item = D>,
+              E::Signal: 'static {
 
         self.set_attribute_namespace_signal(namespace, name, value);
         self
     }
 
 
-    fn set_class_signal<B>(&mut self, name: &str, value: B)
-        where B: IntoSignal<Item = bool>,
-              B::Signal: 'static {
+    fn set_class_signal<B, C>(&mut self, name: B, value: C)
+        where B: MultiStr + 'static,
+              C: IntoSignal<Item = bool>,
+              C::Signal: 'static {
 
         let element = self.element.clone();
-        let name = name.to_owned();
 
         let mut is_set = false;
 
@@ -582,29 +682,36 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
             if value {
                 if !is_set {
                     is_set = true;
-                    dom_operations::add_class(&element, &name);
+
+                    name.each(|name| {
+                        dom_operations::add_class(&element, name);
+                    });
                 }
 
             } else {
                 if is_set {
                     is_set = false;
-                    dom_operations::remove_class(&element, &name);
+
+                    name.each(|name| {
+                        dom_operations::remove_class(&element, name);
+                    });
                 }
             }
         }));
     }
 
     #[inline]
-    pub fn class_signal<B>(mut self, name: &str, value: B) -> Self
-        where B: IntoSignal<Item = bool>,
-              B::Signal: 'static {
+    pub fn class_signal<B, C>(mut self, name: B, value: C) -> Self
+        where B: MultiStr + 'static,
+              C: IntoSignal<Item = bool>,
+              C::Signal: 'static {
 
         self.set_class_signal(name, value);
         self
     }
 
 
-    // TODO generalize IntoOptionStr ?
+    // TODO use OptionStr ?
     fn set_scroll_signal<B, F>(&mut self, signal: B, mut f: F)
         where B: IntoSignal<Item = Option<f64>>,
               B::Signal: 'static,
@@ -639,52 +746,44 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
 
 impl<A: IHtmlElement> DomBuilder<A> {
     #[inline]
-    pub fn style<B: StyleName>(self, name: B, value: &str) -> Self {
-        name.set_style(&self.element, value, false);
+    pub fn style<B, C>(self, name: B, value: C) -> Self
+        where B: MultiStr,
+              C: MultiStr {
+        set_style(&self.element, &name, value, false);
         self
     }
 
     #[inline]
-    pub fn style_important<B: StyleName>(self, name: B, value: &str) -> Self {
-        name.set_style(&self.element, value, true);
+    pub fn style_important<B, C>(self, name: B, value: C) -> Self
+        where B: MultiStr,
+              C: MultiStr {
+        set_style(&self.element, &name, value, true);
         self
     }
 }
 
 impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
-    fn set_style_signal<B, C, D>(&mut self, name: B, value: D, important: bool)
-        where B: StyleName + 'static,
-              C: IntoOptionStr,
-              D: IntoSignal<Item = C>,
-              D::Signal: 'static {
-
-        set_option_str(&self.element, &mut self.callbacks, value, move |element, value| {
-            match value {
-                Some(value) => name.set_style(element, value, important),
-                None => name.remove_style(element),
-            }
-        });
-    }
-
     #[inline]
-    pub fn style_signal<B, C, D>(mut self, name: B, value: D) -> Self
-        where B: StyleName + 'static,
-              C: IntoOptionStr,
-              D: IntoSignal<Item = C>,
-              D::Signal: 'static {
+    pub fn style_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+        where B: MultiStr + 'static,
+              C: MultiStr,
+              D: OptionStr<Output = C>,
+              E: IntoSignal<Item = D>,
+              E::Signal: 'static {
 
-        self.set_style_signal(name, value, false);
+        set_style_signal(&self.element, &mut self.callbacks, name, value, false);
         self
     }
 
     #[inline]
-    pub fn style_important_signal<B, C, D>(mut self, name: B, value: D) -> Self
-        where B: StyleName + 'static,
-              C: IntoOptionStr,
-              D: IntoSignal<Item = C>,
-              D::Signal: 'static {
+    pub fn style_important_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+        where B: MultiStr + 'static,
+              C: MultiStr,
+              D: OptionStr<Output = C>,
+              E: IntoSignal<Item = D>,
+              E::Signal: 'static {
 
-        self.set_style_signal(name, value, true);
+        set_style_signal(&self.element, &mut self.callbacks, name, value, true);
         self
     }
 
@@ -767,51 +866,42 @@ impl StylesheetBuilder {
     }
 
     #[inline]
-    pub fn style<B: StyleName>(self, name: B, value: &str) -> Self {
-        name.set_style(&self.element, value, false);
+    pub fn style<B, C>(self, name: B, value: C) -> Self
+        where B: MultiStr,
+              C: MultiStr {
+        set_style(&self.element, &name, value, false);
         self
     }
 
     #[inline]
-    pub fn style_important<B: StyleName>(self, name: B, value: &str) -> Self {
-        name.set_style(&self.element, value, true);
-        self
-    }
-
-
-    fn set_style_signal<B, C, D>(&mut self, name: B, value: D, important: bool)
-        where B: StyleName + 'static,
-              C: IntoOptionStr,
-              D: IntoSignal<Item = C>,
-              D::Signal: 'static {
-
-        set_option_str(&self.element, &mut self.callbacks, value, move |element, value| {
-            match value {
-                Some(value) => name.set_style(element, value, important),
-                None => name.remove_style(element),
-            }
-        });
-    }
-
-    #[inline]
-    pub fn style_signal<B, C, D>(mut self, name: B, value: D) -> Self
-        where B: StyleName + 'static,
-              C: IntoOptionStr,
-              D: IntoSignal<Item = C>,
-              D::Signal: 'static {
-
-        self.set_style_signal(name, value, false);
+    pub fn style_important<B, C>(self, name: B, value: C) -> Self
+        where B: MultiStr,
+              C: MultiStr {
+        set_style(&self.element, &name, value, true);
         self
     }
 
     #[inline]
-    pub fn style_important_signal<B, C, D>(mut self, name: B, value: D) -> Self
-        where B: StyleName + 'static,
-              C: IntoOptionStr,
-              D: IntoSignal<Item = C>,
-              D::Signal: 'static {
+    pub fn style_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+        where B: MultiStr + 'static,
+              C: MultiStr,
+              D: OptionStr<Output = C>,
+              E: IntoSignal<Item = D>,
+              E::Signal: 'static {
 
-        self.set_style_signal(name, value, true);
+        set_style_signal(&self.element, &mut self.callbacks, name, value, false);
+        self
+    }
+
+    #[inline]
+    pub fn style_important_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+        where B: MultiStr + 'static,
+              C: MultiStr,
+              D: OptionStr<Output = C>,
+              E: IntoSignal<Item = D>,
+              E::Signal: 'static {
+
+        set_style_signal(&self.element, &mut self.callbacks, name, value, true);
         self
     }
 
@@ -861,34 +951,40 @@ impl ClassBuilder {
     }
 
     #[inline]
-    pub fn style<B: StyleName>(mut self, name: B, value: &str) -> Self {
+    pub fn style<B, C>(mut self, name: B, value: C) -> Self
+        where B: MultiStr,
+              C: MultiStr {
         self.stylesheet = self.stylesheet.style(name, value);
         self
     }
 
     #[inline]
-    pub fn style_important<B: StyleName>(mut self, name: B, value: &str) -> Self {
+    pub fn style_important<B, C>(mut self, name: B, value: C) -> Self
+        where B: MultiStr,
+              C: MultiStr {
         self.stylesheet = self.stylesheet.style_important(name, value);
         self
     }
 
     #[inline]
-    pub fn style_signal<B, C, D>(mut self, name: B, value: D) -> Self
-        where B: StyleName + 'static,
-              C: IntoOptionStr,
-              D: IntoSignal<Item = C>,
-              D::Signal: 'static {
+    pub fn style_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+        where B: MultiStr + 'static,
+              C: MultiStr,
+              D: OptionStr<Output = C>,
+              E: IntoSignal<Item = D>,
+              E::Signal: 'static {
 
         self.stylesheet = self.stylesheet.style_signal(name, value);
         self
     }
 
     #[inline]
-    pub fn style_important_signal<B, C, D>(mut self, name: B, value: D) -> Self
-        where B: StyleName + 'static,
-              C: IntoOptionStr,
-              D: IntoSignal<Item = C>,
-              D::Signal: 'static {
+    pub fn style_important_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+        where B: MultiStr + 'static,
+              C: MultiStr,
+              D: OptionStr<Output = C>,
+              E: IntoSignal<Item = D>,
+              E::Signal: 'static {
 
         self.stylesheet = self.stylesheet.style_important_signal(name, value);
         self
@@ -906,7 +1002,7 @@ impl ClassBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::{create_element_ns, DomBuilder, HTML_NAMESPACE, text_signal, DerefFn};
+    use super::{create_element_ns, DomBuilder, HTML_NAMESPACE, text_signal, RefFn};
     use futures_signals::signal::{always, SignalExt};
     use stdweb::web::{HtmlElement, IHtmlElement};
 
@@ -925,7 +1021,7 @@ mod tests {
     fn text_signal_types() {
         text_signal(always("foo"));
         text_signal(always("foo".to_owned()));
-        text_signal(always("foo".to_owned()).map(|x| DerefFn::new(x, |x| x.as_str())));
+        text_signal(always("foo".to_owned()).map(|x| RefFn::new(x, |x| x.as_str())));
         //text_signal(always(Arc::new("foo")));
         //text_signal(always(Arc::new("foo".to_owned())));
         //text_signal(always(Rc::new("foo")));
@@ -937,23 +1033,73 @@ mod tests {
     }
 
     #[test]
+    fn property_signal_types() {
+        let _a: DomBuilder<HtmlElement> = DomBuilder::new(create_element_ns("div", HTML_NAMESPACE))
+            .property("foo", "hi")
+            .property("foo", 5)
+            .property(["foo", "-webkit-foo", "-ms-foo"], "hi")
+
+            .property_signal("foo", always("hi"))
+            .property_signal("foo", always(5))
+            .property_signal("foo", always(Some("hi")))
+
+            .property_signal(["foo", "-webkit-foo", "-ms-foo"], always("hi"))
+            .property_signal(["foo", "-webkit-foo", "-ms-foo"], always(5))
+            .property_signal(["foo", "-webkit-foo", "-ms-foo"], always(Some("hi")))
+            ;
+    }
+
+    #[test]
+    fn attribute_signal_types() {
+        let _a: DomBuilder<HtmlElement> = DomBuilder::new(create_element_ns("div", HTML_NAMESPACE))
+            .attribute("foo", "hi")
+            .attribute(["foo", "-webkit-foo", "-ms-foo"], "hi")
+
+            .attribute_signal("foo", always("hi"))
+            .attribute_signal("foo", always(Some("hi")))
+
+            .attribute_signal(["foo", "-webkit-foo", "-ms-foo"], always("hi"))
+            .attribute_signal(["foo", "-webkit-foo", "-ms-foo"], always(Some("hi")))
+            ;
+    }
+
+    #[test]
+    fn class_signal_types() {
+        let _a: DomBuilder<HtmlElement> = DomBuilder::new(create_element_ns("div", HTML_NAMESPACE))
+            .class("foo")
+            .class(["foo", "-webkit-foo", "-ms-foo"])
+
+            .class_signal("foo", always(true))
+            .class_signal(["foo", "-webkit-foo", "-ms-foo"], always(true))
+            ;
+    }
+
+    #[test]
     fn style_signal_types() {
         let _a: DomBuilder<HtmlElement> = DomBuilder::new(create_element_ns("div", HTML_NAMESPACE))
             .style_signal("foo", always("bar"))
             .style_signal("foo", always("bar".to_owned()))
-            .style_signal("foo", always("bar".to_owned()).map(|x| DerefFn::new(x, |x| x.as_str())))
+            .style_signal("foo", always("bar".to_owned()).map(|x| RefFn::new(x, |x| x.as_str())))
+
+            //.style_signal(vec!["-moz-foo", "-webkit-foo", "foo"].as_slice(), always("bar"))
+            //.style_signal(vec!["-moz-foo", "-webkit-foo", "foo"].as_slice(), always("bar".to_owned()))
+            //.style_signal(vec!["-moz-foo", "-webkit-foo", "foo"].as_slice(), always("bar".to_owned()).map(|x| RefFn::new(x, |x| x.as_str())))
 
             .style_signal(["-moz-foo", "-webkit-foo", "foo"], always("bar"))
             .style_signal(["-moz-foo", "-webkit-foo", "foo"], always("bar".to_owned()))
-            .style_signal(["-moz-foo", "-webkit-foo", "foo"], always("bar".to_owned()).map(|x| DerefFn::new(x, |x| x.as_str())))
+            .style_signal(["-moz-foo", "-webkit-foo", "foo"], always("bar".to_owned()).map(|x| RefFn::new(x, |x| x.as_str())))
+
+            .style_signal(["-moz-foo", "-webkit-foo", "foo"], always(["bar", "qux"]))
+            .style_signal(["-moz-foo", "-webkit-foo", "foo"], always(["bar".to_owned(), "qux".to_owned()]))
+            //.style_signal(["-moz-foo", "-webkit-foo", "foo"], always(("bar".to_owned(), "qux".to_owned())).map(|x| RefFn::new(x, |x| [x.0.as_str(), x.1.as_str()])))
 
             .style_signal("foo", always(Some("bar")))
             .style_signal("foo", always(Some("bar".to_owned())))
-            .style_signal("foo", always("bar".to_owned()).map(|x| Some(DerefFn::new(x, |x| x.as_str()))))
+            .style_signal("foo", always("bar".to_owned()).map(|x| Some(RefFn::new(x, |x| x.as_str()))))
 
             .style_signal(["-moz-foo", "-webkit-foo", "foo"], always(Some("bar")))
             .style_signal(["-moz-foo", "-webkit-foo", "foo"], always(Some("bar".to_owned())))
-            .style_signal(["-moz-foo", "-webkit-foo", "foo"], always("bar".to_owned()).map(|x| Some(DerefFn::new(x, |x| x.as_str()))))
+            .style_signal(["-moz-foo", "-webkit-foo", "foo"], always("bar".to_owned()).map(|x| Some(RefFn::new(x, |x| x.as_str()))))
 
             ;
     }
