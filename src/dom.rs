@@ -1076,10 +1076,23 @@ mod tests {
 
     #[test]
     fn style_signal_types() {
+        lazy_static! {
+            static ref FOO: String = "foo".to_owned();
+        }
+
         let _a: DomBuilder<HtmlElement> = DomBuilder::new(create_element_ns("div", HTML_NAMESPACE))
             .style_signal("foo", always("bar"))
             .style_signal("foo", always("bar".to_owned()))
             .style_signal("foo", always("bar".to_owned()).map(|x| RefFn::new(x, |x| x.as_str())))
+
+            .style("foo".to_owned(), "bar".to_owned())
+            .style_signal("foo".to_owned(), always("bar".to_owned()))
+
+            .style(&"foo".to_owned(), &"bar".to_owned())
+            .style(Box::new("foo".to_owned()), Box::new("bar".to_owned()))
+
+            .style_signal(&*FOO, always(&*FOO))
+            .style_signal(Box::new("foo".to_owned()), always(Box::new("bar".to_owned())))
 
             //.style_signal(vec!["-moz-foo", "-webkit-foo", "foo"].as_slice(), always("bar"))
             //.style_signal(vec!["-moz-foo", "-webkit-foo", "foo"].as_slice(), always("bar".to_owned()))

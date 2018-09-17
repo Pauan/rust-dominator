@@ -21,7 +21,35 @@ pub trait AsStr {
     fn as_str(&self) -> &str;
 }
 
+impl<'a, A> AsStr for &'a A where A: AsStr {
+    #[inline]
+    fn as_str(&self) -> &str {
+        AsStr::as_str(*self)
+    }
+}
+
+impl<'a, A> AsStr for &'a mut A where A: AsStr {
+    #[inline]
+    fn as_str(&self) -> &str {
+        AsStr::as_str(*self)
+    }
+}
+
+impl<A> AsStr for Box<A> where A: AsStr {
+    #[inline]
+    fn as_str(&self) -> &str {
+        AsStr::as_str(&**self)
+    }
+}
+
 impl AsStr for String {
+    #[inline]
+    fn as_str(&self) -> &str {
+        self
+    }
+}
+
+impl AsStr for str {
     #[inline]
     fn as_str(&self) -> &str {
         self
