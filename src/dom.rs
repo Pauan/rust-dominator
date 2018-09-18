@@ -1089,12 +1089,12 @@ mod tests {
             .style_signal("foo".to_owned(), always("bar".to_owned()))
 
             .style(&"foo".to_owned(), &"bar".to_owned())
-            .style(Box::new("foo".to_owned()), Box::new("bar".to_owned()))
+            //.style(Box::new("foo".to_owned()), Box::new("bar".to_owned()))
+            //.style_signal(Box::new("foo".to_owned()), always(Box::new("bar".to_owned())))
 
             .style_signal(&*FOO, always(&*FOO))
-            .style_signal(Box::new("foo".to_owned()), always(Box::new("bar".to_owned())))
 
-            .style(vec!["-moz-foo", "-webkit-foo", "foo"].as_slice(), vec!["bar"].as_slice())
+            //.style(vec!["-moz-foo", "-webkit-foo", "foo"].as_slice(), vec!["bar"].as_slice())
             .style_signal(RefFn::new(vec!["-moz-foo", "-webkit-foo", "foo"], |x| x.as_slice()), always(RefFn::new(vec!["bar"], |x| x.as_slice())))
 
             .style_signal(["-moz-foo", "-webkit-foo", "foo"], always("bar"))

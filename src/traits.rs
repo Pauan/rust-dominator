@@ -28,20 +28,6 @@ impl<'a, A> AsStr for &'a A where A: AsStr {
     }
 }
 
-impl<'a, A> AsStr for &'a mut A where A: AsStr {
-    #[inline]
-    fn as_str(&self) -> &str {
-        AsStr::as_str(*self)
-    }
-}
-
-impl<A> AsStr for Box<A> where A: AsStr {
-    #[inline]
-    fn as_str(&self) -> &str {
-        AsStr::as_str(&**self)
-    }
-}
-
 impl AsStr for String {
     #[inline]
     fn as_str(&self) -> &str {
@@ -57,13 +43,6 @@ impl AsStr for str {
 }
 
 impl<'a> AsStr for &'a str {
-    #[inline]
-    fn as_str(&self) -> &str {
-        self
-    }
-}
-
-impl<'a> AsStr for &'a mut str {
     #[inline]
     fn as_str(&self) -> &str {
         self
@@ -98,12 +77,12 @@ impl<A> MultiStr for A where A: AsStr {
 }
 
 // TODO it would be great to use IntoIterator instead, and then we can replace the array implementations with it
-impl<'a, A> MultiStr for &'a [A] where A: AsStr {
+/*impl<'a, A> MultiStr for &'a [A] where A: AsStr {
     #[inline]
     fn any<F>(&self, mut f: F) -> bool where F: FnMut(&str) -> bool {
         self.iter().any(|x| f(x.as_str()))
     }
-}
+}*/
 
 // TODO it would be great to use IntoIterator or Iterator instead
 impl<'a, A, C> MultiStr for RefFn<A, [&'a str], C> where C: Fn(&A) -> &[&'a str] {
