@@ -1094,9 +1094,8 @@ mod tests {
             .style_signal(&*FOO, always(&*FOO))
             .style_signal(Box::new("foo".to_owned()), always(Box::new("bar".to_owned())))
 
-            //.style_signal(vec!["-moz-foo", "-webkit-foo", "foo"].as_slice(), always("bar"))
-            //.style_signal(vec!["-moz-foo", "-webkit-foo", "foo"].as_slice(), always("bar".to_owned()))
-            //.style_signal(vec!["-moz-foo", "-webkit-foo", "foo"].as_slice(), always("bar".to_owned()).map(|x| RefFn::new(x, |x| x.as_str())))
+            .style(vec!["-moz-foo", "-webkit-foo", "foo"].as_slice(), vec!["bar"].as_slice())
+            .style_signal(RefFn::new(vec!["-moz-foo", "-webkit-foo", "foo"], |x| x.as_slice()), always(RefFn::new(vec!["bar"], |x| x.as_slice())))
 
             .style_signal(["-moz-foo", "-webkit-foo", "foo"], always("bar"))
             .style_signal(["-moz-foo", "-webkit-foo", "foo"], always("bar".to_owned()))
@@ -1104,7 +1103,9 @@ mod tests {
 
             .style_signal(["-moz-foo", "-webkit-foo", "foo"], always(["bar", "qux"]))
             .style_signal(["-moz-foo", "-webkit-foo", "foo"], always(["bar".to_owned(), "qux".to_owned()]))
-            //.style_signal(["-moz-foo", "-webkit-foo", "foo"], always(("bar".to_owned(), "qux".to_owned())).map(|x| RefFn::new(x, |x| [x.0.as_str(), x.1.as_str()])))
+
+            //.style_signal(["-moz-foo", "-webkit-foo", "foo"], always(AsSlice::new(["foo", "bar"])))
+            //.style_signal(["-moz-foo", "-webkit-foo", "foo"], always(("bar".to_owned(), "qux".to_owned())).map(|x| RefFn::new(x, |x| AsSlice::new([x.0.as_str(), x.1.as_str()]))))
 
             .style_signal("foo", always(Some("bar")))
             .style_signal("foo", always(Some("bar".to_owned())))

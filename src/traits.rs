@@ -98,20 +98,20 @@ impl<A> MultiStr for A where A: AsStr {
 }
 
 // TODO it would be great to use IntoIterator instead, and then we can replace the array implementations with it
-/*impl<'a, A> MultiStr for &'a [A] where A: AsStr {
+impl<'a, A> MultiStr for &'a [A] where A: AsStr {
     #[inline]
     fn any<F>(&self, mut f: F) -> bool where F: FnMut(&str) -> bool {
         self.iter().any(|x| f(x.as_str()))
     }
-}*/
+}
 
 // TODO it would be great to use IntoIterator or Iterator instead
-/*impl<'a, A, C> MultiStr for RefFn<A, [&'a str], C> where C: Fn(&A) -> &[&'a str] {
+impl<'a, A, C> MultiStr for RefFn<A, [&'a str], C> where C: Fn(&A) -> &[&'a str] {
     #[inline]
     fn any<F>(&self, mut f: F) -> bool where F: FnMut(&str) -> bool {
         self.call_ref().iter().any(|x| f(x))
     }
-}*/
+}
 
 macro_rules! array_multi_str {
     ($size:expr) => {
