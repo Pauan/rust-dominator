@@ -1,4 +1,5 @@
 #![recursion_limit="128"]
+#![feature(futures_api, pin, arbitrary_self_types)]
 #![warn(unreachable_pub)]
 
 #[macro_use]
@@ -13,7 +14,9 @@ extern crate lazy_static;
 extern crate discard;
 extern crate futures_core;
 extern crate futures_channel;
+extern crate futures_util;
 extern crate futures_signals;
+extern crate pin_utils;
 
 
 mod macros;

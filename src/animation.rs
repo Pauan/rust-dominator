@@ -1,14 +1,16 @@
 use std::fmt;
+use std::pin::{Pin, Unpin};
 use std::sync::{Arc, Weak, Mutex, RwLock};
-use futures_core::Async;
-use futures_core::future::Future;
-use futures_core::task::{Context, Waker};
+use futures_core::Poll;
+use futures_core::task::{LocalWaker, Waker};
+use futures_util::future::{ready, FutureExt};
 use futures_signals::CancelableFutureHandle;
 use futures_signals::signal::{Signal, SignalExt, WaitFor, MutableSignal, Mutable};
 use futures_signals::signal_vec::{SignalVec, VecDiff};
 use stdweb::Value;
 use discard::DiscardOnDrop;
 use operations::spawn_future;
+use pin_utils::{unsafe_pinned, unsafe_unpinned};
 
 
 // TODO generalize this so it works for any target, not just JS
@@ -78,22 +80,22 @@ pub struct Timestamps {
 impl Signal for Timestamps {
     type Item = Option<f64>;
 
-    // TODO implement Async::Ready(None)
-    fn poll_change(&mut self, cx: &mut Context) -> Async<Option<Self::Item>> {
+    // TODO implement Poll::Ready(None)
+    fn poll_change(self: Pin<&mut Self>, waker: &LocalWaker) -> Poll<Option<Self::Item>> {
         let mut lock = self.state.lock().unwrap();
 
         match lock.state {
             TimestampsEnum::Changed => {
                 lock.state = TimestampsEnum::NotChanged;
-                Async::Ready(Some(*self.value.read().unwrap()))
+                Poll::Ready(Some(*self.value.read().unwrap()))
             },
             TimestampsEnum::First => {
                 lock.state = TimestampsEnum::NotChanged;
-                Async::Ready(Some(None))
+                Poll::Ready(Some(None))
             },
             TimestampsEnum::NotChanged => {
-                lock.waker = Some(cx.waker().clone());
-                Async::Pending
+                lock.waker = Some(waker.clone().into_waker());
+                Poll::Pending
             },
         }
     }
@@ -215,6 +217,10 @@ impl<A, F, S> AnimatedMap<S, F>
     where S: SignalVec,
           F: FnMut(S::Item, AnimatedMapBroadcaster) -> A {
 
+    unsafe_unpinned!(animations: Vec<AnimatedMapState>);
+    unsafe_pinned!(signal: Option<S>);
+    unsafe_unpinned!(callback: F);
+
     fn animated_state(&self) -> AnimatedMapState {
         let state = AnimatedMapState {
             animation: MutableAnimation::new(self.duration),
@@ -226,25 +232,25 @@ impl<A, F, S> AnimatedMap<S, F>
         state
     }
 
-    fn remove_index(&mut self, index: usize) -> Async<Option<VecDiff<A>>> {
+    fn remove_index(self: &mut Pin<&mut Self>, index: usize) -> Poll<Option<VecDiff<A>>> {
         if index == (self.animations.len() - 1) {
-            self.animations.pop();
-            Async::Ready(Some(VecDiff::Pop {}))
+            self.animations().pop();
+            Poll::Ready(Some(VecDiff::Pop {}))
 
         } else {
-            self.animations.remove(index);
-            Async::Ready(Some(VecDiff::RemoveAt { index }))
+            self.animations().remove(index);
+            Poll::Ready(Some(VecDiff::RemoveAt { index }))
         }
     }
 
-    fn should_remove(&mut self, cx: &mut Context, index: usize) -> bool {
-        let state = &mut self.animations[index];
+    fn should_remove(self: &mut Pin<&mut Self>, waker: &LocalWaker, index: usize) -> bool {
+        let state = &mut self.animations()[index];
 
         state.animation.animate_to(Percentage::new_unchecked(0.0));
 
         let mut future = state.animation.signal().wait_for(Percentage::new_unchecked(0.0));
 
-        if future.poll(cx).unwrap().is_ready() {
+        if future.poll_unpin(waker).is_ready() {
             true
 
         } else {
@@ -279,33 +285,35 @@ impl<A, F, S> AnimatedMap<S, F>
     }
 }
 
+impl<A, B> Unpin for AnimatedMap<A, B> where A: Unpin {}
+
 impl<A, F, S> SignalVec for AnimatedMap<S, F>
     where S: SignalVec,
           F: FnMut(S::Item, AnimatedMapBroadcaster) -> A {
     type Item = A;
 
     // TODO this can probably be implemented more efficiently
-    fn poll_vec_change(&mut self, cx: &mut Context) -> Async<Option<VecDiff<Self::Item>>> {
+    fn poll_vec_change(mut self: Pin<&mut Self>, waker: &LocalWaker) -> Poll<Option<VecDiff<Self::Item>>> {
         let mut is_done = true;
 
         // TODO is this loop correct ?
-        while let Some(result) = self.signal.as_mut().map(|signal| signal.poll_vec_change(cx)) {
+        while let Some(result) = self.signal().as_pin_mut().map(|signal| signal.poll_vec_change(waker)) {
             match result {
-                Async::Ready(Some(change)) => return match change {
+                Poll::Ready(Some(change)) => return match change {
                     // TODO maybe it should play remove / insert animations for this ?
                     VecDiff::Replace { values } => {
-                        self.animations = Vec::with_capacity(values.len());
+                        *self.animations() = Vec::with_capacity(values.len());
 
-                        Async::Ready(Some(VecDiff::Replace {
+                        Poll::Ready(Some(VecDiff::Replace {
                             values: values.into_iter().map(|value| {
                                 let state = AnimatedMapState {
                                     animation: MutableAnimation::new_with_initial(self.duration, Percentage::new_unchecked(1.0)),
                                     removing: None,
                                 };
 
-                                let value = (self.callback)(value, AnimatedMapBroadcaster(state.animation.raw_clone()));
+                                let value = self.callback()(value, AnimatedMapBroadcaster(state.animation.raw_clone()));
 
-                                self.animations.push(state);
+                                self.animations().push(state);
 
                                 value
                             }).collect()
@@ -315,23 +323,26 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
                     VecDiff::InsertAt { index, value } => {
                         let index = self.find_index(index).unwrap_or_else(|| self.animations.len());
                         let state = self.animated_state();
-                        let value = (self.callback)(value, AnimatedMapBroadcaster(state.animation.raw_clone()));
-                        self.animations.insert(index, state);
-                        Async::Ready(Some(VecDiff::InsertAt { index, value }))
+                        let value = self.callback()(value, AnimatedMapBroadcaster(state.animation.raw_clone()));
+                        self.animations().insert(index, state);
+                        Poll::Ready(Some(VecDiff::InsertAt { index, value }))
                     },
 
                     VecDiff::Push { value } => {
                         let state = self.animated_state();
-                        let value = (self.callback)(value, AnimatedMapBroadcaster(state.animation.raw_clone()));
-                        self.animations.push(state);
-                        Async::Ready(Some(VecDiff::Push { value }))
+                        let value = self.callback()(value, AnimatedMapBroadcaster(state.animation.raw_clone()));
+                        self.animations().push(state);
+                        Poll::Ready(Some(VecDiff::Push { value }))
                     },
 
                     VecDiff::UpdateAt { index, value } => {
                         let index = self.find_index(index).expect("Could not find value");
-                        let state = &self.animations[index];
-                        let value = (self.callback)(value, AnimatedMapBroadcaster(state.animation.raw_clone()));
-                        Async::Ready(Some(VecDiff::UpdateAt { index, value }))
+                        let state = {
+                            let state = &self.animations()[index];
+                            AnimatedMapBroadcaster(state.animation.raw_clone())
+                        };
+                        let value = self.callback()(value, state);
+                        Poll::Ready(Some(VecDiff::UpdateAt { index, value }))
                     },
 
                     // TODO test this
@@ -339,19 +350,19 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
                     VecDiff::Move { old_index, new_index } => {
                         let old_index = self.find_index(old_index).expect("Could not find value");
 
-                        let state = self.animations.remove(old_index);
+                        let state = self.animations().remove(old_index);
 
                         let new_index = self.find_index(new_index).unwrap_or_else(|| self.animations.len());
 
-                        self.animations.insert(new_index, state);
+                        self.animations().insert(new_index, state);
 
-                        Async::Ready(Some(VecDiff::Move { old_index, new_index }))
+                        Poll::Ready(Some(VecDiff::Move { old_index, new_index }))
                     },
 
                     VecDiff::RemoveAt { index } => {
                         let index = self.find_index(index).expect("Could not find value");
 
-                        if self.should_remove(cx, index) {
+                        if self.should_remove(waker, index) {
                             self.remove_index(index)
 
                         } else {
@@ -362,7 +373,7 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
                     VecDiff::Pop {} => {
                         let index = self.find_last_index().expect("Cannot pop from empty vec");
 
-                        if self.should_remove(cx, index) {
+                        if self.should_remove(waker, index) {
                             self.remove_index(index)
 
                         } else {
@@ -372,15 +383,15 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
 
                     // TODO maybe it should play remove animation for this ?
                     VecDiff::Clear {} => {
-                        self.animations.clear();
-                        Async::Ready(Some(VecDiff::Clear {}))
+                        self.animations().clear();
+                        Poll::Ready(Some(VecDiff::Clear {}))
                     },
                 },
-                Async::Ready(None) => {
-                    self.signal = None;
+                Poll::Ready(None) => {
+                    Pin::set(self.signal(), None);
                     break;
                 },
-                Async::Pending => {
+                Poll::Pending => {
                     is_done = false;
                     break;
                 },
@@ -391,10 +402,10 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
 
         // TODO make this more efficient (e.g. using a similar strategy as FuturesUnordered)
         // This uses rposition so that way it will return VecDiff::Pop in more situations
-        let index = self.animations.iter_mut().rposition(|state| {
+        let index = self.animations().iter_mut().rposition(|state| {
             if let Some(ref mut future) = state.removing {
                 is_removing = true;
-                future.poll(cx).unwrap().is_ready()
+                future.poll_unpin(waker).is_ready()
 
             } else {
                 false
@@ -406,10 +417,10 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
                 self.remove_index(index)
             },
             None => if is_done && !is_removing {
-                Async::Ready(None)
+                Poll::Ready(None)
 
             } else {
-                Async::Pending
+                Poll::Pending
             },
         }
     }
@@ -521,7 +532,7 @@ impl OnTimestampDiff {
                         callback(current_time - starting_time);
                     }
 
-                    Ok(())
+                    ready(())
                 })
         ))
     }
@@ -541,8 +552,8 @@ impl Signal for MutableAnimationSignal {
     type Item = Percentage;
 
     #[inline]
-    fn poll_change(&mut self, cx: &mut Context) -> Async<Option<Self::Item>> {
-        self.0.poll_change(cx)
+    fn poll_change(mut self: Pin<&mut Self>, waker: &LocalWaker) -> Poll<Option<Self::Item>> {
+        self.0.poll_change_unpin(waker)
     }
 }
 

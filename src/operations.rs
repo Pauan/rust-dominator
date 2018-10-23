@@ -1,27 +1,27 @@
 use std::sync::{Arc, Mutex};
 use std::mem::ManuallyDrop;
-use stdweb::PromiseFuture;
 use discard::{Discard, DiscardOnDrop};
+use futures_core::future::Future;
+use futures_util::future::ready;
 use futures_signals::{cancelable_future, CancelableFutureHandle};
 use futures_signals::signal::{Signal, SignalExt};
-use futures_signals::signal_vec::{VecDiff, SignalVec, SignalVecExt, IntoSignalVec};
+use futures_signals::signal_vec::{VecDiff, SignalVec, SignalVecExt};
 use dom_operations;
 use dom::Dom;
 use callbacks::Callbacks;
 use std::iter::IntoIterator;
+use stdweb::spawn_local;
 use stdweb::traits::INode;
-use futures_core::Never;
-use futures_core::future::Future;
 
 
 // TODO this should probably be in stdweb
 #[inline]
 pub(crate) fn spawn_future<F>(future: F) -> DiscardOnDrop<CancelableFutureHandle>
-    where F: Future<Item = (), Error = Never> + 'static {
+    where F: Future<Output = ()> + 'static {
     // TODO make this more efficient ?
-    let (handle, future) = cancelable_future(future, |_| ());
+    let (handle, future) = cancelable_future(future, || ());
 
-    PromiseFuture::spawn_local(future);
+    spawn_local(future);
 
     handle
 }
@@ -34,7 +34,7 @@ pub(crate) fn for_each<A, B>(signal: A, mut callback: B) -> CancelableFutureHand
 
     DiscardOnDrop::leak(spawn_future(signal.for_each(move |value| {
         callback(value);
-        Ok(())
+        ready(())
     })))
 }
 
@@ -46,7 +46,7 @@ fn for_each_vec<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
 
     DiscardOnDrop::leak(spawn_future(signal.for_each(move |value| {
         callback(value);
-        Ok(())
+        ready(())
     })))
 }
 
@@ -131,8 +131,7 @@ impl<A> Discard for FnDiscard<A> where A: FnOnce() {
 
 pub(crate) fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, signal: B)
     where A: INode + Clone + 'static,
-          B: IntoSignalVec<Item = Dom>,
-          B::SignalVec: 'static {
+          B: SignalVec<Item = Dom> + 'static {
 
     let element = element.clone();
 
@@ -165,7 +164,7 @@ pub(crate) fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Call
     }
 
     // TODO verify that this will drop `children`
-    callbacks.after_remove(for_each_vec(signal.into_signal_vec(), move |change| {
+    callbacks.after_remove(for_each_vec(signal, move |change| {
         let mut state = state.lock().unwrap();
 
         match change {

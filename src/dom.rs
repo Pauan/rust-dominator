@@ -1,3 +1,4 @@
+use std::pin::Pin;
 use std::convert::AsRef;
 use std::marker::PhantomData;
 use stdweb::{Reference, Value, JsSerialize, Once};
@@ -10,11 +11,12 @@ use operations;
 use operations::for_each;
 use dom_operations;
 use operations::{ValueDiscard, FnDiscard, spawn_future};
-use futures_signals::signal::{IntoSignal, Signal};
-use futures_signals::signal_vec::IntoSignalVec;
-use futures_core::{Never, Async};
-use futures_core::task::Context;
+use futures_signals::signal::Signal;
+use futures_signals::signal_vec::SignalVec;
+use futures_core::Poll;
+use futures_core::task::LocalWaker;
 use futures_core::future::Future;
+use futures_util::FutureExt;
 use futures_channel::oneshot;
 use discard::{Discard, DiscardOnDrop};
 
@@ -173,18 +175,22 @@ enum IsWindowLoaded {
 impl Signal for IsWindowLoaded {
     type Item = bool;
 
-    fn poll_change(&mut self, cx: &mut Context) -> Async<Option<Self::Item>> {
-        let result = match self {
+    fn poll_change(self: Pin<&mut Self>, waker: &LocalWaker) -> Poll<Option<Self::Item>> {
+        // Safe to call `get_mut_unchecked` because we won't move the futures.
+        // TODO verify the safety of this
+        let this = unsafe { Pin::get_mut_unchecked(self) };
+
+        let result = match this {
             IsWindowLoaded::Initial {} => {
                 let is_ready: bool = js!( return document.readyState === "complete"; ).try_into().unwrap();
 
                 if is_ready {
-                    Async::Ready(Some(true))
+                    Poll::Ready(Some(true))
 
                 } else {
                     let (sender, receiver) = oneshot::channel();
 
-                    *self = IsWindowLoaded::Pending {
+                    *this = IsWindowLoaded::Pending {
                         receiver,
                         event: IsWindowLoadedEvent::new(move || {
                             // TODO test this
@@ -192,19 +198,19 @@ impl Signal for IsWindowLoaded {
                         }),
                     };
 
-                    Async::Ready(Some(false))
+                    Poll::Ready(Some(false))
                 }
             },
             IsWindowLoaded::Pending { receiver, .. } => {
-                receiver.poll(cx).unwrap().map(|_| Some(true))
+                receiver.poll_unpin(waker).map(|_| Some(true))
             },
             IsWindowLoaded::Done {} => {
-                Async::Ready(None)
+                Poll::Ready(None)
             },
         };
 
-        if let Async::Ready(Some(true)) = result {
-            *self = IsWindowLoaded::Done {};
+        if let Poll::Ready(Some(true)) = result {
+            *this = IsWindowLoaded::Done {};
         }
 
         result
@@ -226,8 +232,7 @@ pub fn text(value: &str) -> Dom {
 // TODO should this inline ?
 pub fn text_signal<A, B>(value: B) -> Dom
     where A: AsStr,
-          B: IntoSignal<Item = A>,
-          B::Signal: 'static {
+          B: Signal<Item = A> + 'static {
 
     let element: TextNode = js!( return document.createTextNode(""); ).try_into().unwrap();
 
@@ -236,7 +241,7 @@ pub fn text_signal<A, B>(value: B) -> Dom
     {
         let element = element.clone();
 
-        callbacks.after_remove(for_each(value.into_signal(), move |value| {
+        callbacks.after_remove(for_each(value, move |value| {
             let value = value.as_str();
             dom_operations::set_text(&element, value);
         }));
@@ -313,15 +318,14 @@ pub fn create_element_ns<A: IElement>(name: &str, namespace: &str) -> A
 fn set_option<A, B, C, D, F>(element: &A, callbacks: &mut Callbacks, value: D, mut f: F)
     where A: Clone + 'static,
           C: OptionStr<Output = B>,
-          D: IntoSignal<Item = C>,
-          D::Signal: 'static,
+          D: Signal<Item = C> + 'static,
           F: FnMut(&A, Option<B>) + 'static {
 
     let element = element.clone();
 
     let mut is_set = false;
 
-    callbacks.after_remove(for_each(value.into_signal(), move |value| {
+    callbacks.after_remove(for_each(value, move |value| {
         let value = value.into_option();
 
         if value.is_some() {
@@ -370,8 +374,7 @@ fn set_style_signal<A, B, C, D, E>(element: &A, callbacks: &mut Callbacks, name:
           B: MultiStr + 'static,
           C: MultiStr,
           D: OptionStr<Output = C>,
-          E: IntoSignal<Item = D>,
-          E::Signal: 'static {
+          E: Signal<Item = D> + 'static {
 
     set_option(element, callbacks, value, move |element, value| {
         match value {
@@ -435,7 +438,7 @@ impl<A> DomBuilder<A> {
     }
 
     #[inline]
-    pub fn future<F>(mut self, future: F) -> Self where F: Future<Item = (), Error = Never> + 'static {
+    pub fn future<F>(mut self, future: F) -> Self where F: Future<Output = ()> + 'static {
         self.callbacks.after_remove(DiscardOnDrop::leak(spawn_future(future)));
         self
     }
@@ -502,12 +505,11 @@ impl<A: AsRef<Reference> + Clone + 'static> DomBuilder<A> {
     fn set_property_signal<B, C, D>(&mut self, name: B, value: D)
         where B: MultiStr + 'static,
               C: JsSerialize,
-              D: IntoSignal<Item = C>,
-              D::Signal: 'static {
+              D: Signal<Item = C> + 'static {
 
         let element = self.element.clone();
 
-        self.callbacks.after_remove(for_each(value.into_signal(), move |value| {
+        self.callbacks.after_remove(for_each(value, move |value| {
             name.each(|name| {
                 dom_operations::set_property(&element, name, &value);
             });
@@ -518,8 +520,7 @@ impl<A: AsRef<Reference> + Clone + 'static> DomBuilder<A> {
     pub fn property_signal<B, C, D>(mut self, name: B, value: D) -> Self
         where B: MultiStr + 'static,
               C: JsSerialize,
-              D: IntoSignal<Item = C>,
-              D::Signal: 'static {
+              D: Signal<Item = C> + 'static {
 
         self.set_property_signal(name, value);
         self
@@ -553,8 +554,7 @@ impl<A: INode> DomBuilder<A> {
 impl<A: INode + Clone + 'static> DomBuilder<A> {
     #[inline]
     pub fn children_signal_vec<B>(mut self, children: B) -> Self
-        where B: IntoSignalVec<Item = Dom>,
-              B::SignalVec: 'static {
+        where B: SignalVec<Item = Dom> + 'static {
 
         assert_eq!(self.has_children, false);
         self.has_children = true;
@@ -595,8 +595,7 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
         where B: MultiStr + 'static,
               C: AsStr,
               D: OptionStr<Output = C>,
-              E: IntoSignal<Item = D>,
-              E::Signal: 'static {
+              E: Signal<Item = D> + 'static {
 
         set_option(&self.element, &mut self.callbacks, value, move |element, value| {
             match value {
@@ -622,8 +621,7 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
         where B: MultiStr + 'static,
               C: AsStr,
               D: OptionStr<Output = C>,
-              E: IntoSignal<Item = D>,
-              E::Signal: 'static {
+              E: Signal<Item = D> + 'static {
 
         self.set_attribute_signal(name, value);
         self
@@ -633,8 +631,7 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
         where B: MultiStr + 'static,
               C: AsStr,
               D: OptionStr<Output = C>,
-              E: IntoSignal<Item = D>,
-              E::Signal: 'static {
+              E: Signal<Item = D> + 'static {
 
         let namespace = namespace.to_owned();
 
@@ -661,8 +658,7 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
         where B: MultiStr + 'static,
               C: AsStr,
               D: OptionStr<Output = C>,
-              E: IntoSignal<Item = D>,
-              E::Signal: 'static {
+              E: Signal<Item = D> + 'static {
 
         self.set_attribute_namespace_signal(namespace, name, value);
         self
@@ -671,14 +667,13 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
 
     fn set_class_signal<B, C>(&mut self, name: B, value: C)
         where B: MultiStr + 'static,
-              C: IntoSignal<Item = bool>,
-              C::Signal: 'static {
+              C: Signal<Item = bool> + 'static {
 
         let element = self.element.clone();
 
         let mut is_set = false;
 
-        self.callbacks.after_remove(for_each(value.into_signal(), move |value| {
+        self.callbacks.after_remove(for_each(value, move |value| {
             if value {
                 if !is_set {
                     is_set = true;
@@ -703,8 +698,7 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
     #[inline]
     pub fn class_signal<B, C>(mut self, name: B, value: C) -> Self
         where B: MultiStr + 'static,
-              C: IntoSignal<Item = bool>,
-              C::Signal: 'static {
+              C: Signal<Item = bool> + 'static {
 
         self.set_class_signal(name, value);
         self
@@ -713,13 +707,10 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
 
     // TODO use OptionStr ?
     fn set_scroll_signal<B, F>(&mut self, signal: B, mut f: F)
-        where B: IntoSignal<Item = Option<f64>>,
-              B::Signal: 'static,
+        where B: Signal<Item = Option<f64>> + 'static,
               F: FnMut(&A, f64) + 'static {
 
         let element = self.element.clone();
-
-        let signal = signal.into_signal();
 
         // This needs to use `after_insert` because scrolling an element before it is in the DOM has no effect
         self.callbacks.after_insert(move |callbacks| {
@@ -732,13 +723,13 @@ impl<A: IElement + Clone + 'static> DomBuilder<A> {
     }
 
     #[inline]
-    pub fn scroll_left_signal<B>(mut self, signal: B) -> Self where B: IntoSignal<Item = Option<f64>>, B::Signal: 'static {
+    pub fn scroll_left_signal<B>(mut self, signal: B) -> Self where B: Signal<Item = Option<f64>> + 'static {
         self.set_scroll_signal(signal, IElement::set_scroll_left);
         self
     }
 
     #[inline]
-    pub fn scroll_top_signal<B>(mut self, signal: B) -> Self where B: IntoSignal<Item = Option<f64>>, B::Signal: 'static {
+    pub fn scroll_top_signal<B>(mut self, signal: B) -> Self where B: Signal<Item = Option<f64>> + 'static {
         self.set_scroll_signal(signal, IElement::set_scroll_top);
         self
     }
@@ -768,8 +759,7 @@ impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
         where B: MultiStr + 'static,
               C: MultiStr,
               D: OptionStr<Output = C>,
-              E: IntoSignal<Item = D>,
-              E::Signal: 'static {
+              E: Signal<Item = D> + 'static {
 
         set_style_signal(&self.element, &mut self.callbacks, name, value, false);
         self
@@ -780,8 +770,7 @@ impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
         where B: MultiStr + 'static,
               C: MultiStr,
               D: OptionStr<Output = C>,
-              E: IntoSignal<Item = D>,
-              E::Signal: 'static {
+              E: Signal<Item = D> + 'static {
 
         set_style_signal(&self.element, &mut self.callbacks, name, value, true);
         self
@@ -804,12 +793,9 @@ impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
 
 
     fn set_focused_signal<B>(&mut self, value: B)
-        where B: IntoSignal<Item = bool>,
-              B::Signal: 'static {
+        where B: Signal<Item = bool> + 'static {
 
         let element = self.element.clone();
-
-        let value = value.into_signal();
 
         // This needs to use `after_insert` because calling `.focus()` on an element before it is in the DOM has no effect
         self.callbacks.after_insert(move |callbacks| {
@@ -823,8 +809,7 @@ impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
 
     #[inline]
     pub fn focused_signal<B>(mut self, value: B) -> Self
-        where B: IntoSignal<Item = bool>,
-              B::Signal: 'static {
+        where B: Signal<Item = bool> + 'static {
 
         self.set_focused_signal(value);
         self
@@ -886,8 +871,7 @@ impl StylesheetBuilder {
         where B: MultiStr + 'static,
               C: MultiStr,
               D: OptionStr<Output = C>,
-              E: IntoSignal<Item = D>,
-              E::Signal: 'static {
+              E: Signal<Item = D> + 'static {
 
         set_style_signal(&self.element, &mut self.callbacks, name, value, false);
         self
@@ -898,8 +882,7 @@ impl StylesheetBuilder {
         where B: MultiStr + 'static,
               C: MultiStr,
               D: OptionStr<Output = C>,
-              E: IntoSignal<Item = D>,
-              E::Signal: 'static {
+              E: Signal<Item = D> + 'static {
 
         set_style_signal(&self.element, &mut self.callbacks, name, value, true);
         self
@@ -971,8 +954,7 @@ impl ClassBuilder {
         where B: MultiStr + 'static,
               C: MultiStr,
               D: OptionStr<Output = C>,
-              E: IntoSignal<Item = D>,
-              E::Signal: 'static {
+              E: Signal<Item = D> + 'static {
 
         self.stylesheet = self.stylesheet.style_signal(name, value);
         self
@@ -983,8 +965,7 @@ impl ClassBuilder {
         where B: MultiStr + 'static,
               C: MultiStr,
               D: OptionStr<Output = C>,
-              E: IntoSignal<Item = D>,
-              E::Signal: 'static {
+              E: Signal<Item = D> + 'static {
 
         self.stylesheet = self.stylesheet.style_important_signal(name, value);
         self
