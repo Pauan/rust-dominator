@@ -773,6 +773,12 @@ impl<A: IHtmlElement> DomBuilder<A> {
         set_style(&self.element, &name, value, true);
         self
     }
+
+    // TODO make this more efficient
+    #[inline]
+    pub fn hidden(self) -> Self {
+        self.property("hidden", true)
+    }
 }
 
 impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
@@ -835,6 +841,13 @@ impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
 
         self.set_focused_signal(value);
         self
+    }
+
+
+    // TODO make this more efficient
+    #[inline]
+    pub fn hidden_signal<B>(self, value: B) -> Self where B: Signal<Item = bool> + 'static {
+        self.property_signal("hidden", value)
     }
 }
 
