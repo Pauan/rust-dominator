@@ -86,6 +86,10 @@ pub struct CssStyleRule(Reference);
 #[reference(subclass_of(EventTarget, Node, Element))]
 pub struct SvgElement(Reference);
 
+impl IEventTarget for SvgElement {}
+impl INode for SvgElement {}
+impl IElement for SvgElement {}
+
 
 // https://developer.mozilla.org/en-US/docs/Web/API/Document/createElementNS#Valid%20Namespace%20URIs
 pub const HTML_NAMESPACE: &str = "http://www.w3.org/1999/xhtml";
