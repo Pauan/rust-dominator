@@ -129,17 +129,15 @@ fn main() {
 
     /*dominator::append_dom(&body,
         html!("button", {
-            event(clone!(state => move |_: ClickEvent| {
+            .event(clone!(state => move |_: ClickEvent| {
                 js! { @(no_return)
                     clearInterval(@{&timer_id});
                 }
 
                 state.boxes.clear();
-            }));
+            }))
 
-            children(&mut [
-                text("Clear all animations")
-            ]);
+            .text("Clear all animations")
         })
     );*/
 

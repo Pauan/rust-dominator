@@ -22,7 +22,7 @@ use stdweb::traits::*;
 
 use futures_signals::signal::{SignalExt, Mutable};
 use futures_signals::signal_vec::{SignalVecExt, MutableVec};
-use dominator::{Dom, text, text_signal};
+use dominator::{Dom, text};
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,9 +137,7 @@ fn simple(kind: &str, children: &mut [Dom]) -> Dom {
 fn link(href: &str, t: &str) -> Dom {
     html!("a", {
         .attribute("href", href)
-        .children(&mut [
-            text(t),
-        ])
+        .text(t)
     })
 }
 
@@ -154,13 +152,11 @@ fn filter_button(state: Rc<State>, kind: Filter) -> Dom {
             Filter::All => "#/",
         })
 
-        .children(&mut [
-            text(match kind {
-                Filter::Active => "Active",
-                Filter::Completed => "Completed",
-                Filter::All => "All",
-            })
-        ])
+        .text(match kind {
+            Filter::Active => "Active",
+            Filter::Completed => "Completed",
+            Filter::All => "All",
+        })
     })
 }
 
@@ -184,9 +180,9 @@ fn main() {
                 html!("header", {
                     .class("header")
                     .children(&mut [
-                        simple("h1", &mut [
-                            text("todos"),
-                        ]),
+                        html!("h1", {
+                            .text("todos")
+                        }),
                         html!("input", {
                             .focused(true)
                             .class("new-todo")
@@ -263,9 +259,7 @@ fn main() {
 
                         html!("label", {
                             .attribute("for", "toggle-all")
-                            .children(&mut [
-                                text("Mark all as complete"),
-                            ])
+                            .text("Mark all as complete")
                         }),
 
                         html!("ul", {
@@ -312,9 +306,7 @@ fn main() {
                                                             todo.editing.set_neq(Some(todo.title.get_cloned()));
                                                         }))
 
-                                                        .children(&mut [
-                                                            text_signal(todo.title.signal_cloned()),
-                                                        ])
+                                                        .text_signal(todo.title.signal_cloned())
                                                     }),
 
                                                     html!("button", {
@@ -396,9 +388,9 @@ fn main() {
                                 // TODO make this more efficient
                                 .map(|len| {
                                     vec![
-                                        simple("strong", &mut [
-                                            text(&len.to_string())
-                                        ]),
+                                        html!("strong", {
+                                            .text(&len.to_string())
+                                        }),
                                         text(if len == 1 {
                                             " item left"
                                         } else {
@@ -437,9 +429,7 @@ fn main() {
                                 state.serialize();
                             }))
 
-                            .children(&mut [
-                                text("Clear completed"),
-                            ])
+                            .text("Clear completed")
                         }),
                     ])
                 }),
@@ -451,9 +441,9 @@ fn main() {
         html!("footer", {
             .class("info")
             .children(&mut [
-                simple("p", &mut [
-                    text("Double-click to edit a todo"),
-                ]),
+                html!("p", {
+                    .text("Double-click to edit a todo")
+                }),
                 simple("p", &mut [
                     text("Created by "),
                     link("https://github.com/Pauan", "Pauan"),

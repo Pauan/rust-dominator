@@ -549,6 +549,24 @@ impl<A: INode> DomBuilder<A> {
         operations::insert_children_iter(&self.element, &mut self.callbacks, children);
         self
     }
+
+    #[inline]
+    pub fn text(self, value: &str) -> Self {
+        // TODO make this more efficient ?
+        self.children(&mut [
+            text(value),
+        ])
+    }
+
+    #[inline]
+    pub fn text_signal<B, C>(self, value: C) -> Self
+        where B: AsStr,
+              C: Signal<Item = B> + 'static {
+        // TODO make this more efficient ?
+        self.children(&mut [
+            text_signal(value),
+        ])
+    }
 }
 
 impl<A: INode + Clone + 'static> DomBuilder<A> {
