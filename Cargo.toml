@@ -1,6 +1,6 @@
 [package]
 name = "dominator"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Pauan <pcxunlimited@gmail.com>"]
 description = "Zero cost virtual DOM library using FRP signals"
 repository = "https://github.com/Pauan/rust-dominator"
@@ -18,13 +18,10 @@ pin-utils = "0.1.0-alpha.3"
 futures-core-preview = "0.3.0-alpha.7"
 futures-channel-preview = "0.3.0-alpha.7"
 futures-util-preview = "0.3.0-alpha.7"
-#futures-signals = { path = "../rust-signals" }
-futures-signals = { git = "https://github.com/Pauan/rust-signals" }
+futures-signals = "0.2.0"
 
 [dependencies.stdweb]
-version = "0.4.6"
-#git = "https://github.com/koute/stdweb"
-#path = "../stdweb"
+version = "0.4.10"
 features = ["experimental_features_which_may_break_on_minor_version_bumps"]
 
 [profile.release]
