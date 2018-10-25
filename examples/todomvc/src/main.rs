@@ -226,9 +226,9 @@ fn main() {
                     .class("main")
 
                     // Hide if it doesn't have any todos.
-                    .property_signal("hidden", state.todo_list.signal_vec_cloned()
+                    .visible_signal(state.todo_list.signal_vec_cloned()
                         .len()
-                        .map(|len| len == 0))
+                        .map(|len| len > 0))
 
                     .children(&mut [
                         html!("input", {
@@ -273,8 +273,7 @@ fn main() {
 
                                         .class_signal("completed", todo.completed.signal())
 
-                                        .property_signal("hidden",
-                                            map_ref!(
+                                        .visible_signal(map_ref!(
                                                 let filter = state.filter.signal(),
                                                 let completed = todo.completed.signal() =>
                                                 match *filter {
@@ -283,7 +282,7 @@ fn main() {
                                                     Filter::All => true,
                                                 }
                                             )
-                                            .dedupe_map(|show| !*show))
+                                            .dedupe())
 
                                         .children(&mut [
                                             html!("div", {
@@ -325,8 +324,8 @@ fn main() {
                                                 .property_signal("value", todo.editing.signal_cloned()
                                                     .map(|x| x.unwrap_or_else(|| "".to_owned())))
 
-                                                .property_signal("hidden", todo.editing.signal_cloned()
-                                                    .map(|x| x.is_none()))
+                                                .visible_signal(todo.editing.signal_cloned()
+                                                    .map(|x| x.is_some()))
 
                                                 // TODO dedupe this somehow ?
                                                 .focused_signal(todo.editing.signal_cloned()
@@ -373,9 +372,9 @@ fn main() {
                     .class("footer")
 
                     // Hide if it doesn't have any todos.
-                    .property_signal("hidden", state.todo_list.signal_vec_cloned()
+                    .visible_signal(state.todo_list.signal_vec_cloned()
                         .len()
-                        .map(|len| len == 0))
+                        .map(|len| len > 0))
 
                     .children(&mut [
                         html!("span", {
@@ -418,11 +417,11 @@ fn main() {
                             .class("clear-completed")
 
                             // Hide if it doesn't have any completed items.
-                            .property_signal("hidden", state.todo_list.signal_vec_cloned()
+                            .visible_signal(state.todo_list.signal_vec_cloned()
                                 .map_signal(|todo| todo.completed.signal())
                                 .filter(|completed| *completed)
                                 .len()
-                                .map(|len| len == 0))
+                                .map(|len| len > 0))
 
                             .event(clone!(state => move |_: ClickEvent| {
                                 state.todo_list.lock_mut().retain(|todo| todo.completed.get() == false);

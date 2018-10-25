@@ -11,7 +11,7 @@ use operations;
 use operations::for_each;
 use dom_operations;
 use operations::{ValueDiscard, FnDiscard, spawn_future};
-use futures_signals::signal::Signal;
+use futures_signals::signal::{Signal, not};
 use futures_signals::signal_vec::SignalVec;
 use futures_core::Poll;
 use futures_core::task::LocalWaker;
@@ -776,8 +776,8 @@ impl<A: IHtmlElement> DomBuilder<A> {
 
     // TODO make this more efficient
     #[inline]
-    pub fn hidden(self) -> Self {
-        self.property("hidden", true)
+    pub fn visible(self, value: bool) -> Self {
+        self.property("hidden", !value)
     }
 }
 
@@ -846,8 +846,8 @@ impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
 
     // TODO make this more efficient
     #[inline]
-    pub fn hidden_signal<B>(self, value: B) -> Self where B: Signal<Item = bool> + 'static {
-        self.property_signal("hidden", value)
+    pub fn visible_signal<B>(self, value: B) -> Self where B: Signal<Item = bool> + 'static {
+        self.property_signal("hidden", not(value))
     }
 }
 
