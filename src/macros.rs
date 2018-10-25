@@ -4,9 +4,10 @@ macro_rules! builder {
         builder!($namespace, $default, $kind => $t, {})
     };
     ($namespace:expr, $default:ty, $kind:expr => $t:ty, { $(.$name:ident($($args:expr),*))* }) => {{
-        let a: $crate::DomBuilder<$t> = $crate::DomBuilder::new($crate::create_element_ns($kind, $namespace))$(.$name($($args),*))*;
-        let b: $crate::Dom = $crate::DomBuilder::into_dom(a);
-        b
+        let a: $crate::DomBuilder<$t> = $crate::DomBuilder::new($crate::create_element_ns($kind, $namespace));
+        let b = a$(.$name($($args),*))*;
+        let c: $crate::Dom = $crate::DomBuilder::into_dom(b);
+        c
     }};
 
     ($namespace:expr, $default:ty, $kind:expr) => {
