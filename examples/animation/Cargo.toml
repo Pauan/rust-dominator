@@ -5,11 +5,9 @@ authors = ["Pauan <pcxunlimited@gmail.com>"]
 
 [dependencies]
 dominator = { path = "../.." }
-#futures-signals = { path = "../../../rust-signals" }
-futures-signals = { git = "https://github.com/Pauan/rust-signals" }
+futures-signals = "0.2.0"
+futures-preview = "0.3.0-alpha.9"
 
 [dependencies.stdweb]
-version = "0.4.6"
-#git = "https://github.com/koute/stdweb"
-#path = "../../../stdweb"
+version = "0.4.10"
 features = ["experimental_features_which_may_break_on_minor_version_bumps"]

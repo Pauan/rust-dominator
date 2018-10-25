@@ -4,8 +4,10 @@ extern crate stdweb;
 extern crate dominator;
 #[macro_use]
 extern crate futures_signals;
+extern crate futures;
 
 use std::rc::Rc;
+use futures::future::ready;
 use futures_signals::signal::SignalExt;
 use futures_signals::signal_vec::MutableVec;
 use dominator::traits::*;
@@ -34,7 +36,7 @@ fn make_animated_box(value: u32, broadcaster: AnimatedMapBroadcaster) -> Dom {
                 animation.animate_to(Percentage::new(0.0));
             }
 
-            Ok(())
+            ready(())
         })))
 
         .event(clone!(hover_animation => move |_: MouseOverEvent| {
