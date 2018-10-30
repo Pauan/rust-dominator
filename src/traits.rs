@@ -3,10 +3,12 @@ use dom::RefFn;
 pub use animation::AnimatedSignalVec;
 
 
+#[deprecated(since = "0.3.2", note = "Use the apply or apply_if methods instead")]
 pub trait Mixin<A> {
     fn apply(self, builder: A) -> A;
 }
 
+#[allow(deprecated)]
 impl<A, F> Mixin<A> for F where F: FnOnce(A) -> A {
     #[inline]
     fn apply(self, builder: A) -> A {

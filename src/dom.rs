@@ -447,11 +447,32 @@ impl<A> DomBuilder<A> {
         self
     }
 
+
+    #[inline]
+    pub fn apply<F>(self, f: F) -> Self where F: FnOnce(Self) -> Self {
+        self.apply_if(true, f)
+    }
+
+    #[inline]
+    pub fn apply_if<F>(self, test: bool, f: F) -> Self where F: FnOnce(Self) -> Self {
+        if test {
+            f(self)
+
+        } else {
+            self
+        }
+    }
+
+
+    #[deprecated(since = "0.3.2", note = "Use apply instead")]
+    #[allow(deprecated)]
     #[inline]
     pub fn mixin<B: Mixin<Self>>(self, mixin: B) -> Self {
         self.mixin_if(true, mixin)
     }
 
+    #[deprecated(since = "0.3.2", note = "Use apply_if instead")]
+    #[allow(deprecated)]
     #[inline]
     pub fn mixin_if<B: Mixin<Self>>(self, test: bool, mixin: B) -> Self {
         if test {
