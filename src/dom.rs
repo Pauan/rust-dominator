@@ -449,7 +449,17 @@ impl<A> DomBuilder<A> {
 
     #[inline]
     pub fn mixin<B: Mixin<Self>>(self, mixin: B) -> Self {
-        mixin.apply(self)
+        self.mixin_if(true, mixin)
+    }
+
+    #[inline]
+    pub fn mixin_if<B: Mixin<Self>>(self, test: bool, mixin: B) -> Self {
+        if test {
+            mixin.apply(self)
+
+        } else {
+            self
+        }
     }
 }
 
