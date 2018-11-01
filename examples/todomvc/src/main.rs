@@ -13,16 +13,15 @@ use std::rc::Rc;
 use std::cell::Cell;
 
 // TODO replace most of these with dominator
-use stdweb::web::{window, document};
-use stdweb::web::event::{InputEvent, ClickEvent, HashChangeEvent, KeyDownEvent, ChangeEvent, DoubleClickEvent, BlurEvent};
+use stdweb::web::window;
 use stdweb::web::html_element::InputElement;
-use stdweb::web::HtmlElement;
 use stdweb::unstable::TryInto;
 use stdweb::traits::*;
 
-use futures_signals::signal::{SignalExt, Mutable};
+use futures_signals::signal::{Signal, SignalExt, Mutable};
 use futures_signals::signal_vec::{SignalVecExt, MutableVec};
-use dominator::{Dom, text};
+use dominator::{Dom, text, routing, HtmlElement};
+use dominator::events::{InputEvent, ClickEvent, KeyDownEvent, ChangeEvent, DoubleClickEvent, BlurEvent};
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,15 +31,41 @@ enum Filter {
     All,
 }
 
-impl Default for Filter {
+impl Filter {
+    fn signal() -> impl Signal<Item = Self> {
+        routing::url().map(|url| {
+            match url.hash().as_str() {
+                "#/active" => Filter::Active,
+                "#/completed" => Filter::Completed,
+                _ => Filter::All,
+            }
+        })
+    }
+
     #[inline]
-    fn default() -> Self {
-        Filter::All
+    fn button(kind: Self) -> Dom {
+        let url = match kind {
+            Filter::Active => "#/active",
+            Filter::Completed => "#/completed",
+            Filter::All => "#/",
+        };
+
+        let text = match kind {
+            Filter::Active => "Active",
+            Filter::Completed => "Completed",
+            Filter::All => "All",
+        };
+
+        routing::link(url, |dom| { dom
+            .class_signal("selected", Self::signal()
+                .map(clone!(kind => move |filter| filter == kind)))
+            .text(text)
+        })
     }
 }
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Todo {
     id: u32,
     title: Mutable<String>,
@@ -51,7 +76,7 @@ struct Todo {
 }
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct State {
     todo_id: Cell<u32>,
 
@@ -59,9 +84,6 @@ struct State {
     new_todo_title: Mutable<String>,
 
     todo_list: MutableVec<Rc<Todo>>,
-
-    #[serde(skip)]
-    filter: Mutable<Filter>,
 }
 
 impl State {
@@ -70,7 +92,6 @@ impl State {
             todo_id: Cell::new(0),
             new_todo_title: Mutable::new("".to_owned()),
             todo_list: MutableVec::new(),
-            filter: Mutable::new(Filter::All),
         }
     }
 
@@ -79,20 +100,12 @@ impl State {
         self.todo_list.lock_mut().retain(|x| x.id != todo.id);
     }
 
-    fn update_filter(&self) {
-        let hash = document().location().unwrap().hash().unwrap();
-
-        self.filter.set_neq(match hash.as_str() {
-            "#/active" => Filter::Active,
-            "#/completed" => Filter::Completed,
-            _ => Filter::All,
-        });
-    }
-
     fn deserialize() -> Self {
-        window().local_storage().get("todos-rust-dominator").and_then(|state_json| {
-            serde_json::from_str(state_json.as_str()).ok()
-        }).unwrap_or_else(State::new)
+        window().local_storage().get("todos-rust-dominator")
+            .and_then(|state_json| {
+                serde_json::from_str(state_json.as_str()).ok()
+            })
+            .unwrap_or_else(State::new)
     }
 
     fn serialize(&self) {
@@ -126,50 +139,9 @@ fn get_checked(event: &ChangeEvent) -> bool {
     js!( return @{&event.target()}.checked; ).try_into().unwrap()
 }
 
-#[inline]
-fn simple(kind: &str, children: &mut [Dom]) -> Dom {
-    html!(kind, {
-        .children(children)
-    })
-}
-
-#[inline]
-fn link(href: &str, t: &str) -> Dom {
-    html!("a", {
-        .attribute("href", href)
-        .text(t)
-    })
-}
-
-fn filter_button(state: Rc<State>, kind: Filter) -> Dom {
-    html!("a", {
-        .class_signal("selected", state.filter.signal()
-            .map(clone!(kind => move |filter| filter == kind)))
-
-        .attribute("href", match kind {
-            Filter::Active => "#/active",
-            Filter::Completed => "#/completed",
-            Filter::All => "#/",
-        })
-
-        .text(match kind {
-            Filter::Active => "Active",
-            Filter::Completed => "Completed",
-            Filter::All => "All",
-        })
-    })
-}
-
 
 fn main() {
     let state = Rc::new(State::deserialize());
-
-    state.update_filter();
-
-    window().add_event_listener(clone!(state => move |_: HashChangeEvent| {
-        state.update_filter();
-    }));
-
 
     let body = dominator::body();
 
@@ -274,7 +246,7 @@ fn main() {
                                         .class_signal("completed", todo.completed.signal())
 
                                         .visible_signal(map_ref!(
-                                                let filter = state.filter.signal(),
+                                                let filter = Filter::signal(),
                                                 let completed = todo.completed.signal() =>
                                                 match *filter {
                                                     Filter::Active => !completed,
@@ -402,15 +374,21 @@ fn main() {
                         html!("ul", {
                             .class("filters")
                             .children(&mut [
-                                simple("li", &mut [
-                                    filter_button(state.clone(), Filter::All),
-                                ]),
-                                simple("li", &mut [
-                                    filter_button(state.clone(), Filter::Active),
-                                ]),
-                                simple("li", &mut [
-                                    filter_button(state.clone(), Filter::Completed),
-                                ]),
+                                html!("li", {
+                                    .children(&mut [
+                                        Filter::button(Filter::All),
+                                    ])
+                                }),
+                                html!("li", {
+                                    .children(&mut [
+                                        Filter::button(Filter::Active),
+                                    ])
+                                }),
+                                html!("li", {
+                                    .children(&mut [
+                                        Filter::button(Filter::Completed),
+                                    ])
+                                }),
                             ])
                         }),
                         html!("button", {
@@ -443,14 +421,24 @@ fn main() {
                 html!("p", {
                     .text("Double-click to edit a todo")
                 }),
-                simple("p", &mut [
-                    text("Created by "),
-                    link("https://github.com/Pauan", "Pauan"),
-                ]),
-                simple("p", &mut [
-                    text("Part of "),
-                    link("http://todomvc.com", "TodoMVC"),
-                ]),
+                html!("p", {
+                    .children(&mut [
+                        text("Created by "),
+                        html!("a", {
+                            .attribute("href", "https://github.com/Pauan")
+                            .text("Pauan")
+                        }),
+                    ])
+                }),
+                html!("p", {
+                    .children(&mut [
+                        text("Part of "),
+                        html!("a", {
+                            .attribute("href", "http://todomvc.com")
+                            .text("TodoMVC")
+                        }),
+                    ])
+                }),
             ])
         }),
     );

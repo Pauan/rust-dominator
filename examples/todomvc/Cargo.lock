@@ -10,7 +10,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "dominator"
-version = "0.2.3"
+version = "0.3.2"
 dependencies = [
  "discard 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-channel-preview 0.3.0-alpha.9 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -279,7 +279,7 @@ dependencies = [
 name = "todomvc"
 version = "0.1.0"
 dependencies = [
- "dominator 0.2.3",
+ "dominator 0.3.2",
  "futures-signals 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",

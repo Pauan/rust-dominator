@@ -81,6 +81,7 @@ pub struct CssStyleRule(Reference);
 /// A reference to an SVG Element.
 ///
 /// [(JavaScript docs)](https://developer.mozilla.org/en-US/docs/Web/API/SVGElement)
+// TODO move this into stdweb
 #[derive(Clone, Debug, PartialEq, Eq, ReferenceType)]
 #[reference(instance_of = "SVGElement")]
 #[reference(subclass_of(EventTarget, Node, Element))]
@@ -89,6 +90,152 @@ pub struct SvgElement(Reference);
 impl IEventTarget for SvgElement {}
 impl INode for SvgElement {}
 impl IElement for SvgElement {}
+
+
+// TODO move this into stdweb
+#[derive(Clone, Debug, PartialEq, Eq, ReferenceType)]
+#[reference(instance_of = "URL")]
+pub struct Url( Reference );
+
+// TODO create_object_url, revoke_object_url, and search_params
+impl Url {
+    #[inline]
+    pub fn new( url: &str ) -> Self {
+        js!( return new URL( @{url} ); ).try_into().unwrap()
+    }
+
+    #[inline]
+    pub fn hash( &self ) -> String {
+        js!( return @{&self.0}.hash; ).try_into().unwrap()
+    }
+
+    #[inline]
+    pub fn set_hash( &self, hash: &str ) {
+        js! { @(no_return)
+            @{&self.0}.hash = @{hash};
+        }
+    }
+
+    #[inline]
+    pub fn host( &self ) -> String {
+        js!( return @{&self.0}.host; ).try_into().unwrap()
+    }
+
+    #[inline]
+    pub fn set_host( &self, host: &str ) {
+        js! { @(no_return)
+            @{&self.0}.host = @{host};
+        }
+    }
+
+    #[inline]
+    pub fn hostname( &self ) -> String {
+        js!( return @{&self.0}.hostname; ).try_into().unwrap()
+    }
+
+    #[inline]
+    pub fn set_hostname( &self, hostname: &str ) {
+        js! { @(no_return)
+            @{&self.0}.hostname = @{hostname};
+        }
+    }
+
+    #[inline]
+    pub fn href( &self ) -> String {
+        js!( return @{&self.0}.href; ).try_into().unwrap()
+    }
+
+    #[inline]
+    pub fn set_href( &self, href: &str ) {
+        js! { @(no_return)
+            @{&self.0}.href = @{href};
+        }
+    }
+
+    #[inline]
+    pub fn origin( &self ) -> String {
+        js!( return @{&self.0}.origin; ).try_into().unwrap()
+    }
+
+    #[inline]
+    pub fn password( &self ) -> String {
+        js!( return @{&self.0}.password; ).try_into().unwrap()
+    }
+
+    #[inline]
+    pub fn set_password( &self, password: &str ) {
+        js! { @(no_return)
+            @{&self.0}.password = @{password};
+        }
+    }
+
+    #[inline]
+    pub fn pathname( &self ) -> String {
+        js!( return @{&self.0}.pathname; ).try_into().unwrap()
+    }
+
+    #[inline]
+    pub fn set_pathname( &self, pathname: &str ) {
+        js! { @(no_return)
+            @{&self.0}.pathname = @{pathname};
+        }
+    }
+
+    #[inline]
+    pub fn port( &self ) -> String {
+        js!( return @{&self.0}.port; ).try_into().unwrap()
+    }
+
+    #[inline]
+    pub fn set_port( &self, port: &str ) {
+        js! { @(no_return)
+            @{&self.0}.port = @{port};
+        }
+    }
+
+    #[inline]
+    pub fn protocol( &self ) -> String {
+        js!( return @{&self.0}.protocol; ).try_into().unwrap()
+    }
+
+    #[inline]
+    pub fn set_protocol( &self, protocol: &str ) {
+        js! { @(no_return)
+            @{&self.0}.protocol = @{protocol};
+        }
+    }
+
+    #[inline]
+    pub fn search( &self ) -> String {
+        js!( return @{&self.0}.search; ).try_into().unwrap()
+    }
+
+    #[inline]
+    pub fn set_search( &self, search: &str ) {
+        js! { @(no_return)
+            @{&self.0}.search = @{search};
+        }
+    }
+
+    #[inline]
+    pub fn username( &self ) -> String {
+        js!( return @{&self.0}.username; ).try_into().unwrap()
+    }
+
+    #[inline]
+    pub fn set_username( &self, username: &str ) {
+        js! { @(no_return)
+            @{&self.0}.username = @{username};
+        }
+    }
+}
+
+impl ::std::fmt::Display for Url {
+    #[inline]
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        self.href().fmt(f)
+    }
+}
 
 
 // https://developer.mozilla.org/en-US/docs/Web/API/Document/createElementNS#Valid%20Namespace%20URIs

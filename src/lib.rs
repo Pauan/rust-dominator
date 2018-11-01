@@ -19,6 +19,7 @@ extern crate futures_signals;
 extern crate pin_utils;
 
 
+#[macro_use]
 mod macros;
 mod callbacks;
 mod operations;
@@ -28,6 +29,7 @@ mod dom;
 pub use dom::*;
 pub mod traits;
 pub mod animation;
+pub mod routing;
 
 pub use stdweb::web::HtmlElement;
 
