@@ -60,17 +60,20 @@ struct TimestampsGlobal {
     value: Arc<RwLock<Option<f64>>>,
 }
 
+#[derive(Debug)]
 enum TimestampsEnum {
     First,
     Changed,
     NotChanged,
 }
 
+#[derive(Debug)]
 struct TimestampsState {
     state: TimestampsEnum,
     waker: Option<Waker>,
 }
 
+#[derive(Debug)]
 pub struct Timestamps {
     state: Arc<Mutex<TimestampsState>>,
     // TODO verify that there aren't any Arc cycles
@@ -189,6 +192,7 @@ impl<S: SignalVec> AnimatedSignalVec for S {
 }
 
 
+#[derive(Debug)]
 pub struct AnimatedMapBroadcaster(MutableAnimation);
 
 impl AnimatedMapBroadcaster {
@@ -200,12 +204,14 @@ impl AnimatedMapBroadcaster {
 }
 
 
+#[derive(Debug)]
 struct AnimatedMapState {
     animation: MutableAnimation,
     removing: Option<WaitFor<MutableAnimationSignal>>,
 }
 
 // TODO move this into signals crate and also generalize it to work with any future, not just animations
+#[derive(Debug)]
 pub struct AnimatedMap<A, B> {
     duration: f64,
     animations: Vec<AnimatedMapState>,
@@ -517,19 +523,27 @@ impl MutableTimestamps<F> where F: FnMut(f64) {
 }*/
 
 
+pub fn timestamps_difference() -> impl Signal<Item = Option<f64>> {
+    let mut starting_time = None;
+
+    timestamps().map(move |current_time| {
+        current_time.map(|current_time| {
+            let starting_time = *starting_time.get_or_insert(current_time);
+            current_time - starting_time
+        })
+    })
+}
+
+
 pub struct OnTimestampDiff(DiscardOnDrop<CancelableFutureHandle>);
 
 impl OnTimestampDiff {
     pub fn new<F>(mut callback: F) -> Self where F: FnMut(f64) + 'static {
-        let mut starting_time = None;
-
         OnTimestampDiff(spawn_future(
-            timestamps()
-                .for_each(move |current_time| {
-                    if let Some(current_time) = current_time {
-                        let starting_time = *starting_time.get_or_insert(current_time);
-
-                        callback(current_time - starting_time);
+            timestamps_difference()
+                .for_each(move |diff| {
+                    if let Some(diff) = diff {
+                        callback(diff);
                     }
 
                     ready(())
@@ -546,6 +560,7 @@ impl fmt::Debug for OnTimestampDiff {
 }
 
 
+#[derive(Debug)]
 pub struct MutableAnimationSignal(MutableSignal<Percentage>);
 
 impl Signal for MutableAnimationSignal {
@@ -570,6 +585,8 @@ struct MutableAnimationInner {
     value: Mutable<Percentage>,
 }
 
+// TODO deref to ReadOnlyMutable ?
+// TODO provide read_only() method ?
 pub struct MutableAnimation {
     inner: Arc<MutableAnimationInner>,
 }
