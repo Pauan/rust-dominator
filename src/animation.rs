@@ -523,7 +523,7 @@ impl MutableTimestamps<F> where F: FnMut(f64) {
 }*/
 
 
-pub fn timestamps_difference() -> impl Signal<Item = Option<f64>> {
+pub fn timestamps_absolute_difference() -> impl Signal<Item = Option<f64>> {
     let mut starting_time = None;
 
     timestamps().map(move |current_time| {
@@ -535,12 +535,27 @@ pub fn timestamps_difference() -> impl Signal<Item = Option<f64>> {
 }
 
 
+pub fn timestamps_difference() -> impl Signal<Item = Option<f64>> {
+    let mut previous_time = None;
+
+    timestamps().map(move |current_time| {
+        let diff = current_time.map(|current_time| {
+            previous_time.map(|previous_time| current_time - previous_time).unwrap_or(0.0)
+        });
+
+        previous_time = current_time;
+
+        diff
+    })
+}
+
+
 pub struct OnTimestampDiff(DiscardOnDrop<CancelableFutureHandle>);
 
 impl OnTimestampDiff {
     pub fn new<F>(mut callback: F) -> Self where F: FnMut(f64) + 'static {
         OnTimestampDiff(spawn_future(
-            timestamps_difference()
+            timestamps_absolute_difference()
                 .for_each(move |diff| {
                     if let Some(diff) = diff {
                         callback(diff);
