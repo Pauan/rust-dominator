@@ -41,15 +41,15 @@ impl<A> State<A> {
 }*/
 
 
-fn current_url() -> String {
+fn current_url_string() -> String {
     window().location().unwrap().href().unwrap()
 }
 
 // TODO inline ?
 fn change_url(mutable: &Mutable<Url>) {
-    let new_url = current_url();
-
     let mut lock = mutable.lock_mut();
+
+    let new_url = current_url_string();
 
     // TODO test that this doesn't notify if the URLs are the same
     // TODO helper method for this
@@ -68,7 +68,7 @@ struct CurrentUrl {
 impl CurrentUrl {
     #[inline]
     fn new() -> Self {
-        let value = Mutable::new(Url::new(&current_url()));
+        let value = Mutable::new(Url::new(&current_url_string()));
 
         let callback = {
             let value = value.clone();
@@ -103,6 +103,12 @@ impl Drop for CurrentUrl {
 // TODO use thread_local instead ?
 lazy_static! {
     static ref URL: CurrentUrl = CurrentUrl::new();
+}
+
+
+#[inline]
+pub fn current_url() -> Url {
+    URL.value.get_cloned()
 }
 
 
