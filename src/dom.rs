@@ -246,6 +246,13 @@ pub const SVG_NAMESPACE: &str = "http://www.w3.org/2000/svg";
 pub const HIGHEST_ZINDEX: &str = "2147483647";
 
 
+lazy_static! {
+    static ref HIDDEN_CLASS: String = class! {
+        .style_important("display", "none")
+    };
+}
+
+
 // TODO this should be in stdweb
 // TODO this should return HtmlBodyElement
 pub fn body() -> HtmlElement {
@@ -952,10 +959,16 @@ impl<A: IHtmlElement> DomBuilder<A> {
         self
     }
 
-    // TODO make this more efficient
+    // TODO make this more efficient ?
     #[inline]
     pub fn visible(self, value: bool) -> Self {
-        self.property("hidden", !value)
+        if value {
+            // TODO remove the class somehow ?
+            self
+
+        } else {
+            self.class(&*HIDDEN_CLASS)
+        }
     }
 }
 
@@ -1022,10 +1035,10 @@ impl<A: IHtmlElement + Clone + 'static> DomBuilder<A> {
     }
 
 
-    // TODO make this more efficient
+    // TODO make this more efficient ?
     #[inline]
     pub fn visible_signal<B>(self, value: B) -> Self where B: Signal<Item = bool> + 'static {
-        self.property_signal("hidden", not(value))
+        self.class_signal(&*HIDDEN_CLASS, not(value))
     }
 }
 
