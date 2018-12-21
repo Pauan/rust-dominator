@@ -4,7 +4,6 @@ extern crate stdweb;
 extern crate dominator;
 #[macro_use]
 extern crate futures_signals;
-extern crate futures;
 
 use std::rc::Rc;
 use futures::future::ready;

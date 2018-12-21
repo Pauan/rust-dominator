@@ -2,9 +2,9 @@
 name = "animation"
 version = "0.1.0"
 dependencies = [
- "dominator 0.2.0",
+ "dominator 0.3.5",
  "futures-preview 0.3.0-alpha.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures-signals 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures-signals 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "stdweb 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -20,12 +20,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "dominator"
-version = "0.2.0"
+version = "0.3.5"
 dependencies = [
  "discard 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-channel-preview 0.3.0-alpha.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-core-preview 0.3.0-alpha.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures-signals 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures-signals 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-util-preview 0.3.0-alpha.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pin-utils 0.1.0-alpha.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -91,7 +91,7 @@ dependencies = [
 
 [[package]]
 name = "futures-signals"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "discard 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -322,7 +322,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum futures-executor-preview 0.3.0-alpha.9 (registry+https://github.com/rust-lang/crates.io-index)" = "43d4bb2cc4c0cefc554b0cf12f7151e0a578cf1820a36453eff1d955dde762ff"
 "checksum futures-io-preview 0.3.0-alpha.9 (registry+https://github.com/rust-lang/crates.io-index)" = "91bd6aba63f52d532c0f4ca6e9960f80a1b4295c292362baf2cad6d739fa9123"
 "checksum futures-preview 0.3.0-alpha.9 (registry+https://github.com/rust-lang/crates.io-index)" = "fde02ea82d846abc2d0f0acf12646b55278f06f027b70977de0c771ba7140ad6"
-"checksum futures-signals 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b3973c4e41654b7d70a75dfebd10ef4291beefa06ac410e5ab42eb577f67b640"
+"checksum futures-signals 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "136084926d80c5c6013e48337e99bd2af8e08f59585a64201316da944456e536"
 "checksum futures-sink-preview 0.3.0-alpha.9 (registry+https://github.com/rust-lang/crates.io-index)" = "cd7799480a224d80e9e915a6bf8bff27498e8210b831f5a513af09d5c1db2e36"
 "checksum futures-util-preview 0.3.0-alpha.9 (registry+https://github.com/rust-lang/crates.io-index)" = "b73a6f85964a8291914db0114ccb0045c994c58b2110c4cf4ac47f5d2176ec90"
 "checksum iovec 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "dbe6e417e7d0975db6512b90796e8ce223145ac4e33c377e4a42882a0e88bb08"

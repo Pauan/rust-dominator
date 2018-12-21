@@ -6,8 +6,6 @@ extern crate dominator;
 extern crate futures_signals;
 #[macro_use]
 extern crate serde_derive;
-extern crate serde;
-extern crate serde_json;
 
 use std::rc::Rc;
 use std::cell::Cell;
