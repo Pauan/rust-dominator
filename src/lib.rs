@@ -1,6 +1,7 @@
 #![recursion_limit="128"]
-#![feature(futures_api, pin, arbitrary_self_types)]
+#![feature(futures_api, arbitrary_self_types)]
 #![warn(unreachable_pub)]
+#![deny(warnings)]
 
 #[macro_use]
 extern crate stdweb;

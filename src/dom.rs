@@ -325,7 +325,7 @@ enum IsWindowLoaded {
     Initial {},
     Pending {
         receiver: oneshot::Receiver<()>,
-        event: IsWindowLoadedEvent,
+        _event: IsWindowLoadedEvent,
     },
     Done {},
 }
@@ -336,7 +336,7 @@ impl Signal for IsWindowLoaded {
     fn poll_change(self: Pin<&mut Self>, waker: &LocalWaker) -> Poll<Option<Self::Item>> {
         // Safe to call `get_mut_unchecked` because we won't move the futures.
         // TODO verify the safety of this
-        let this = unsafe { Pin::get_mut_unchecked(self) };
+        let this = unsafe { Pin::get_unchecked_mut(self) };
 
         let result = match this {
             IsWindowLoaded::Initial {} => {
@@ -350,7 +350,7 @@ impl Signal for IsWindowLoaded {
 
                     *this = IsWindowLoaded::Pending {
                         receiver,
-                        event: IsWindowLoadedEvent::new(move || {
+                        _event: IsWindowLoadedEvent::new(move || {
                             // TODO test this
                             sender.send(()).unwrap();
                         }),

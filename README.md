@@ -1,4 +1,4 @@
-Zero-cost virtual DOM for Rust!
+Zero cost declarative DOM library using FRP signals for Rust!
 
 Status
 ======
