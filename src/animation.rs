@@ -395,7 +395,7 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
                     },
                 },
                 Poll::Ready(None) => {
-                    Pin::set(self.as_mut().signal(), None);
+                    self.as_mut().signal().set(None);
                     break;
                 },
                 Poll::Pending => {
