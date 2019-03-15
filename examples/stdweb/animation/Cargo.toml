@@ -5,7 +5,7 @@ authors = ["Pauan <pcxunlimited@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-dominator = { path = "../.." }
+dominator = { path = "../../.." }
 futures-signals = "0.3.0"
 futures-preview = "0.3.0-alpha.9"
 

@@ -3,7 +3,7 @@ use std::pin::Pin;
 use std::marker::Unpin;
 use std::sync::{Arc, Weak, Mutex, RwLock};
 use futures_core::Poll;
-use futures_core::task::{LocalWaker, Waker};
+use futures_core::task::Waker;
 use futures_util::future::{ready, FutureExt};
 use futures_signals::CancelableFutureHandle;
 use futures_signals::signal::{Signal, SignalExt, WaitFor, MutableSignal, Mutable};
@@ -85,7 +85,7 @@ impl Signal for Timestamps {
     type Item = Option<f64>;
 
     // TODO implement Poll::Ready(None)
-    fn poll_change(self: Pin<&mut Self>, waker: &LocalWaker) -> Poll<Option<Self::Item>> {
+    fn poll_change(self: Pin<&mut Self>, waker: &Waker) -> Poll<Option<Self::Item>> {
         let mut lock = self.state.lock().unwrap();
 
         match lock.state {
@@ -98,7 +98,7 @@ impl Signal for Timestamps {
                 Poll::Ready(Some(None))
             },
             TimestampsEnum::NotChanged => {
-                lock.waker = Some(waker.clone().into_waker());
+                lock.waker = Some(waker.clone());
                 Poll::Pending
             },
         }
@@ -250,7 +250,7 @@ impl<A, F, S> AnimatedMap<S, F>
         }
     }
 
-    fn should_remove(self: &mut Pin<&mut Self>, waker: &LocalWaker, index: usize) -> bool {
+    fn should_remove(self: &mut Pin<&mut Self>, waker: &Waker, index: usize) -> bool {
         let state = &mut self.as_mut().animations()[index];
 
         state.animation.animate_to(Percentage::new_unchecked(0.0));
@@ -300,7 +300,7 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
     type Item = A;
 
     // TODO this can probably be implemented more efficiently
-    fn poll_vec_change(mut self: Pin<&mut Self>, waker: &LocalWaker) -> Poll<Option<VecDiff<Self::Item>>> {
+    fn poll_vec_change(mut self: Pin<&mut Self>, waker: &Waker) -> Poll<Option<VecDiff<Self::Item>>> {
         let mut is_done = true;
 
         // TODO is this loop correct ?
@@ -583,7 +583,7 @@ impl Signal for MutableAnimationSignal {
     type Item = Percentage;
 
     #[inline]
-    fn poll_change(mut self: Pin<&mut Self>, waker: &LocalWaker) -> Poll<Option<Self::Item>> {
+    fn poll_change(mut self: Pin<&mut Self>, waker: &Waker) -> Poll<Option<Self::Item>> {
         self.0.poll_change_unpin(waker)
     }
 }

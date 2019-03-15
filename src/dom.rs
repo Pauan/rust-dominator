@@ -14,7 +14,7 @@ use operations::{ValueDiscard, FnDiscard, spawn_future};
 use futures_signals::signal::{Signal, not};
 use futures_signals::signal_vec::SignalVec;
 use futures_core::Poll;
-use futures_core::task::LocalWaker;
+use futures_core::task::Waker;
 use futures_core::future::Future;
 use futures_util::FutureExt;
 use futures_channel::oneshot;
@@ -333,7 +333,7 @@ enum IsWindowLoaded {
 impl Signal for IsWindowLoaded {
     type Item = bool;
 
-    fn poll_change(self: Pin<&mut Self>, waker: &LocalWaker) -> Poll<Option<Self::Item>> {
+    fn poll_change(self: Pin<&mut Self>, waker: &Waker) -> Poll<Option<Self::Item>> {
         // Safe to call `get_mut_unchecked` because we won't move the futures.
         // TODO verify the safety of this
         let this = unsafe { Pin::get_unchecked_mut(self) };
@@ -1136,13 +1136,13 @@ impl ClassBuilder {
     #[inline]
     pub fn new() -> Self {
         let class_name = {
-            use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
+            use std::sync::atomic::{AtomicUsize, Ordering};
 
             // TODO replace this with a global counter in JavaScript ?
             lazy_static! {
                 // TODO can this be made more efficient ?
                 // TODO use AtomicU32 instead ?
-                static ref CLASS_ID: AtomicUsize = ATOMIC_USIZE_INIT;
+                static ref CLASS_ID: AtomicUsize = AtomicUsize::new(0);
             }
 
             // TODO check for overflow ?
@@ -1214,14 +1214,14 @@ mod tests {
     use stdweb::web::{HtmlElement, IHtmlElement};
 
     #[test]
-    fn mixin() {
+    fn apply() {
         let a: DomBuilder<HtmlElement> = DomBuilder::new(create_element_ns("div", HTML_NAMESPACE));
 
         fn my_mixin<A: IHtmlElement>(builder: DomBuilder<A>) -> DomBuilder<A> {
             builder.style("foo", "bar")
         }
 
-        a.mixin(my_mixin);
+        a.apply(my_mixin);
     }
 
     #[test]
