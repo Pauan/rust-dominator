@@ -1,6 +1,8 @@
 use std::pin::Pin;
 use std::convert::AsRef;
 use std::marker::PhantomData;
+use std::future::Future;
+use std::task::{Context, Poll};
 use stdweb::{Reference, Value, JsSerialize, Once};
 use stdweb::unstable::{TryFrom, TryInto};
 use stdweb::web::{IEventTarget, INode, IElement, IHtmlElement, HtmlElement, Node, window, TextNode, EventTarget, Element};
@@ -13,9 +15,6 @@ use dom_operations;
 use operations::{ValueDiscard, FnDiscard, spawn_future};
 use futures_signals::signal::{Signal, not};
 use futures_signals::signal_vec::SignalVec;
-use futures_core::Poll;
-use futures_core::task::Waker;
-use futures_core::future::Future;
 use futures_util::FutureExt;
 use futures_channel::oneshot;
 use discard::{Discard, DiscardOnDrop};
@@ -333,7 +332,7 @@ enum IsWindowLoaded {
 impl Signal for IsWindowLoaded {
     type Item = bool;
 
-    fn poll_change(self: Pin<&mut Self>, waker: &Waker) -> Poll<Option<Self::Item>> {
+    fn poll_change(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         // Safe to call `get_mut_unchecked` because we won't move the futures.
         // TODO verify the safety of this
         let this = unsafe { Pin::get_unchecked_mut(self) };
@@ -360,7 +359,7 @@ impl Signal for IsWindowLoaded {
                 }
             },
             IsWindowLoaded::Pending { receiver, .. } => {
-                receiver.poll_unpin(waker).map(|_| Some(true))
+                receiver.poll_unpin(cx).map(|_| Some(true))
             },
             IsWindowLoaded::Done {} => {
                 Poll::Ready(None)

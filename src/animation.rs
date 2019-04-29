@@ -2,8 +2,7 @@ use std::fmt;
 use std::pin::Pin;
 use std::marker::Unpin;
 use std::sync::{Arc, Weak, Mutex, RwLock};
-use futures_core::Poll;
-use futures_core::task::Waker;
+use std::task::{Poll, Waker, Context};
 use futures_util::future::{ready, FutureExt};
 use futures_signals::CancelableFutureHandle;
 use futures_signals::signal::{Signal, SignalExt, WaitFor, MutableSignal, Mutable};
@@ -85,7 +84,7 @@ impl Signal for Timestamps {
     type Item = Option<f64>;
 
     // TODO implement Poll::Ready(None)
-    fn poll_change(self: Pin<&mut Self>, waker: &Waker) -> Poll<Option<Self::Item>> {
+    fn poll_change(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         let mut lock = self.state.lock().unwrap();
 
         match lock.state {
@@ -98,7 +97,7 @@ impl Signal for Timestamps {
                 Poll::Ready(Some(None))
             },
             TimestampsEnum::NotChanged => {
-                lock.waker = Some(waker.clone());
+                lock.waker = Some(cx.waker().clone());
                 Poll::Pending
             },
         }
@@ -239,7 +238,7 @@ impl<A, F, S> AnimatedMap<S, F>
         state
     }
 
-    fn remove_index(self: &mut Pin<&mut Self>, index: usize) -> Poll<Option<VecDiff<A>>> {
+    fn remove_index(mut self: Pin<&mut Self>, index: usize) -> Poll<Option<VecDiff<A>>> {
         if index == (self.animations.len() - 1) {
             self.as_mut().animations().pop();
             Poll::Ready(Some(VecDiff::Pop {}))
@@ -250,14 +249,14 @@ impl<A, F, S> AnimatedMap<S, F>
         }
     }
 
-    fn should_remove(self: &mut Pin<&mut Self>, waker: &Waker, index: usize) -> bool {
+    fn should_remove(mut self: Pin<&mut Self>, cx: &mut Context, index: usize) -> bool {
         let state = &mut self.as_mut().animations()[index];
 
         state.animation.animate_to(Percentage::new_unchecked(0.0));
 
         let mut future = state.animation.signal().wait_for(Percentage::new_unchecked(0.0));
 
-        if future.poll_unpin(waker).is_ready() {
+        if future.poll_unpin(cx).is_ready() {
             true
 
         } else {
@@ -300,11 +299,11 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
     type Item = A;
 
     // TODO this can probably be implemented more efficiently
-    fn poll_vec_change(mut self: Pin<&mut Self>, waker: &Waker) -> Poll<Option<VecDiff<Self::Item>>> {
+    fn poll_vec_change(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<VecDiff<Self::Item>>> {
         let mut is_done = true;
 
         // TODO is this loop correct ?
-        while let Some(result) = self.as_mut().signal().as_pin_mut().map(|signal| signal.poll_vec_change(waker)) {
+        while let Some(result) = self.as_mut().signal().as_pin_mut().map(|signal| signal.poll_vec_change(cx)) {
             match result {
                 Poll::Ready(Some(change)) => return match change {
                     // TODO maybe it should play remove / insert animations for this ?
@@ -369,7 +368,7 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
                     VecDiff::RemoveAt { index } => {
                         let index = self.find_index(index).expect("Could not find value");
 
-                        if self.should_remove(waker, index) {
+                        if self.as_mut().should_remove(cx, index) {
                             self.remove_index(index)
 
                         } else {
@@ -380,7 +379,7 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
                     VecDiff::Pop {} => {
                         let index = self.find_last_index().expect("Cannot pop from empty vec");
 
-                        if self.should_remove(waker, index) {
+                        if self.as_mut().should_remove(cx, index) {
                             self.remove_index(index)
 
                         } else {
@@ -412,7 +411,7 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
         let index = self.as_mut().animations().iter_mut().rposition(|state| {
             if let Some(ref mut future) = state.removing {
                 is_removing = true;
-                future.poll_unpin(waker).is_ready()
+                future.poll_unpin(cx).is_ready()
 
             } else {
                 false
@@ -583,8 +582,8 @@ impl Signal for MutableAnimationSignal {
     type Item = Percentage;
 
     #[inline]
-    fn poll_change(mut self: Pin<&mut Self>, waker: &Waker) -> Poll<Option<Self::Item>> {
-        self.0.poll_change_unpin(waker)
+    fn poll_change(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+        self.0.poll_change_unpin(cx)
     }
 }
 

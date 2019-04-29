@@ -1,5 +1,4 @@
 #![recursion_limit="128"]
-#![feature(futures_api, arbitrary_self_types)]
 #![warn(unreachable_pub)]
 #![deny(warnings)]
 
@@ -13,7 +12,6 @@ extern crate stdweb_derive;
 extern crate lazy_static;
 
 extern crate discard;
-extern crate futures_core;
 extern crate futures_channel;
 extern crate futures_util;
 extern crate futures_signals;

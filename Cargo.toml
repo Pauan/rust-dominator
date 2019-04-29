@@ -15,9 +15,8 @@ stdweb-derive = "0.5.0"
 lazy_static = "1.0.0"
 discard = "1.0.3"
 pin-utils = "0.1.0-alpha.3"
-futures-core-preview = "0.3.0-alpha.7"
-futures-channel-preview = "0.3.0-alpha.7"
-futures-util-preview = "0.3.0-alpha.7"
+futures-channel-preview = "0.3.0-alpha.15"
+futures-util-preview = "0.3.0-alpha.15"
 futures-signals = "0.3.0"
 
 [dependencies.stdweb]

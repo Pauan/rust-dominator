@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use std::mem::ManuallyDrop;
+use std::future::Future;
 use discard::{Discard, DiscardOnDrop};
-use futures_core::future::Future;
 use futures_util::future::ready;
 use futures_signals::{cancelable_future, CancelableFutureHandle};
 use futures_signals::signal::{Signal, SignalExt};
