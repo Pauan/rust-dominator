@@ -133,7 +133,7 @@ pub fn main_js() -> Result<(), JsValue> {
         color += 10;
     }));
 
-    /*dominator::append_dom(body,
+    /*dominator::append_dom(&body,
         html!("button", {
             .event(clone!(state => move |_: ClickEvent| {
                 js! { @(no_return)
@@ -148,7 +148,7 @@ pub fn main_js() -> Result<(), JsValue> {
     );*/
 
     for _ in 0..1 {
-        dominator::append_dom(dominator::body(),
+        dominator::append_dom(&dominator::body(),
             html!("div", {
                 .style("display", "flex")
 

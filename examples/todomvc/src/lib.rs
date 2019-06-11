@@ -130,7 +130,7 @@ pub fn main_js() -> Result<(), JsValue> {
 
     let state = Rc::new(State::deserialize());
 
-    dominator::append_dom(dominator::body(),
+    dominator::append_dom(&dominator::body(),
         html!("section", {
             .class("todoapp")
             .children(&mut [
@@ -400,7 +400,7 @@ pub fn main_js() -> Result<(), JsValue> {
         }),
     );
 
-    dominator::append_dom(dominator::body(),
+    dominator::append_dom(&dominator::body(),
         html!("footer", {
             .class("info")
             .children(&mut [

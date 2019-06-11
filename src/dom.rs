@@ -109,7 +109,7 @@ impl Discard for DomHandle {
 }
 
 #[inline]
-pub fn append_dom(parent: Node, mut dom: Dom) -> DomHandle {
+pub fn append_dom(parent: &Node, mut dom: Dom) -> DomHandle {
     parent.append_child(&dom.element).unwrap_throw();
 
     dom.callbacks.trigger_after_insert();
@@ -118,7 +118,7 @@ pub fn append_dom(parent: Node, mut dom: Dom) -> DomHandle {
     dom.callbacks.leak();
 
     DomHandle {
-        parent,
+        parent: parent.clone(),
         dom,
     }
 }

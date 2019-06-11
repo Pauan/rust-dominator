@@ -87,7 +87,7 @@ pub fn main_js() -> Result<(), JsValue> {
 
     let state = State::new();
 
-    dominator::append_dom(dominator::body(), State::render(state));
+    dominator::append_dom(&dominator::body(), State::render(state));
 
     Ok(())
 }
