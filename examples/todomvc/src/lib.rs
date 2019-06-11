@@ -1,25 +1,31 @@
-#[macro_use]
-extern crate stdweb;
-#[macro_use]
-extern crate dominator;
-#[macro_use]
-extern crate futures_signals;
-#[macro_use]
-extern crate serde_derive;
-
 use std::rc::Rc;
 use std::cell::Cell;
 
-// TODO replace most of these with dominator
-use stdweb::web::window;
-use stdweb::web::html_element::InputElement;
-use stdweb::unstable::TryInto;
-use stdweb::traits::*;
-
+use wasm_bindgen::prelude::*;
+use serde_derive::{Serialize, Deserialize};
+use web_sys::{window, HtmlElement, Storage};
+use futures_signals::map_ref;
 use futures_signals::signal::{Signal, SignalExt, Mutable};
 use futures_signals::signal_vec::{SignalVecExt, MutableVec};
-use dominator::{Dom, text, routing, HtmlElement};
-use dominator::events::{InputEvent, ClickEvent, KeyDownEvent, ChangeEvent, DoubleClickEvent, BlurEvent};
+use dominator::{Dom, text, routing, html, clone, events};
+
+
+fn local_storage() -> Storage {
+    window().unwrap_throw().local_storage().unwrap_throw().unwrap_throw()
+}
+
+// TODO make this more efficient
+#[inline]
+fn trim(input: &str) -> Option<String> {
+    let trimmed = input.trim();
+
+    if trimmed.is_empty() {
+        None
+
+    } else {
+        Some(trimmed.to_owned())
+    }
+}
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,7 +105,9 @@ impl State {
     }
 
     fn deserialize() -> Self {
-        window().local_storage().get("todos-rust-dominator")
+        local_storage()
+            .get_item("todos-rust-dominator")
+            .unwrap_throw()
             .and_then(|state_json| {
                 serde_json::from_str(state_json.as_str()).ok()
             })
@@ -107,43 +115,22 @@ impl State {
     }
 
     fn serialize(&self) {
-        let state_json = serde_json::to_string(self).unwrap();
-        window().local_storage().insert("todos-rust-dominator", state_json.as_str()).unwrap();
+        let state_json = serde_json::to_string(self).unwrap_throw();
+
+        local_storage().set_item("todos-rust-dominator", state_json.as_str()).unwrap_throw();
     }
 }
 
 
-// TODO make this more efficient
-#[inline]
-fn trim(input: &str) -> Option<String> {
-    let trimmed = input.trim();
-
-    if trimmed.is_empty() {
-        None
-
-    } else {
-        Some(trimmed.to_owned())
-    }
-}
-
-#[inline]
-fn get_value(event: &InputEvent) -> String {
-    let target: InputElement = event.target().unwrap().try_into().unwrap();
-    target.raw_value()
-}
-
-#[inline]
-fn get_checked(event: &ChangeEvent) -> bool {
-    js!( return @{&event.target()}.checked; ).try_into().unwrap()
-}
+#[wasm_bindgen(start)]
+pub fn main_js() -> Result<(), JsValue> {
+    #[cfg(debug_assertions)]
+    console_error_panic_hook::set_once();
 
 
-fn main() {
     let state = Rc::new(State::deserialize());
 
-    let body = dominator::body();
-
-    dominator::append_dom(&body,
+    dominator::append_dom(dominator::body(),
         html!("section", {
             .class("todoapp")
             .children(&mut [
@@ -160,11 +147,11 @@ fn main() {
 
                             .property_signal("value", state.new_todo_title.signal_cloned())
 
-                            .event(clone!(state => move |event: InputEvent| {
-                                state.new_todo_title.set_neq(get_value(&event));
+                            .event(clone!(state => move |event: events::Input| {
+                                state.new_todo_title.set_neq(event.value().unwrap_throw());
                             }))
 
-                            .event(clone!(state => move |event: KeyDownEvent| {
+                            .event(clone!(state => move |event: events::KeyDown| {
                                 if event.key() == "Enter" {
                                     event.prevent_default();
 
@@ -212,8 +199,9 @@ fn main() {
                                 .len()
                                 .map(|len| len != 0))
 
-                            .event(clone!(state => move |event: ChangeEvent| {
-                                let checked = !get_checked(&event);
+                            .event(clone!(state => move |event: events::Change| {
+                                // Toggles the boolean
+                                let checked = !event.checked().unwrap_throw();
 
                                 {
                                     let todo_list = state.todo_list.lock_ref();
@@ -264,14 +252,14 @@ fn main() {
 
                                                         .property_signal("checked", todo.completed.signal())
 
-                                                        .event(clone!(state, todo => move |event: ChangeEvent| {
-                                                            todo.completed.set_neq(get_checked(&event));
+                                                        .event(clone!(state, todo => move |event: events::Change| {
+                                                            todo.completed.set_neq(event.checked().unwrap_throw());
                                                             state.serialize();
                                                         }))
                                                     }),
 
                                                     html!("label", {
-                                                        .event(clone!(todo => move |_: DoubleClickEvent| {
+                                                        .event(clone!(todo => move |_: events::DoubleClick| {
                                                             todo.editing.set_neq(Some(todo.title.get_cloned()));
                                                         }))
 
@@ -280,7 +268,7 @@ fn main() {
 
                                                     html!("button", {
                                                         .class("destroy")
-                                                        .event(clone!(state, todo => move |_: ClickEvent| {
+                                                        .event(clone!(state, todo => move |_: events::Click| {
                                                             state.remove_todo(&todo);
                                                             state.serialize();
                                                         }))
@@ -301,24 +289,24 @@ fn main() {
                                                 .focused_signal(todo.editing.signal_cloned()
                                                     .map(|x| x.is_some()))
 
-                                                .event(clone!(todo => move |event: KeyDownEvent| {
-                                                    let key = event.key();
-
-                                                    if key == "Enter" {
-                                                        let element: HtmlElement = event.target().unwrap().try_into().unwrap();
-                                                        element.blur();
-
-                                                    } else if key == "Escape" {
-                                                        todo.editing.set_neq(None);
+                                                .event(clone!(todo => move |event: events::KeyDown| {
+                                                    match event.key().as_str() {
+                                                        "Enter" => {
+                                                            event.dyn_target::<HtmlElement>().unwrap_throw().blur();
+                                                        },
+                                                        "Escape" => {
+                                                            todo.editing.set_neq(None);
+                                                        },
+                                                        _ => {}
                                                     }
                                                 }))
 
-                                                .event(clone!(todo => move |event: InputEvent| {
-                                                    todo.editing.set_neq(Some(get_value(&event)));
+                                                .event(clone!(todo => move |event: events::Input| {
+                                                    todo.editing.set_neq(Some(event.value().unwrap_throw()));
                                                 }))
 
                                                 // TODO global_event ?
-                                                .event(clone!(state, todo => move |_: BlurEvent| {
+                                                .event(clone!(state, todo => move |_: events::Blur| {
                                                     if let Some(title) = todo.editing.replace(None) {
                                                         if let Some(title) = trim(&title) {
                                                             todo.title.set_neq(title);
@@ -399,7 +387,7 @@ fn main() {
                                 .len()
                                 .map(|len| len > 0))
 
-                            .event(clone!(state => move |_: ClickEvent| {
+                            .event(clone!(state => move |_: events::Click| {
                                 state.todo_list.lock_mut().retain(|todo| todo.completed.get() == false);
                                 state.serialize();
                             }))
@@ -412,7 +400,7 @@ fn main() {
         }),
     );
 
-    dominator::append_dom(&body,
+    dominator::append_dom(dominator::body(),
         html!("footer", {
             .class("info")
             .children(&mut [
@@ -440,4 +428,6 @@ fn main() {
             ])
         }),
     );
+
+    Ok(())
 }

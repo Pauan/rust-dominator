@@ -1,50 +1,77 @@
 use std::fmt;
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::pin::Pin;
 use std::marker::Unpin;
 use std::sync::{Arc, Weak, Mutex, RwLock};
 use std::task::{Poll, Waker, Context};
+
 use futures_util::future::{ready, FutureExt};
 use futures_signals::CancelableFutureHandle;
 use futures_signals::signal::{Signal, SignalExt, WaitFor, MutableSignal, Mutable};
 use futures_signals::signal_vec::{SignalVec, VecDiff};
-use stdweb::Value;
 use discard::DiscardOnDrop;
-use operations::spawn_future;
 use pin_utils::{unsafe_pinned, unsafe_unpinned};
+use wasm_bindgen::{JsCast, UnwrapThrowExt};
+use wasm_bindgen::closure::Closure;
+use web_sys::window;
 
+use crate::operations::spawn_future;
+
+
+struct RafState {
+    id: i32,
+    closure: Closure<FnMut(f64)>,
+}
 
 // TODO generalize this so it works for any target, not just JS
-struct Raf(Value);
+struct Raf {
+    state: Rc<RefCell<Option<RafState>>>,
+}
 
 impl Raf {
-    #[inline]
-    fn new<F>(callback: F) -> Self where F: FnMut(f64) + 'static {
-        Raf(js!(
-            var callback = @{callback};
+    fn new<F>(mut callback: F) -> Self where F: FnMut(f64) + 'static {
+        let state: Rc<RefCell<Option<RafState>>> = Rc::new(RefCell::new(None));
 
-            function loop(time) {
-                value.id = requestAnimationFrame(loop);
+        fn schedule(callback: &Closure<FnMut(f64)>) -> i32 {
+            window()
+                .unwrap_throw()
+                .request_animation_frame(callback.as_ref().unchecked_ref())
+                .unwrap_throw()
+        }
+
+        let closure = {
+            let state = state.clone();
+
+            Closure::wrap(Box::new(move |time| {
+                {
+                    let mut state = state.borrow_mut();
+                    let state = state.as_mut().unwrap_throw();
+                    state.id = schedule(&state.closure);
+                }
+
                 callback(time);
-            }
+            }) as Box<FnMut(f64)>)
+        };
 
-            var value = {
-                callback: callback,
-                id: requestAnimationFrame(loop)
-            };
+        *state.borrow_mut() = Some(RafState {
+            id: schedule(&closure),
+            closure
+        });
 
-            return value;
-        ))
+        Self { state }
     }
 }
 
 impl Drop for Raf {
-    #[inline]
     fn drop(&mut self) {
-        js! { @(no_return)
-            var self = @{&self.0};
-            cancelAnimationFrame(self.id);
-            self.callback.drop();
-        }
+        // The take is necessary in order to prevent an Rc leak
+        let state = self.state.borrow_mut().take().unwrap_throw();
+
+        window()
+            .unwrap_throw()
+            .cancel_animation_frame(state.id)
+            .unwrap_throw();
     }
 }
 
@@ -85,12 +112,12 @@ impl Signal for Timestamps {
 
     // TODO implement Poll::Ready(None)
     fn poll_change(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        let mut lock = self.state.lock().unwrap();
+        let mut lock = self.state.lock().unwrap_throw();
 
         match lock.state {
             TimestampsEnum::Changed => {
                 lock.state = TimestampsEnum::NotChanged;
-                Poll::Ready(Some(*self.value.read().unwrap()))
+                Poll::Ready(Some(*self.value.read().unwrap_throw()))
             },
             TimestampsEnum::First => {
                 lock.state = TimestampsEnum::NotChanged;
@@ -104,8 +131,9 @@ impl Signal for Timestamps {
     }
 }
 
-lazy_static! {
-    static ref TIMESTAMPS: Arc<TimestampsGlobal> = Arc::new(TimestampsGlobal {
+// TODO somehow share this safely between threads ?
+thread_local! {
+    static TIMESTAMPS_MANAGER: Arc<TimestampsGlobal> = Arc::new(TimestampsGlobal {
         inner: Mutex::new(TimestampsInner {
             raf: None,
             states: vec![],
@@ -115,56 +143,58 @@ lazy_static! {
 }
 
 pub fn timestamps() -> Timestamps {
-    let timestamps = Timestamps {
-        state: Arc::new(Mutex::new(TimestampsState {
-            state: TimestampsEnum::First,
-            waker: None,
-        })),
-        value: TIMESTAMPS.value.clone(),
-    };
+    TIMESTAMPS_MANAGER.with(|timestamps_manager| {
+        let timestamps = Timestamps {
+            state: Arc::new(Mutex::new(TimestampsState {
+                state: TimestampsEnum::First,
+                waker: None,
+            })),
+            value: timestamps_manager.value.clone(),
+        };
 
-    {
-        let mut lock = TIMESTAMPS.inner.lock().unwrap();
+        {
+            let mut lock = timestamps_manager.inner.lock().unwrap_throw();
 
-        lock.states.push(Arc::downgrade(&timestamps.state));
+            lock.states.push(Arc::downgrade(&timestamps.state));
 
-        if let None = lock.raf {
-            let global = TIMESTAMPS.clone();
+            if let None = lock.raf {
+                let global = timestamps_manager.clone();
 
-            lock.raf = Some(Raf::new(move |time| {
-                let mut lock = global.inner.lock().unwrap();
-                let mut value = global.value.write().unwrap();
+                lock.raf = Some(Raf::new(move |time| {
+                    let mut lock = global.inner.lock().unwrap_throw();
+                    let mut value = global.value.write().unwrap_throw();
 
-                *value = Some(time);
+                    *value = Some(time);
 
-                lock.states.retain(|state| {
-                    if let Some(state) = state.upgrade() {
-                        let mut lock = state.lock().unwrap();
+                    lock.states.retain(|state| {
+                        if let Some(state) = state.upgrade() {
+                            let mut lock = state.lock().unwrap_throw();
 
-                        lock.state = TimestampsEnum::Changed;
+                            lock.state = TimestampsEnum::Changed;
 
-                        if let Some(waker) = lock.waker.take() {
-                            drop(lock);
-                            waker.wake();
+                            if let Some(waker) = lock.waker.take() {
+                                drop(lock);
+                                waker.wake();
+                            }
+
+                            true
+
+                        } else {
+                            false
                         }
+                    });
 
-                        true
-
-                    } else {
-                        false
+                    if lock.states.len() == 0 {
+                        lock.raf = None;
+                        // TODO is this a good idea ?
+                        lock.states = vec![];
                     }
-                });
-
-                if lock.states.len() == 0 {
-                    lock.raf = None;
-                    // TODO is this a good idea ?
-                    lock.states = vec![];
-                }
-            }));
+                }));
+            }
         }
-    }
 
-    timestamps
+        timestamps
+    })
 }
 
 
@@ -505,12 +535,12 @@ impl MutableTimestamps<F> where F: FnMut(f64) {
     }
 
     pub fn stop(&self) {
-        let mut lock = self.animating.lock().unwrap();
+        let mut lock = self.animating.lock().unwrap_throw();
         *lock = None;
     }
 
     pub fn start(&self) {
-        let mut lock = self.animating.lock().unwrap();
+        let mut lock = self.animating.lock().unwrap_throw();
 
         if let None = animating {
             let callback = self.callback.clone();
@@ -608,7 +638,7 @@ pub struct MutableAnimation {
 
 impl fmt::Debug for MutableAnimation {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let state = self.inner.state.lock().unwrap();
+        let state = self.inner.state.lock().unwrap_throw();
 
         fmt.debug_struct("MutableAnimation")
             .field("playing", &state.playing)
@@ -672,7 +702,7 @@ impl MutableAnimation {
                         // TODO test the performance of set_neq
                         if diff >= 1.0 {
                             {
-                                let mut lock = state.inner.state.lock().unwrap();
+                                let mut lock = state.inner.state.lock().unwrap_throw();
                                 Self::stop_animating(&mut lock);
                             }
                             state.inner.value.set_neq(Percentage::new_unchecked(end));
@@ -697,7 +727,7 @@ impl MutableAnimation {
     pub fn set_duration(&self, duration: f64) {
         debug_assert!(duration >= 0.0);
 
-        let mut lock = self.inner.state.lock().unwrap();
+        let mut lock = self.inner.state.lock().unwrap_throw();
 
         if lock.duration != duration {
             lock.duration = duration;
@@ -707,7 +737,7 @@ impl MutableAnimation {
 
     #[inline]
     pub fn pause(&self) {
-        let mut lock = self.inner.state.lock().unwrap();
+        let mut lock = self.inner.state.lock().unwrap_throw();
 
         if lock.playing {
             lock.playing = false;
@@ -717,7 +747,7 @@ impl MutableAnimation {
 
     #[inline]
     pub fn play(&self) {
-        let mut lock = self.inner.state.lock().unwrap();
+        let mut lock = self.inner.state.lock().unwrap_throw();
 
         if !lock.playing {
             lock.playing = true;
@@ -734,13 +764,13 @@ impl MutableAnimation {
     }
 
     pub fn jump_to(&self, end: Percentage) {
-        let mut lock = self.inner.state.lock().unwrap();
+        let mut lock = self.inner.state.lock().unwrap_throw();
 
         Self::_jump_to(&mut lock, &self.inner.value, end);
     }
 
     pub fn animate_to(&self, end: Percentage) {
-        let mut lock = self.inner.state.lock().unwrap();
+        let mut lock = self.inner.state.lock().unwrap_throw();
 
         if lock.end != end {
             if lock.duration <= 0.0 {

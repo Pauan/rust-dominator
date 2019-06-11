@@ -1,0 +1,35 @@
+[package]
+name = "todomvc"
+version = "0.1.0"
+description = "TodoMVC using dominator"
+authors = ["Pauan <pcxunlimited@gmail.com>"]
+categories = ["wasm"]
+readme = "README.md"
+license = "MIT"
+edition = "2018"
+
+[profile.release]
+lto = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+dominator = { path = "../.." }
+futures-signals = "0.3.0"
+wasm-bindgen = "0.2.45"
+serde_json = "1.0.10"
+serde_derive = "1.0.27"
+
+[dependencies.serde]
+version = "1.0.27"
+features = ["rc"]
+
+[dependencies.web-sys]
+version = "0.3.22"
+features = [
+    "Storage",
+]
+
+[target."cfg(debug_assertions)".dependencies]
+console_error_panic_hook = "0.1.5"

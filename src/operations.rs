@@ -1,17 +1,19 @@
 use std::sync::{Arc, Mutex};
-use std::mem::ManuallyDrop;
 use std::future::Future;
+use std::iter::IntoIterator;
+
 use discard::{Discard, DiscardOnDrop};
 use futures_util::future::ready;
 use futures_signals::{cancelable_future, CancelableFutureHandle};
 use futures_signals::signal::{Signal, SignalExt};
 use futures_signals::signal_vec::{VecDiff, SignalVec, SignalVecExt};
-use dom_operations;
-use dom::Dom;
-use callbacks::Callbacks;
-use std::iter::IntoIterator;
-use stdweb::spawn_local;
-use stdweb::traits::INode;
+use web_sys::Node;
+use wasm_bindgen::UnwrapThrowExt;
+use wasm_bindgen_futures::futures_0_3::spawn_local;
+
+use crate::dom_operations;
+use crate::dom::Dom;
+use crate::callbacks::Callbacks;
 
 
 // TODO this should probably be in stdweb
@@ -80,60 +82,18 @@ pub fn insert_children_signal<A, B, C>(element: &A, callbacks: &mut Callbacks, s
 }*/
 
 #[inline]
-pub(crate) fn insert_children_iter<'a, A: INode, B: IntoIterator<Item = &'a mut Dom>>(element: &A, callbacks: &mut Callbacks, value: B) {
+pub(crate) fn insert_children_iter<'a, A: IntoIterator<Item = &'a mut Dom>>(element: &Node, callbacks: &mut Callbacks, value: A) {
     for dom in value.into_iter() {
         callbacks.after_insert.append(&mut dom.callbacks.after_insert);
         callbacks.after_remove.append(&mut dom.callbacks.after_remove);
 
-        element.append_child(&dom.element);
+        element.append_child(&dom.element).unwrap_throw();
     }
 }
 
 
-// TODO move this into the discard crate
-// TODO verify that this is correct and doesn't leak memory or cause memory safety
-pub(crate) struct ValueDiscard<A>(ManuallyDrop<A>);
-
-impl<A> ValueDiscard<A> {
-    #[inline]
-    pub(crate) fn new(value: A) -> Self {
-        ValueDiscard(ManuallyDrop::new(value))
-    }
-}
-
-impl<A> Discard for ValueDiscard<A> {
-    #[inline]
-    fn discard(self) {
-        // TODO verify that this works
-        ManuallyDrop::into_inner(self.0);
-    }
-}
-
-
-// TODO move this into the discard crate
-// TODO replace this with an impl for FnOnce() ?
-pub(crate) struct FnDiscard<A>(A);
-
-impl<A> FnDiscard<A> where A: FnOnce() {
-    #[inline]
-    pub(crate) fn new(f: A) -> Self {
-        FnDiscard(f)
-    }
-}
-
-impl<A> Discard for FnDiscard<A> where A: FnOnce() {
-    #[inline]
-    fn discard(self) {
-        self.0();
-    }
-}
-
-
-pub(crate) fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Callbacks, signal: B)
-    where A: INode + Clone + 'static,
-          B: SignalVec<Item = Dom> + 'static {
-
-    let element = element.clone();
+pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callbacks, signal: A)
+    where A: SignalVec<Item = Dom> + 'static {
 
     // TODO does this create a new struct type every time ?
     struct State {
@@ -151,7 +111,7 @@ pub(crate) fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Call
         let state = state.clone();
 
         callbacks.after_insert(move |_| {
-            let mut state = state.lock().unwrap();
+            let mut state = state.lock().unwrap_throw();
 
             if !state.is_inserted {
                 state.is_inserted = true;
@@ -165,7 +125,7 @@ pub(crate) fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Call
 
     // TODO verify that this will drop `children`
     callbacks.after_remove(for_each_vec(signal, move |change| {
-        let mut state = state.lock().unwrap();
+        let mut state = state.lock().unwrap_throw();
 
         match change {
             VecDiff::Replace { values } => {
@@ -186,7 +146,7 @@ pub(crate) fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Call
                 for dom in state.children.iter_mut() {
                     dom.callbacks.leak();
 
-                    element.append_child(&dom.element);
+                    element.append_child(&dom.element).unwrap_throw();
 
                     if is_inserted {
                         dom.callbacks.trigger_after_insert();
@@ -209,7 +169,7 @@ pub(crate) fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Call
             },
 
             VecDiff::Push { mut value } => {
-                element.append_child(&value.element);
+                element.append_child(&value.element).unwrap_throw();
 
                 value.callbacks.leak();
 
@@ -261,7 +221,7 @@ pub(crate) fn insert_children_signal_vec<A, B>(element: &A, callbacks: &mut Call
                 // TODO better usize -> u32 conversion
                 dom_operations::remove_at(&element, index as u32);
 
-                state.children.pop().unwrap().callbacks.discard();
+                state.children.pop().unwrap_throw().callbacks.discard();
             },
 
             VecDiff::Clear {} => {

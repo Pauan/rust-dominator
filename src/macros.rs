@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! builder {
     ($namespace:expr, $default:ty, $kind:expr => $t:ty) => {
-        builder!($namespace, $default, $kind => $t, {})
+        $crate::builder!($namespace, $default, $kind => $t, {})
     };
     ($namespace:expr, $default:ty, $kind:expr => $t:ty, { $(.$name:ident($($args:expr),*))* }) => {{
         let a: $crate::DomBuilder<$t> = $crate::DomBuilder::new($crate::create_element_ns($kind, $namespace));
@@ -11,10 +11,10 @@ macro_rules! builder {
     }};
 
     ($namespace:expr, $default:ty, $kind:expr) => {
-        builder!($namespace, $default, $kind => $default)
+        $crate::builder!($namespace, $default, $kind => $default)
     };
     ($namespace:expr, $default:ty, $kind:expr, { $(.$name:ident($($args:expr),*))* }) => {
-        builder!($namespace, $default, $kind => $default, { $(.$name($($args),*))* })
+        $crate::builder!($namespace, $default, $kind => $default, { $(.$name($($args),*))* })
     };
 }
 
@@ -22,7 +22,7 @@ macro_rules! builder {
 #[macro_export]
 macro_rules! html {
     ($($args:tt)+) => {
-        builder!($crate::HTML_NAMESPACE, $crate::HtmlElement, $($args)+)
+        $crate::builder!($crate::HTML_NAMESPACE, $crate::HtmlElement, $($args)+)
     };
 }
 
@@ -30,7 +30,7 @@ macro_rules! html {
 #[macro_export]
 macro_rules! svg {
     ($($args:tt)+) => {
-        builder!($crate::SVG_NAMESPACE, $crate::SvgElement, $($args)+)
+        $crate::builder!($crate::SVG_NAMESPACE, $crate::SvgElement, $($args)+)
     };
 }
 
@@ -38,7 +38,7 @@ macro_rules! svg {
 #[macro_export]
 macro_rules! stylesheet {
     ($rule:expr) => {
-        stylesheet!($rule, {})
+        $crate::stylesheet!($rule, {})
     };
     ($rule:expr, { $(.$name:ident($($args:expr),*))* }) => {
         $crate::StylesheetBuilder::new($rule)$(.$name($($args),*))*.done()
@@ -64,12 +64,12 @@ macro_rules! __internal_clone_split {
         $y
     }};
     (($($x:ident)*), $t:ident, $($after:tt)*) => {
-        __internal_clone_split!(($($x)* $t), $($after)*)
+        $crate::__internal_clone_split!(($($x)* $t), $($after)*)
     };
 }
 
-// TODO move into stdweb ?
+// TODO move into gloo ?
 #[macro_export]
 macro_rules! clone {
-    ($($input:tt)*) => { __internal_clone_split!((), $($input)*) };
+    ($($input:tt)*) => { $crate::__internal_clone_split!((), $($input)*) };
 }

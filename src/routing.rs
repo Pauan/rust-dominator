@@ -1,9 +1,10 @@
-use dom::{Dom, DomBuilder, Url};
+use wasm_bindgen::{JsValue, UnwrapThrowExt};
+use web_sys::{window, Url, EventTarget, HtmlElement};
 use futures_signals::signal::{Mutable, Signal};
-use stdweb::web::{window, HtmlElement, IEventTarget};
-use stdweb::web::event::ClickEvent;
-use stdweb::traits::IEvent;
-use stdweb::Value;
+use gloo::events::EventListener;
+
+use crate::dom::{Dom, DomBuilder};
+use crate::events;
 
 
 /*pub struct State<A> {
@@ -14,7 +15,7 @@ use stdweb::Value;
 impl<A> State<A> {
     pub fn new() -> Self {
         // TODO replace with stdweb function
-        let value = Mutable::new(js!( return history.state; ).try_into().unwrap());
+        let value = Mutable::new(js!( return history.state; ).try_into().unwrap_throw());
 
         let callback = |state: Option<A>| {
             value.set(state);
@@ -35,14 +36,14 @@ impl<A> State<A> {
     }
 
     pub fn set(&self, value: A) {
-        window().history().replace_state(value, "", None).unwrap();
+        window().history().replace_state(value, "", None).unwrap_throw();
         self.value.set(value);
     }
 }*/
 
 
 fn current_url_string() -> String {
-    window().location().unwrap().href().unwrap()
+    window().unwrap_throw().location().href().unwrap_throw()
 }
 
 // TODO inline ?
@@ -55,88 +56,74 @@ fn change_url(mutable: &Mutable<Url>) {
     // TODO helper method for this
     // TODO can this be made more efficient ?
     if lock.href() != new_url {
-        *lock = Url::new(&new_url);
+        *lock = Url::new(&new_url).unwrap_throw();
     }
 }
 
 
 struct CurrentUrl {
     value: Mutable<Url>,
-    listener: Value,
+    _listener: EventListener,
 }
 
 impl CurrentUrl {
-    #[inline]
     fn new() -> Self {
-        let value = Mutable::new(Url::new(&current_url_string()));
-
-        let callback = {
-            let value = value.clone();
-            move || {
-                change_url(&value);
-            }
-        };
+        // TODO can this be made more efficient ?
+        let value = Mutable::new(Url::new(&current_url_string()).unwrap_throw());
 
         Self {
-            value,
-            listener: js!(
-                function listener(e) {
-                    @{callback}();
+            _listener: EventListener::new(&window().unwrap_throw(), "popstate", {
+                let value = value.clone();
+                move |_| {
+                    change_url(&value);
                 }
-
-                addEventListener("popstate", listener, true);
-
-                return listener;
-            ),
+            }),
+            value,
         }
     }
 }
 
-impl Drop for CurrentUrl {
-    fn drop(&mut self) {
-        js! { @(no_return)
-            removeEventListener("popstate", @{&self.listener}, true);
-        }
-    }
-}
-
-// TODO use thread_local instead ?
-lazy_static! {
-    static ref URL: CurrentUrl = CurrentUrl::new();
+// TODO somehow share this safely between threads ?
+thread_local! {
+    static URL: CurrentUrl = CurrentUrl::new();
 }
 
 
 #[inline]
 pub fn current_url() -> Url {
-    URL.value.get_cloned()
+    URL.with(|url| url.value.get_cloned())
 }
 
 
 #[inline]
 pub fn url() -> impl Signal<Item = Url> {
-    URL.value.signal_cloned()
+    URL.with(|url| url.value.signal_cloned())
 }
 
 
 // TODO if URL hasn't been created yet, don't create it
 #[inline]
 pub fn go_to_url(new_url: &str) {
-    // TODO replace with stdweb function
-    js! { @(no_return)
+    window()
+        .unwrap_throw()
+        .history()
+        .unwrap_throw()
         // TODO is this the best state object to use ?
-        history.pushState(null, "", @{new_url});
-    }
+        .push_state_with_url(&JsValue::NULL, "", Some(new_url))
+        .unwrap_throw();
 
-    change_url(&URL.value);
+    URL.with(|url| {
+        change_url(&url.value);
+    });
 }
 
 
-// TODO somehow use &str rather than String
+// TODO somehow use &str rather than String, maybe Cow ?
 #[inline]
-pub fn on_click_go_to_url<A>(new_url: String) -> impl FnOnce(DomBuilder<A>) -> DomBuilder<A> where A: IEventTarget + Clone + 'static {
+pub fn on_click_go_to_url<A>(new_url: String) -> impl FnOnce(DomBuilder<A>) -> DomBuilder<A> where A: AsRef<EventTarget> {
     #[inline]
     move |dom| {
-        dom.event(move |e: ClickEvent| {
+        dom.event_preventable(move |e: events::Click| {
             e.prevent_default();
             go_to_url(&new_url);
         })
@@ -144,6 +131,7 @@ pub fn on_click_go_to_url<A>(new_url: String) -> impl FnOnce(DomBuilder<A>) -> D
 }
 
 
+// TODO better type than HtmlElement
 #[inline]
 pub fn link<F>(url: &str, f: F) -> Dom where F: FnOnce(DomBuilder<HtmlElement>) -> DomBuilder<HtmlElement> {
     html!("a", {

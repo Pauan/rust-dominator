@@ -1,0 +1,24 @@
+[package]
+name = "counter"
+version = "0.1.0"
+description = "Counter demo using dominator"
+authors = ["Pauan <pcxunlimited@gmail.com>"]
+categories = ["wasm"]
+readme = "README.md"
+license = "MIT"
+edition = "2018"
+
+[profile.release]
+lto = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+dominator = { path = "../.." }
+wasm-bindgen = "0.2.45"
+futures-signals = "0.3.0"
+lazy_static = "1.0.0"
+
+[target."cfg(debug_assertions)".dependencies]
+console_error_panic_hook = "0.1.5"

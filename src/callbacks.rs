@@ -4,7 +4,7 @@ use discard::Discard;
 
 // TODO replace this with FnOnce later
 trait IInsertCallback {
-    fn call(self: Box<Self>, &mut Callbacks);
+    fn call(self: Box<Self>, callbacks: &mut Callbacks);
 }
 
 impl<F: FnOnce(&mut Callbacks)> IInsertCallback for F {

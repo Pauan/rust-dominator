@@ -1,6 +1,13 @@
-use dom::RefFn;
+use crate::dom::RefFn;
 
-pub use animation::AnimatedSignalVec;
+pub use crate::animation::AnimatedSignalVec;
+
+
+pub trait StaticEvent {
+    const EVENT_TYPE: &'static str;
+
+    fn unchecked_from_event(event: web_sys::Event) -> Self;
+}
 
 
 #[deprecated(since = "0.3.2", note = "Use the apply or apply_if methods instead")]

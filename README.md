@@ -12,4 +12,4 @@ You must use the Nightly Rust compiler (because it is needed for futures 0.3)
 Running the examples
 ====================
 
-Just do `cargo web start --release` and then open `http://[::1]:8000` in a web browser.
+Just do `yarn` and then `yarn start` (it will take a while to compile the dependencies, please be patient)

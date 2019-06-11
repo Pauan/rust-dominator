@@ -1,12 +1,8 @@
-#[macro_use]
-extern crate dominator;
-#[macro_use]
-extern crate lazy_static;
-
+use wasm_bindgen::prelude::*;
 use std::sync::Arc;
+use lazy_static::lazy_static;
 use futures_signals::signal::{Mutable, SignalExt};
-use dominator::Dom;
-use dominator::events::ClickEvent;
+use dominator::{Dom, class, html, clone, events};
 
 
 struct State {
@@ -54,7 +50,7 @@ impl State {
                 html!("button", {
                     .class(&*BUTTON_CLASS)
                     .text("Increase")
-                    .event(clone!(state => move |_: ClickEvent| {
+                    .event(clone!(state => move |_: events::Click| {
                         // Increment the counter
                         state.counter.replace_with(|x| *x + 1);
                     }))
@@ -63,7 +59,7 @@ impl State {
                 html!("button", {
                     .class(&*BUTTON_CLASS)
                     .text("Decrease")
-                    .event(clone!(state => move |_: ClickEvent| {
+                    .event(clone!(state => move |_: events::Click| {
                         // Decrement the counter
                         state.counter.replace_with(|x| *x - 1);
                     }))
@@ -72,7 +68,7 @@ impl State {
                 html!("button", {
                     .class(&*BUTTON_CLASS)
                     .text("Reset")
-                    .event(clone!(state => move |_: ClickEvent| {
+                    .event(clone!(state => move |_: events::Click| {
                         // Reset the counter to 0
                         state.counter.set_neq(0);
                     }))
@@ -83,8 +79,15 @@ impl State {
 }
 
 
-fn main() {
+#[wasm_bindgen(start)]
+pub fn main_js() -> Result<(), JsValue> {
+    #[cfg(debug_assertions)]
+    console_error_panic_hook::set_once();
+
+
     let state = State::new();
 
-    dominator::append_dom(&dominator::body(), State::render(state));
+    dominator::append_dom(dominator::body(), State::render(state));
+
+    Ok(())
 }
