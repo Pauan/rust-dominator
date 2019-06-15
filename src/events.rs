@@ -69,6 +69,7 @@ make_mouse_event!(Click, "click");
 make_mouse_event!(MouseEnter, "mouseenter");
 make_mouse_event!(MouseLeave, "mouseleave");
 make_mouse_event!(DoubleClick, "dblclick");
+make_mouse_event!(ContextMenu, "contextmenu");
 
 make_keyboard_event!(KeyDown, "keydown");
 make_keyboard_event!(KeyUp, "keyup");
