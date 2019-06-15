@@ -100,6 +100,7 @@ struct TimestampsState {
     waker: Option<Waker>,
 }
 
+// TODO must_use ?
 #[derive(Debug)]
 pub struct Timestamps {
     state: Arc<Mutex<TimestampsState>>,

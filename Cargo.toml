@@ -21,7 +21,7 @@ futures-signals = "0.3.5"
 wasm-bindgen = "0.2.45"
 js-sys = "0.3.22"
 # TODO fix this before release
-gloo = { git = "https://github.com/rustwasm/gloo" }
+gloo = { git = "https://github.com/rustwasm/gloo", commit = "e8e505fbdbe96164381bd6fe7ef350438d54a84f" }
 
 [dependencies.wasm-bindgen-futures]
 version = "0.3.22"

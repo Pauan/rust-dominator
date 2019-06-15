@@ -6,6 +6,7 @@ const dist = path.resolve(__dirname, "dist");
 
 module.exports = {
   mode: "production",
+  stats: "errors-warnings",
   entry: {
     index: "./js/index.js"
   },
@@ -14,7 +15,13 @@ module.exports = {
     filename: "[name].js"
   },
   devServer: {
-    contentBase: dist,
+    liveReload: true,
+    open: true,
+    noInfo: true,
+    overlay: {
+      warnings: true,
+      errors: true
+    }
   },
   plugins: [
     new CopyPlugin([
@@ -22,8 +29,7 @@ module.exports = {
     ]),
 
     new WasmPackPlugin({
-      crateDirectory: __dirname,
-      extraArgs: "--out-name index"
-    }),
+      crateDirectory: __dirname
+    })
   ]
 };

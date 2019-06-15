@@ -67,6 +67,7 @@ impl<A> Discard for FnDiscard<A> where A: FnOnce() {
 }
 
 
+// TODO verify that this doesn't leak events / memory
 // TODO is this worth using ?
 pub(crate) struct EventDiscard(Option<EventListener>);
 

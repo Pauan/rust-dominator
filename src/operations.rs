@@ -16,7 +16,6 @@ use crate::dom::Dom;
 use crate::callbacks::Callbacks;
 
 
-// TODO this should probably be in stdweb
 #[inline]
 pub(crate) fn spawn_future<F>(future: F) -> DiscardOnDrop<CancelableFutureHandle>
     where F: Future<Output = ()> + 'static {

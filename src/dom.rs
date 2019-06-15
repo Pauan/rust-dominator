@@ -124,6 +124,7 @@ pub fn append_dom(parent: &Node, mut dom: Dom) -> DomHandle {
 }
 
 
+// TODO use must_use ?
 enum IsWindowLoaded {
     Initial {},
     Pending {
@@ -214,6 +215,8 @@ pub fn text_signal<A, B>(value: B) -> Dom
 }
 
 
+// TODO better warning message for must_use
+#[must_use]
 #[derive(Debug)]
 pub struct Dom {
     pub(crate) element: Node,
@@ -232,7 +235,6 @@ impl Dom {
     #[inline]
     pub fn empty() -> Self {
         // TODO is there a better way of doing this ?
-        // TODO is it legal to append children to a comment node ?
         Self::new(document().create_comment("").into())
     }
 
@@ -351,6 +353,8 @@ fn set_property<A, B, C>(element: &A, name: &B, value: C) where A: AsRef<JsValue
 }
 
 
+// TODO better warning message for must_use
+#[must_use]
 pub struct DomBuilder<A> {
     element: A,
     callbacks: Callbacks,

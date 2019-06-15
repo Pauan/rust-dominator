@@ -292,7 +292,10 @@ pub fn main_js() -> Result<(), JsValue> {
                                                 .event(clone!(todo => move |event: events::KeyDown| {
                                                     match event.key().as_str() {
                                                         "Enter" => {
-                                                            event.dyn_target::<HtmlElement>().unwrap_throw().blur();
+                                                            event.dyn_target::<HtmlElement>()
+                                                                .unwrap_throw()
+                                                                .blur()
+                                                                .unwrap_throw();
                                                         },
                                                         "Escape" => {
                                                             todo.editing.set_neq(None);
