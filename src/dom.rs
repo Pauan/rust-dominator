@@ -527,7 +527,7 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
     }
 
     #[inline]
-    pub fn text(self, value: &str) -> Self {
+    pub fn text(mut self, value: &str) -> Self {
         self.check_children();
         self.element.as_ref().set_text_content(Some(value));
         self
@@ -546,7 +546,7 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
     }
 
     #[inline]
-    pub fn text_signal<B, C>(self, value: C) -> Self
+    pub fn text_signal<B, C>(mut self, value: C) -> Self
         where B: AsStr,
               C: Signal<Item = B> + 'static {
 
