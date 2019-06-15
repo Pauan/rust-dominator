@@ -512,32 +512,47 @@ impl<A> DomBuilder<A> where A: AsRef<EventTarget> {
 }
 
 impl<A> DomBuilder<A> where A: AsRef<Node> {
+    #[inline]
+    fn check_children(&mut self) {
+        assert_eq!(self.has_children, false);
+        self.has_children = true;
+    }
+
     // TODO figure out how to make this owned rather than &mut
     #[inline]
     pub fn children<'a, B: IntoIterator<Item = &'a mut Dom>>(mut self, children: B) -> Self {
-        assert_eq!(self.has_children, false);
-        self.has_children = true;
-
+        self.check_children();
         operations::insert_children_iter(self.element.as_ref(), &mut self.callbacks, children);
         self
     }
 
     #[inline]
     pub fn text(self, value: &str) -> Self {
-        // TODO make this more efficient ?
-        self.children(&mut [
-            text(value),
-        ])
+        self.check_children();
+        self.element.as_ref().set_text_content(Some(value));
+        self
+    }
+
+    fn set_text_signal<B, C>(&mut self, value: C)
+        where B: AsStr,
+              C: Signal<Item = B> + 'static {
+
+        let element = self.element.as_ref().clone();
+
+        self.callbacks.after_remove(for_each(value, move |value| {
+            let value = value.as_str();
+            element.set_text_content(Some(value));
+        }));
     }
 
     #[inline]
     pub fn text_signal<B, C>(self, value: C) -> Self
         where B: AsStr,
               C: Signal<Item = B> + 'static {
-        // TODO make this more efficient ?
-        self.children(&mut [
-            text_signal(value),
-        ])
+
+        self.check_children();
+        self.set_text_signal(value);
+        self
     }
 }
 
