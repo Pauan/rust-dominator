@@ -1,5 +1,4 @@
 use wasm_bindgen::UnwrapThrowExt;
-use wasm_bindgen::prelude::wasm_bindgen;
 use web_sys::{Node, HtmlElement, Element};
 
 
@@ -82,9 +81,7 @@ pub(crate) fn remove_attribute(element: &Element, name: &str) {
 }
 
 
-
-// TODO is this the most efficient way to remove all children ?
-#[wasm_bindgen(inline_js = "export function remove_all_children(node) { while (node.firstChild != null) { node.removeChild(node.firstChild); } }")]
-extern "C" {
-    pub(crate) fn remove_all_children(node: &Node);
+#[inline]
+pub(crate) fn remove_all_children(node: &Node) {
+    node.set_text_content(None);
 }
