@@ -38,6 +38,7 @@ features = [
     "CssStyleRule",
     "CssStyleSheet",
     "Document",
+    "DocumentFragment",
     "DomTokenList",
     "Element",
     "Event",

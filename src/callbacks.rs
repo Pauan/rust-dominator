@@ -28,10 +28,10 @@ impl<A: Discard> IRemove for A {
 }
 
 
-pub(crate) struct InsertCallback(Box<IInsertCallback>);
+pub(crate) struct InsertCallback(Box<dyn IInsertCallback>);
 
 // TODO is there a more efficient way of doing this ?
-pub(crate) struct RemoveCallback(Box<IRemove>);
+pub(crate) struct RemoveCallback(Box<dyn IRemove>);
 
 impl std::fmt::Debug for InsertCallback {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -76,25 +76,27 @@ impl Callbacks {
     // TODO runtime checks to make sure this isn't called multiple times ?
     #[inline]
     pub(crate) fn trigger_after_insert(&mut self) {
-        let mut callbacks = Callbacks::new();
+        if !self.after_insert.is_empty() {
+            let mut callbacks = Callbacks::new();
 
-        // TODO verify that this is correct
-        // TODO is this the most efficient way to accomplish this ?
-        std::mem::swap(&mut callbacks.after_remove, &mut self.after_remove);
+            // TODO verify that this is correct
+            // TODO is this the most efficient way to accomplish this ?
+            std::mem::swap(&mut callbacks.after_remove, &mut self.after_remove);
 
-        for f in self.after_insert.drain(..) {
-            f.0.call(&mut callbacks);
+            for f in self.after_insert.drain(..) {
+                f.0.call(&mut callbacks);
+            }
+
+            // TODO verify that this is correct
+            self.after_insert = vec![];
+
+            // TODO figure out a better way of verifying this
+            assert_eq!(callbacks.after_insert.len(), 0);
+
+            // TODO verify that this is correct
+            // TODO what if `callbacks` is leaked ?
+            std::mem::swap(&mut callbacks.after_remove, &mut self.after_remove);
         }
-
-        // TODO verify that this is correct
-        self.after_insert = vec![];
-
-        // TODO figure out a better way of verifying this
-        assert_eq!(callbacks.after_insert.len(), 0);
-
-        // TODO verify that this is correct
-        // TODO what if `callbacks` is leaked ?
-        std::mem::swap(&mut callbacks.after_remove, &mut self.after_remove);
     }
 
     #[inline]

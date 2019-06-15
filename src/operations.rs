@@ -14,6 +14,7 @@ use wasm_bindgen_futures::futures_0_3::spawn_local;
 use crate::dom_operations;
 use crate::dom::Dom;
 use crate::callbacks::Callbacks;
+use crate::utils::document;
 
 
 #[inline]
@@ -83,6 +84,7 @@ pub fn insert_children_signal<A, B, C>(element: &A, callbacks: &mut Callbacks, s
 #[inline]
 pub(crate) fn insert_children_iter<'a, A: IntoIterator<Item = &'a mut Dom>>(element: &Node, callbacks: &mut Callbacks, value: A) {
     for dom in value.into_iter() {
+        // TODO can this be made more efficient ?
         callbacks.after_insert.append(&mut dom.callbacks.after_insert);
         callbacks.after_remove.append(&mut dom.callbacks.after_remove);
 
@@ -139,15 +141,21 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
 
                 state.children = values;
 
-                let is_inserted = state.is_inserted;
+                let fragment = document().create_document_fragment();
 
-                // TODO use document fragment ?
-                for dom in state.children.iter_mut() {
+                // TODO does this allocate if the filtered Vec is empty ?
+                let after_inserts = state.children.iter_mut().filter(|dom| {
                     dom.callbacks.leak();
 
-                    element.append_child(&dom.element).unwrap_throw();
+                    fragment.append_child(&dom.element).unwrap_throw();
 
-                    if is_inserted {
+                    !dom.callbacks.after_insert.is_empty()
+                }).collect::<Vec<_>>();
+
+                element.append_child(&fragment).unwrap_throw();
+
+                if state.is_inserted {
+                    for dom in after_inserts {
                         dom.callbacks.trigger_after_insert();
                     }
                 }
