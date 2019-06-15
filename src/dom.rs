@@ -252,7 +252,11 @@ impl Dom {
 }
 
 
-// TODO create HTML / SVG specific versions of this ?
+#[inline]
+pub fn create_element<A>(name: &str) -> A where A: JsCast {
+    document().create_element(name).unwrap_throw().dyn_into().unwrap_throw()
+}
+
 #[inline]
 pub fn create_element_ns<A>(name: &str, namespace: &str) -> A where A: JsCast {
     document().create_element_ns(Some(namespace), name).unwrap_throw().dyn_into().unwrap_throw()

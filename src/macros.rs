@@ -13,23 +13,27 @@ macro_rules! __internal_builder_method {
 }
 
 
+#[doc(hidden)]
 #[macro_export]
-macro_rules! builder {
-    ($namespace:expr, $default:ty, $kind:expr => $t:ty) => {
-        $crate::builder!($namespace, $default, $kind => $t, {})
+macro_rules! __internal_builder {
+    ($default:ty, $name:ident => $make:expr, $kind:expr => $t:ty) => {
+        $crate::__internal_builder!($default, $name => $make, $kind => $t, {})
     };
-    ($namespace:expr, $default:ty, $kind:expr => $t:ty, { $($methods:tt)* }) => {{
-        let a: $t = $crate::create_element_ns($kind, $namespace);
+    ($default:ty, $name:ident => $make:expr, $kind:expr => $t:ty, { $($methods:tt)* }) => {{
+        let a: $t = {
+            let $name = $kind;
+            $make
+        };
         let b = $crate::DomBuilder::new(a);
         let c = $crate::__internal_builder_method!(b, $($methods)*);
         $crate::DomBuilder::into_dom(c)
     }};
 
-    ($namespace:expr, $default:ty, $kind:expr) => {
-        $crate::builder!($namespace, $default, $kind => $default)
+    ($default:ty, $name:ident => $make:expr, $kind:expr) => {
+        $crate::__internal_builder!($default, $name => $make, $kind => $default)
     };
-    ($namespace:expr, $default:ty, $kind:expr, { $($methods:tt)* }) => {
-        $crate::builder!($namespace, $default, $kind => $default, { $($methods)* })
+    ($default:ty, $name:ident => $make:expr, $kind:expr, { $($methods:tt)* }) => {
+        $crate::__internal_builder!($default, $name => $make, $kind => $default, { $($methods)* })
     };
 }
 
@@ -37,7 +41,7 @@ macro_rules! builder {
 #[macro_export]
 macro_rules! html {
     ($($args:tt)+) => {
-        $crate::builder!($crate::HTML_NAMESPACE, $crate::HtmlElement, $($args)+)
+        $crate::__internal_builder!($crate::HtmlElement, kind => $crate::create_element(kind), $($args)+)
     };
 }
 
@@ -45,7 +49,7 @@ macro_rules! html {
 #[macro_export]
 macro_rules! svg {
     ($($args:tt)+) => {
-        $crate::builder!($crate::SVG_NAMESPACE, $crate::SvgElement, $($args)+)
+        $crate::__internal_builder!($crate::SvgElement, kind => $crate::create_element_ns(kind, $crate::SVG_NAMESPACE), $($args)+)
     };
 }
 

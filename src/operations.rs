@@ -145,6 +145,7 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
 
                 let mut has_inserts = false;
 
+                // TODO is it worth it to use fragments ?
                 let fragment = document().create_document_fragment();
 
                 for dom in state.children.iter_mut() {
