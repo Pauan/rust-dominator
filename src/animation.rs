@@ -21,7 +21,7 @@ use crate::operations::spawn_future;
 
 struct RafState {
     id: i32,
-    closure: Closure<FnMut(f64)>,
+    closure: Closure<dyn FnMut(f64)>,
 }
 
 // TODO generalize this so it works for any target, not just JS
@@ -33,7 +33,7 @@ impl Raf {
     fn new<F>(mut callback: F) -> Self where F: FnMut(f64) + 'static {
         let state: Rc<RefCell<Option<RafState>>> = Rc::new(RefCell::new(None));
 
-        fn schedule(callback: &Closure<FnMut(f64)>) -> i32 {
+        fn schedule(callback: &Closure<dyn FnMut(f64)>) -> i32 {
             window()
                 .unwrap_throw()
                 .request_animation_frame(callback.as_ref().unchecked_ref())
@@ -51,7 +51,7 @@ impl Raf {
                 }
 
                 callback(time);
-            }) as Box<FnMut(f64)>)
+            }) as Box<dyn FnMut(f64)>)
         };
 
         *state.borrow_mut() = Some(RafState {

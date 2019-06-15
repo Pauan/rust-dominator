@@ -141,21 +141,26 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
 
                 state.children = values;
 
+                let is_inserted = state.is_inserted;
+
+                let mut has_inserts = false;
+
                 let fragment = document().create_document_fragment();
 
-                // TODO does this allocate if the filtered Vec is empty ?
-                let after_inserts = state.children.iter_mut().filter(|dom| {
+                for dom in state.children.iter_mut() {
                     dom.callbacks.leak();
 
                     fragment.append_child(&dom.element).unwrap_throw();
 
-                    !dom.callbacks.after_insert.is_empty()
-                }).collect::<Vec<_>>();
+                    if !dom.callbacks.after_insert.is_empty() {
+                        has_inserts = true;
+                    }
+                }
 
                 element.append_child(&fragment).unwrap_throw();
 
-                if state.is_inserted {
-                    for dom in after_inserts {
+                if is_inserted && has_inserts {
+                    for dom in state.children.iter_mut() {
                         dom.callbacks.trigger_after_insert();
                     }
                 }
