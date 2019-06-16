@@ -592,9 +592,12 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
     #[inline]
     pub fn class<B>(self, name: B) -> Self where B: MultiStr {
+        let list = self.element.as_ref().class_list();
+
         name.each(|name| {
-            dom_operations::add_class(self.element.as_ref(), name);
+            dom_operations::add_class(&list, name);
         });
+
         self
     }
 
@@ -690,7 +693,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         where B: MultiStr + 'static,
               C: Signal<Item = bool> + 'static {
 
-        let element = self.element.as_ref().clone();
+        let list = self.element.as_ref().class_list();
 
         let mut is_set = false;
 
@@ -700,7 +703,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
                     is_set = true;
 
                     name.each(|name| {
-                        dom_operations::add_class(&element, name);
+                        dom_operations::add_class(&list, name);
                     });
                 }
 
@@ -709,7 +712,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
                     is_set = false;
 
                     name.each(|name| {
-                        dom_operations::remove_class(&element, name);
+                        dom_operations::remove_class(&list, name);
                     });
                 }
             }

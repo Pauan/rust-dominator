@@ -1,5 +1,5 @@
 use wasm_bindgen::UnwrapThrowExt;
-use web_sys::{Node, HtmlElement, Element};
+use web_sys::{Node, HtmlElement, Element, DomTokenList};
 
 
 #[inline]
@@ -47,13 +47,13 @@ pub(crate) fn set_focused(element: &HtmlElement, focused: bool) {
 }
 
 #[inline]
-pub(crate) fn add_class(element: &Element, name: &str) {
-    element.class_list().add_1(name).unwrap_throw();
+pub(crate) fn add_class(list: &DomTokenList, name: &str) {
+    list.add_1(name).unwrap_throw();
 }
 
 #[inline]
-pub(crate) fn remove_class(element: &Element, name: &str) {
-    element.class_list().remove_1(name).unwrap_throw();
+pub(crate) fn remove_class(list: &DomTokenList, name: &str) {
+    list.remove_1(name).unwrap_throw();
 }
 
 
