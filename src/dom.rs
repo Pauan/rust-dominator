@@ -3,6 +3,7 @@ use std::convert::AsRef;
 use std::marker::PhantomData;
 use std::future::Future;
 use std::task::{Context, Poll};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use lazy_static::lazy_static;
 use futures_signals::signal::{Signal, not};
@@ -953,13 +954,9 @@ impl ClassBuilder {
     #[inline]
     pub fn new() -> Self {
         let class_name = {
-            use std::sync::atomic::{AtomicU32, Ordering};
-
             // TODO replace this with a global counter in JavaScript ?
-            lazy_static! {
-                // TODO can this be made more efficient ?
-                static ref CLASS_ID: AtomicU32 = AtomicU32::new(0);
-            }
+            // TODO can this be made more efficient ?
+            static CLASS_ID: AtomicU32 = AtomicU32::new(0);
 
             // TODO check for overflow ?
             let id = CLASS_ID.fetch_add(1, Ordering::Relaxed);
@@ -1138,7 +1135,6 @@ mod tests {
             .style_signal(["-moz-foo", "-webkit-foo", "foo"], always(Some("bar")))
             .style_signal(["-moz-foo", "-webkit-foo", "foo"], always(Some("bar".to_owned())))
             .style_signal(["-moz-foo", "-webkit-foo", "foo"], always("bar".to_owned()).map(|x| Some(RefFn::new(x, |x| x.as_str()))))
-
             ;
     }
 }
