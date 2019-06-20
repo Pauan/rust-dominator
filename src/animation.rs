@@ -25,6 +25,7 @@ struct RafState {
 }
 
 // TODO generalize this so it works for any target, not just JS
+// TODO move this into gloo
 struct Raf {
     state: Rc<RefCell<Option<RafState>>>,
 }
@@ -468,6 +469,9 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
 pub struct Percentage(f64);
 
 impl Percentage {
+    pub const START: Percentage = Percentage(0.0);
+    pub const END: Percentage = Percentage(1.0);
+
     #[inline]
     pub fn new(input: f64) -> Self {
         debug_assert!(input >= 0.0 && input <= 1.0);

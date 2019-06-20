@@ -1,4 +1,4 @@
-use wasm_bindgen::UnwrapThrowExt;
+use wasm_bindgen::{JsValue, UnwrapThrowExt};
 use web_sys::{Node, HtmlElement, Element, DomTokenList};
 
 
@@ -9,75 +9,88 @@ pub(crate) fn get_at(parent: &Node, index: u32) -> Node {
 
 // TODO make this more efficient
 #[inline]
-pub(crate) fn move_from_to(parent: &Node, old_index: u32, new_index: u32) {
+pub(crate) fn move_from_to(parent: &Node, old_index: u32, new_index: u32) -> Result<(), JsValue> {
     let child = get_at(parent, old_index);
 
-    parent.remove_child(&child).unwrap_throw();
+    parent.remove_child(&child)?;
 
-    insert_at(parent, new_index, &child);
+    insert_at(parent, new_index, &child)?;
+
+    Ok(())
 }
 
 // TODO make this more efficient
 #[inline]
-pub(crate) fn insert_at(parent: &Node, index: u32, child: &Node) {
-    parent.insert_before(child, Some(&get_at(parent, index))).unwrap_throw();
+pub(crate) fn insert_at(parent: &Node, index: u32, child: &Node) -> Result<(), JsValue> {
+    parent.insert_before(child, Some(&get_at(parent, index)))?;
+    Ok(())
 }
 
 // TODO make this more efficient
 #[inline]
-pub(crate) fn update_at(parent: &Node, index: u32, child: &Node) {
-    parent.replace_child(child, &get_at(parent, index)).unwrap_throw();
+pub(crate) fn update_at(parent: &Node, index: u32, child: &Node) -> Result<(), JsValue> {
+    parent.replace_child(child, &get_at(parent, index))?;
+    Ok(())
 }
 
 // TODO make this more efficient
 #[inline]
-pub(crate) fn remove_at(parent: &Node, index: u32) {
-    parent.remove_child(&get_at(parent, index)).unwrap_throw();
+pub(crate) fn remove_at(parent: &Node, index: u32) -> Result<(), JsValue> {
+    parent.remove_child(&get_at(parent, index))?;
+    Ok(())
 }
 
 
 #[inline]
-pub(crate) fn set_focused(element: &HtmlElement, focused: bool) {
+pub(crate) fn set_focused(element: &HtmlElement, focused: bool) -> Result<(), JsValue> {
     if focused {
-        element.focus().unwrap_throw();
+        element.focus()?;
 
     } else {
-        element.blur().unwrap_throw();
+        element.blur()?;
     }
+
+    Ok(())
 }
 
 #[inline]
-pub(crate) fn add_class(list: &DomTokenList, name: &str) {
-    list.add_1(name).unwrap_throw();
+pub(crate) fn add_class(list: &DomTokenList, name: &str) -> Result<(), JsValue> {
+    list.add_1(name)?;
+    Ok(())
 }
 
 #[inline]
-pub(crate) fn remove_class(list: &DomTokenList, name: &str) {
-    list.remove_1(name).unwrap_throw();
+pub(crate) fn remove_class(list: &DomTokenList, name: &str) -> Result<(), JsValue> {
+    list.remove_1(name)?;
+    Ok(())
 }
 
 
 // TODO check that the attribute *actually* was changed
 #[inline]
-pub(crate) fn set_attribute(element: &Element, name: &str, value: &str) {
-    element.set_attribute(name, value).unwrap_throw();
+pub(crate) fn set_attribute(element: &Element, name: &str, value: &str) -> Result<(), JsValue> {
+    element.set_attribute(name, value)?;
+    Ok(())
 }
 
 // TODO check that the attribute *actually* was changed
 #[inline]
-pub(crate) fn set_attribute_ns(element: &Element, namespace: &str, name: &str, value: &str) {
-    element.set_attribute_ns(Some(namespace), name, value).unwrap_throw();
+pub(crate) fn set_attribute_ns(element: &Element, namespace: &str, name: &str, value: &str) -> Result<(), JsValue> {
+    element.set_attribute_ns(Some(namespace), name, value)?;
+    Ok(())
 }
 
 
 #[inline]
-pub(crate) fn remove_attribute_ns(element: &Element, namespace: &str, name: &str) {
-    element.remove_attribute_ns(Some(namespace), name).unwrap_throw();
+pub(crate) fn remove_attribute_ns(element: &Element, namespace: &str, name: &str) -> Result<(), JsValue> {
+    element.remove_attribute_ns(Some(namespace), name)?;
+    Ok(())
 }
 
 #[inline]
-pub(crate) fn remove_attribute(element: &Element, name: &str) {
-    element.remove_attribute(name).unwrap_throw();
+pub(crate) fn remove_attribute(element: &Element, name: &str) -> Result<(), JsValue> {
+    element.remove_attribute(name)?;
+    Ok(())
 }
 
 

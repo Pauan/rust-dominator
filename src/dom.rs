@@ -296,26 +296,30 @@ fn set_style<A, B>(style: &CssStyleDeclaration, name: &A, value: B, important: b
     let mut names = vec![];
     let mut values = vec![];
 
+    fn try_set_style(style: &CssStyleDeclaration, names: &mut Vec<String>, values: &mut Vec<String>, name: &str, value: &str, important: bool) -> Result<bool, JsValue> {
+        assert!(value != "");
+
+        // TODO handle browser prefixes ?
+        style.remove_property(name)?;
+
+        style.set_property_with_priority(name, value, if important { "important" } else { "" })?;
+
+        // TODO maybe use cfg(debug_assertions) ?
+        let is_changed = style.get_property_value(name)? != "";
+
+        if is_changed {
+            Ok(true)
+
+        } else {
+            names.push(name.to_string());
+            values.push(value.to_string());
+            Ok(false)
+        }
+    }
+
     let okay = name.any(|name| {
         value.any(|value| {
-            assert!(value != "");
-
-            // TODO handle browser prefixes ?
-            style.remove_property(name).unwrap_throw();
-
-            style.set_property_with_priority(name, value, if important { "important" } else { "" }).unwrap_throw();
-
-            // TODO maybe use cfg(debug_assertions) ?
-            let is_changed = style.get_property_value(name).unwrap_throw() != "";
-
-            if is_changed {
-                true
-
-            } else {
-                names.push(name.to_string());
-                values.push(value.to_string());
-                false
-            }
+            try_set_style(style, &mut names, &mut values, name, value, important).unwrap_throw()
         })
     });
 
@@ -527,7 +531,7 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
     #[inline]
     pub fn children<'a, B: IntoIterator<Item = &'a mut Dom>>(mut self, children: B) -> Self {
         self.check_children();
-        operations::insert_children_iter(self.element.as_ref(), &mut self.callbacks, children);
+        operations::insert_children_iter(self.element.as_ref(), &mut self.callbacks, children).unwrap_throw();
         self
     }
 
@@ -578,7 +582,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
     #[inline]
     pub fn attribute<B>(self, name: B, value: &str) -> Self where B: MultiStr {
         name.each(|name| {
-            dom_operations::set_attribute(self.element.as_ref(), name, value);
+            dom_operations::set_attribute(self.element.as_ref(), name, value).unwrap_throw();
         });
         self
     }
@@ -586,7 +590,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
     #[inline]
     pub fn attribute_namespace<B>(self, namespace: &str, name: B, value: &str) -> Self where B: MultiStr {
         name.each(|name| {
-            dom_operations::set_attribute_ns(self.element.as_ref(), namespace, name, value);
+            dom_operations::set_attribute_ns(self.element.as_ref(), namespace, name, value).unwrap_throw();
         });
         self
     }
@@ -596,7 +600,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         let list = self.element.as_ref().class_list();
 
         name.each(|name| {
-            dom_operations::add_class(&list, name);
+            dom_operations::add_class(&list, name).unwrap_throw();
         });
 
         self
@@ -628,12 +632,12 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
                     let value = value.as_str();
 
                     name.each(|name| {
-                        dom_operations::set_attribute(element, &name, value);
+                        dom_operations::set_attribute(element, &name, value).unwrap_throw();
                     });
                 },
                 None => {
                     name.each(|name| {
-                        dom_operations::remove_attribute(element, &name)
+                        dom_operations::remove_attribute(element, &name).unwrap_throw();
                     });
                 },
             }
@@ -666,12 +670,12 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
                     let value = value.as_str();
 
                     name.each(|name| {
-                        dom_operations::set_attribute_ns(element, &namespace, &name, value);
+                        dom_operations::set_attribute_ns(element, &namespace, &name, value).unwrap_throw();
                     });
                 },
                 None => {
                     name.each(|name| {
-                        dom_operations::remove_attribute_ns(element, &namespace, &name);
+                        dom_operations::remove_attribute_ns(element, &namespace, &name).unwrap_throw();
                     });
                 },
             }
@@ -704,7 +708,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
                     is_set = true;
 
                     name.each(|name| {
-                        dom_operations::add_class(&list, name);
+                        dom_operations::add_class(&list, name).unwrap_throw();
                     });
                 }
 
@@ -713,7 +717,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
                     is_set = false;
 
                     name.each(|name| {
-                        dom_operations::remove_class(&list, name);
+                        dom_operations::remove_class(&list, name).unwrap_throw();
                     });
                 }
             }
@@ -816,7 +820,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
         // This needs to use `after_insert` because calling `.focus()` on an element before it is in the DOM has no effect
         self.callbacks.after_insert(move |_| {
             // TODO avoid updating if the focused state hasn't changed ?
-            dom_operations::set_focused(&element, value);
+            dom_operations::set_focused(&element, value).unwrap_throw();
         });
 
         self
@@ -833,7 +837,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
             // TODO verify that this is correct under all circumstances
             callbacks.after_remove(for_each(value, move |value| {
                 // TODO avoid updating if the focused state hasn't changed ?
-                dom_operations::set_focused(&element, value);
+                dom_operations::set_focused(&element, value).unwrap_throw();
             }));
         });
     }
@@ -1035,14 +1039,14 @@ mod tests {
             builder.style("foo", "bar")
         }
 
-        a.apply(my_mixin);
+        let _ = a.apply(my_mixin);
     }
 
     #[test]
     fn text_signal_types() {
-        text_signal(always("foo"));
-        text_signal(always("foo".to_owned()));
-        text_signal(always("foo".to_owned()).map(|x| RefFn::new(x, |x| x.as_str())));
+        let _ = text_signal(always("foo"));
+        let _ = text_signal(always("foo".to_owned()));
+        let _ = text_signal(always("foo".to_owned()).map(|x| RefFn::new(x, |x| x.as_str())));
         //text_signal(always(Arc::new("foo")));
         //text_signal(always(Arc::new("foo".to_owned())));
         //text_signal(always(Rc::new("foo")));

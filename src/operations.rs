@@ -8,7 +8,7 @@ use futures_signals::{cancelable_future, CancelableFutureHandle};
 use futures_signals::signal::{Signal, SignalExt};
 use futures_signals::signal_vec::{VecDiff, SignalVec, SignalVecExt};
 use web_sys::Node;
-use wasm_bindgen::UnwrapThrowExt;
+use wasm_bindgen::{JsValue, UnwrapThrowExt};
 use wasm_bindgen_futures::futures_0_3::spawn_local;
 
 use crate::dom_operations;
@@ -82,14 +82,16 @@ pub fn insert_children_signal<A, B, C>(element: &A, callbacks: &mut Callbacks, s
 }*/
 
 #[inline]
-pub(crate) fn insert_children_iter<'a, A: IntoIterator<Item = &'a mut Dom>>(element: &Node, callbacks: &mut Callbacks, value: A) {
+pub(crate) fn insert_children_iter<'a, A: IntoIterator<Item = &'a mut Dom>>(element: &Node, callbacks: &mut Callbacks, value: A) -> Result<(), JsValue> {
     for dom in value.into_iter() {
         // TODO can this be made more efficient ?
         callbacks.after_insert.append(&mut dom.callbacks.after_insert);
         callbacks.after_remove.append(&mut dom.callbacks.after_remove);
 
-        element.append_child(&dom.element).unwrap_throw();
+        element.append_child(&dom.element)?;
     }
+
+    Ok(())
 }
 
 
@@ -124,15 +126,12 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
         });
     }
 
-    // TODO verify that this will drop `children`
-    callbacks.after_remove(for_each_vec(signal, move |change| {
-        let mut state = state.lock().unwrap_throw();
-
+    fn process_change(state: &mut State, element: &Node, change: VecDiff<Dom>) -> Result<(), JsValue> {
         match change {
             VecDiff::Replace { values } => {
                 // TODO is this correct ?
                 if state.children.len() > 0 {
-                    dom_operations::remove_all_children(&element);
+                    dom_operations::remove_all_children(element);
 
                     for dom in state.children.drain(..) {
                         dom.callbacks.discard();
@@ -151,14 +150,14 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
                 for dom in state.children.iter_mut() {
                     dom.callbacks.leak();
 
-                    fragment.append_child(&dom.element).unwrap_throw();
+                    fragment.append_child(&dom.element)?;
 
                     if !dom.callbacks.after_insert.is_empty() {
                         has_inserts = true;
                     }
                 }
 
-                element.append_child(&fragment).unwrap_throw();
+                element.append_child(&fragment)?;
 
                 if is_inserted && has_inserts {
                     for dom in state.children.iter_mut() {
@@ -169,7 +168,7 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
 
             VecDiff::InsertAt { index, mut value } => {
                 // TODO better usize -> u32 conversion
-                dom_operations::insert_at(&element, index as u32, &value.element);
+                dom_operations::insert_at(element, index as u32, &value.element)?;
 
                 value.callbacks.leak();
 
@@ -182,7 +181,7 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
             },
 
             VecDiff::Push { mut value } => {
-                element.append_child(&value.element).unwrap_throw();
+                element.append_child(&value.element)?;
 
                 value.callbacks.leak();
 
@@ -196,7 +195,7 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
 
             VecDiff::UpdateAt { index, mut value } => {
                 // TODO better usize -> u32 conversion
-                dom_operations::update_at(&element, index as u32, &value.element);
+                dom_operations::update_at(element, index as u32, &value.element)?;
 
                 value.callbacks.leak();
 
@@ -217,12 +216,12 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
                 state.children.insert(new_index, value);
 
                 // TODO better usize -> u32 conversion
-                dom_operations::move_from_to(&element, old_index as u32, new_index as u32);
+                dom_operations::move_from_to(element, old_index as u32, new_index as u32)?;
             },
 
             VecDiff::RemoveAt { index } => {
                 // TODO better usize -> u32 conversion
-                dom_operations::remove_at(&element, index as u32);
+                dom_operations::remove_at(element, index as u32)?;
 
                 state.children.remove(index).callbacks.discard();
             },
@@ -232,7 +231,7 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
 
                 // TODO create remove_last_child function ?
                 // TODO better usize -> u32 conversion
-                dom_operations::remove_at(&element, index as u32);
+                dom_operations::remove_at(element, index as u32)?;
 
                 state.children.pop().unwrap_throw().callbacks.discard();
             },
@@ -241,7 +240,7 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
                 // TODO is this correct ?
                 // TODO is this needed, or is it guaranteed by VecDiff ?
                 if state.children.len() > 0 {
-                    dom_operations::remove_all_children(&element);
+                    dom_operations::remove_all_children(element);
 
                     for dom in state.children.drain(..) {
                         dom.callbacks.discard();
@@ -249,5 +248,14 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
                 }
             },
         }
+
+        Ok(())
+    }
+
+    // TODO verify that this will drop `children`
+    callbacks.after_remove(for_each_vec(signal, move |change| {
+        let mut state = state.lock().unwrap_throw();
+
+        process_change(&mut state, &element, change).unwrap_throw();
     }));
 }

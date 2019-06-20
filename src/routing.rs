@@ -42,22 +42,24 @@ impl<A> State<A> {
 }*/
 
 
-fn current_url_string() -> String {
-    window().unwrap_throw().location().href().unwrap_throw()
+fn current_url_string() -> Result<String, JsValue> {
+    Ok(window().unwrap_throw().location().href()?)
 }
 
 // TODO inline ?
-fn change_url(mutable: &Mutable<Url>) {
+fn change_url(mutable: &Mutable<Url>) -> Result<(), JsValue> {
     let mut lock = mutable.lock_mut();
 
-    let new_url = current_url_string();
+    let new_url = current_url_string()?;
 
     // TODO test that this doesn't notify if the URLs are the same
     // TODO helper method for this
     // TODO can this be made more efficient ?
     if lock.href() != new_url {
-        *lock = Url::new(&new_url).unwrap_throw();
+        *lock = Url::new(&new_url)?;
     }
+
+    Ok(())
 }
 
 
@@ -67,25 +69,25 @@ struct CurrentUrl {
 }
 
 impl CurrentUrl {
-    fn new() -> Self {
+    fn new() -> Result<Self, JsValue> {
         // TODO can this be made more efficient ?
-        let value = Mutable::new(Url::new(&current_url_string()).unwrap_throw());
+        let value = Mutable::new(Url::new(&current_url_string()?)?);
 
-        Self {
+        Ok(Self {
             _listener: EventListener::new(&window().unwrap_throw(), "popstate", {
                 let value = value.clone();
                 move |_| {
-                    change_url(&value);
+                    change_url(&value).unwrap_throw();
                 }
             }),
             value,
-        }
+        })
     }
 }
 
 // TODO somehow share this safely between threads ?
 thread_local! {
-    static URL: CurrentUrl = CurrentUrl::new();
+    static URL: CurrentUrl = CurrentUrl::new().unwrap_throw();
 }
 
 
@@ -113,7 +115,7 @@ pub fn go_to_url(new_url: &str) {
         .unwrap_throw();
 
     URL.with(|url| {
-        change_url(&url.value);
+        change_url(&url.value).unwrap_throw();
     });
 }
 
