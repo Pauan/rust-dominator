@@ -18,10 +18,7 @@ module.exports = {
     liveReload: true,
     open: true,
     noInfo: true,
-    overlay: {
-      warnings: true,
-      errors: true
-    }
+    overlay: true
   },
   plugins: [
     new CopyPlugin([
@@ -29,7 +26,8 @@ module.exports = {
     ]),
 
     new WasmPackPlugin({
-      crateDirectory: __dirname
+      crateDirectory: __dirname,
+      extraArgs: "--out-name index"
     })
   ]
 };

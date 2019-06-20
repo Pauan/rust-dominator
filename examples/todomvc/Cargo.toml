@@ -29,6 +29,7 @@ features = ["rc"]
 version = "0.3.22"
 features = [
     "Storage",
+    "Url",
 ]
 
 [target."cfg(debug_assertions)".dependencies]

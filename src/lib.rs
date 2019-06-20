@@ -6,12 +6,14 @@
 #[macro_use]
 mod macros;
 mod utils;
+mod cache;
+mod bindings;
 mod callbacks;
 mod operations;
-mod dom_operations;
 mod dom;
 
 pub use dom::*;
+pub use cache::*;
 pub mod traits;
 pub mod animation;
 pub mod routing;

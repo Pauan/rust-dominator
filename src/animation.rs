@@ -374,7 +374,7 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
                     },
 
                     VecDiff::UpdateAt { index, value } => {
-                        let index = self.find_index(index).expect("Could not find value");
+                        let index = self.find_index(index).unwrap_throw();
                         let state = {
                             let state = &self.as_mut().animations()[index];
                             AnimatedMapBroadcaster(state.animation.raw_clone())
@@ -386,7 +386,7 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
                     // TODO test this
                     // TODO should this be treated as a removal + insertion ?
                     VecDiff::Move { old_index, new_index } => {
-                        let old_index = self.find_index(old_index).expect("Could not find value");
+                        let old_index = self.find_index(old_index).unwrap_throw();
 
                         let state = self.as_mut().animations().remove(old_index);
 
@@ -398,7 +398,7 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
                     },
 
                     VecDiff::RemoveAt { index } => {
-                        let index = self.find_index(index).expect("Could not find value");
+                        let index = self.find_index(index).unwrap_throw();
 
                         if self.as_mut().should_remove(cx, index) {
                             self.remove_index(index)
@@ -409,7 +409,7 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
                     },
 
                     VecDiff::Pop {} => {
-                        let index = self.find_last_index().expect("Cannot pop from empty vec");
+                        let index = self.find_last_index().unwrap_throw();
 
                         if self.as_mut().should_remove(cx, index) {
                             self.remove_index(index)

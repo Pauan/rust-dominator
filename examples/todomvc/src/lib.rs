@@ -3,7 +3,7 @@ use std::cell::Cell;
 
 use wasm_bindgen::prelude::*;
 use serde_derive::{Serialize, Deserialize};
-use web_sys::{window, HtmlElement, Storage};
+use web_sys::{window, HtmlElement, Storage, Url};
 use futures_signals::map_ref;
 use futures_signals::signal::{Signal, SignalExt, Mutable};
 use futures_signals::signal_vec::{SignalVecExt, MutableVec};
@@ -37,13 +37,15 @@ enum Filter {
 
 impl Filter {
     fn signal() -> impl Signal<Item = Self> {
-        routing::url().map(|url| {
-            match url.hash().as_str() {
-                "#/active" => Filter::Active,
-                "#/completed" => Filter::Completed,
-                _ => Filter::All,
-            }
-        })
+        routing::url()
+            .signal_ref(|url| Url::new(&url).unwrap_throw())
+            .map(|url| {
+                match url.hash().as_str() {
+                    "#/active" => Filter::Active,
+                    "#/completed" => Filter::Completed,
+                    _ => Filter::All,
+                }
+            })
     }
 
     #[inline]

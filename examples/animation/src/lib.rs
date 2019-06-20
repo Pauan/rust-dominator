@@ -98,7 +98,7 @@ impl Drop for State {
 
 // TODO move this into gloo
 fn set_interval<F>(ms: i32, f: F) where F: FnMut() + 'static {
-    let f = wasm_bindgen::closure::Closure::wrap(Box::new(f) as Box<FnMut()>);
+    let f = wasm_bindgen::closure::Closure::wrap(Box::new(f) as Box<dyn FnMut()>);
 
     web_sys::window()
         .unwrap_throw()

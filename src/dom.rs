@@ -12,16 +12,17 @@ use futures_util::FutureExt;
 use futures_channel::oneshot;
 use discard::{Discard, DiscardOnDrop};
 use wasm_bindgen::{JsValue, UnwrapThrowExt, JsCast};
-use js_sys::Reflect;
-use web_sys::{window, HtmlElement, Node, EventTarget, Element, CssStyleSheet, HtmlStyleElement, CssStyleRule, CssStyleDeclaration};
+use js_sys::JsString;
+use web_sys::{HtmlElement, Node, EventTarget, Element, CssStyleSheet, CssStyleRule};
 use gloo::events::{EventListener, EventListenerOptions};
 
+use crate::cache::intern;
+use crate::bindings;
 use crate::callbacks::Callbacks;
 use crate::traits::*;
 use crate::operations;
 use crate::operations::{for_each, spawn_future};
-use crate::dom_operations;
-use crate::utils::{document, on, on_with_options, ValueDiscard, FnDiscard, EventDiscard};
+use crate::utils::{on, on_with_options, ValueDiscard, FnDiscard, EventDiscard};
 
 
 pub struct RefFn<A, B, C> where B: ?Sized {
@@ -92,7 +93,7 @@ lazy_static! {
 
 // TODO should return HtmlBodyElement ?
 pub fn body() -> HtmlElement {
-    document().body().unwrap_throw()
+    bindings::body()
 }
 
 
@@ -104,14 +105,14 @@ pub struct DomHandle {
 impl Discard for DomHandle {
     #[inline]
     fn discard(self) {
-        self.parent.remove_child(&self.dom.element).unwrap_throw();
+        bindings::remove_child(&self.parent, &self.dom.element);
         self.dom.callbacks.discard();
     }
 }
 
 #[inline]
 pub fn append_dom(parent: &Node, mut dom: Dom) -> DomHandle {
-    parent.append_child(&dom.element).unwrap_throw();
+    bindings::append_child(&parent, &dom.element);
 
     dom.callbacks.trigger_after_insert();
 
@@ -141,7 +142,7 @@ impl Signal for IsWindowLoaded {
     fn poll_change(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         let result = match *self {
             IsWindowLoaded::Initial {} => {
-                let is_ready = document().ready_state() == "complete";
+                let is_ready = bindings::ready_state() == "complete";
 
                 if is_ready {
                     Poll::Ready(Some(true))
@@ -151,7 +152,7 @@ impl Signal for IsWindowLoaded {
 
                     *self = IsWindowLoaded::Pending {
                         receiver,
-                        _event: EventListener::once(&window().unwrap_throw(), "load", move |_| {
+                        _event: EventListener::once(&bindings::window(), "load", move |_| {
                             // TODO test this
                             sender.send(Some(true)).unwrap_throw();
                         }),
@@ -185,7 +186,7 @@ pub fn is_window_loaded() -> impl Signal<Item = bool> {
 
 #[inline]
 pub fn text(value: &str) -> Dom {
-    Dom::new(document().create_text_node(value).into())
+    Dom::new(bindings::create_text_node(&intern(value)).into())
 }
 
 
@@ -194,7 +195,7 @@ pub fn text_signal<A, B>(value: B) -> Dom
     where A: AsStr,
           B: Signal<Item = A> + 'static {
 
-    let element = document().create_text_node("");
+    let element = bindings::create_text_node(&intern(""));
 
     let mut callbacks = Callbacks::new();
 
@@ -204,8 +205,8 @@ pub fn text_signal<A, B>(value: B) -> Dom
         callbacks.after_remove(for_each(value, move |value| {
             let value = value.as_str();
 
-            // http://jsperf.com/textnode-performance
-            element.set_data(value);
+            // TODO maybe this should intern ?
+            bindings::set_text(&element, &JsString::from(value));
         }));
     }
 
@@ -236,7 +237,7 @@ impl Dom {
     #[inline]
     pub fn empty() -> Self {
         // TODO is there a better way of doing this ?
-        Self::new(document().create_comment("").into())
+        Self::new(bindings::create_comment(&intern("")).into())
     }
 
     #[inline]
@@ -255,12 +256,12 @@ impl Dom {
 
 #[inline]
 pub fn create_element<A>(name: &str) -> A where A: JsCast {
-    document().create_element(name).unwrap_throw().dyn_into().unwrap_throw()
+    bindings::create_element(&intern(name)).dyn_into().unwrap_throw()
 }
 
 #[inline]
 pub fn create_element_ns<A>(name: &str, namespace: &str) -> A where A: JsCast {
-    document().create_element_ns(Some(namespace), name).unwrap_throw().dyn_into().unwrap_throw()
+    bindings::create_element_ns(&intern(namespace), &intern(name)).dyn_into().unwrap_throw()
 }
 
 
@@ -289,37 +290,50 @@ fn set_option<A, B, C, D, F>(element: A, callbacks: &mut Callbacks, value: D, mu
     }));
 }
 
-fn set_style<A, B>(style: &CssStyleDeclaration, name: &A, value: B, important: bool)
+fn set_style<A, B>(element: &JsValue, name: &A, value: B, important: bool, should_intern: bool)
     where A: MultiStr,
           B: MultiStr {
 
     let mut names = vec![];
     let mut values = vec![];
 
-    fn try_set_style(style: &CssStyleDeclaration, names: &mut Vec<String>, values: &mut Vec<String>, name: &str, value: &str, important: bool) -> Result<bool, JsValue> {
-        assert!(value != "");
+    fn try_set_style(element: &JsValue, names: &mut Vec<String>, values: &mut Vec<String>, name: &JsString, value: &JsString, important: bool) -> bool {
+        // TODO move this out of this function ?
+        let empty = intern("");
+
+        assert!(*value != empty);
 
         // TODO handle browser prefixes ?
-        style.remove_property(name)?;
+        bindings::remove_style(element, name);
 
-        style.set_property_with_priority(name, value, if important { "important" } else { "" })?;
+        bindings::set_style(element, name, value, important);
 
         // TODO maybe use cfg(debug_assertions) ?
-        let is_changed = style.get_property_value(name)? != "";
+        let is_changed = bindings::get_style(element, name) != empty;
 
         if is_changed {
-            Ok(true)
+            true
 
         } else {
-            names.push(name.to_string());
-            values.push(value.to_string());
-            Ok(false)
+            names.push(String::from(name));
+            values.push(String::from(value));
+            false
         }
     }
 
     let okay = name.any(|name| {
+        let name = intern(name);
+
         value.any(|value| {
-            try_set_style(style, &mut names, &mut values, name, value, important).unwrap_throw()
+            // TODO maybe always intern the value ?
+            let value = if should_intern {
+                intern(value)
+
+            } else {
+                JsString::from(value)
+            };
+
+            try_set_style(element, &mut names, &mut values, &name, &value, important)
         })
     });
 
@@ -329,21 +343,24 @@ fn set_style<A, B>(style: &CssStyleDeclaration, name: &A, value: B, important: b
     }
 }
 
-fn set_style_signal<A, B, C, D>(style: CssStyleDeclaration, callbacks: &mut Callbacks, name: A, value: D, important: bool)
+fn set_style_signal<A, B, C, D>(element: &JsValue, callbacks: &mut Callbacks, name: A, value: D, important: bool)
     where A: MultiStr + 'static,
           B: MultiStr,
           C: OptionStr<Output = B>,
           D: Signal<Item = C> + 'static {
 
-    set_option(style, callbacks, value, move |style, value| {
+    // TODO verify that this is always a cheap O(1) clone
+    let element = element.clone();
+
+    set_option(element, callbacks, value, move |element, value| {
         match value {
             Some(value) => {
-                set_style(style, &name, value, important);
+                set_style(element, &name, value, important, false);
             },
             None => {
                 name.each(|name| {
                     // TODO handle browser prefixes ?
-                    style.remove_property(name).unwrap_throw();
+                    bindings::remove_style(element, &intern(name));
                 });
             },
         }
@@ -351,13 +368,13 @@ fn set_style_signal<A, B, C, D>(style: CssStyleDeclaration, callbacks: &mut Call
 }
 
 // TODO check that the property *actually* was changed ?
+// TODO maybe use AsRef<Object> ?
 fn set_property<A, B, C>(element: &A, name: &B, value: C) where A: AsRef<JsValue>, B: MultiStr, C: Into<JsValue> {
     let element = element.as_ref();
     let value = value.into();
 
     name.each(|name| {
-        // TODO can this be made more efficient ?
-        assert!(Reflect::set(element, &JsValue::from(name), &value).unwrap_throw());
+        bindings::set_property(element, &intern(name), &value);
     });
 }
 
@@ -400,7 +417,7 @@ impl<A> DomBuilder<A> {
     pub fn global_event<T, F>(mut self, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        self._event(&window().unwrap_throw(), listener);
+        self._event(&bindings::window(), listener);
         self
     }
 
@@ -531,14 +548,14 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
     #[inline]
     pub fn children<'a, B: IntoIterator<Item = &'a mut Dom>>(mut self, children: B) -> Self {
         self.check_children();
-        operations::insert_children_iter(self.element.as_ref(), &mut self.callbacks, children).unwrap_throw();
+        operations::insert_children_iter(self.element.as_ref(), &mut self.callbacks, children);
         self
     }
 
     #[inline]
     pub fn text(mut self, value: &str) -> Self {
         self.check_children();
-        self.element.as_ref().set_text_content(Some(value));
+        bindings::set_text_content(self.element.as_ref(), &intern(value));
         self
     }
 
@@ -550,7 +567,8 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
 
         self.callbacks.after_remove(for_each(value, move |value| {
             let value = value.as_str();
-            element.set_text_content(Some(value));
+            // TODO maybe intern this ?
+            bindings::set_text_content(&element, &JsString::from(value));
         }));
     }
 
@@ -581,26 +599,35 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
 impl<A> DomBuilder<A> where A: AsRef<Element> {
     #[inline]
     pub fn attribute<B>(self, name: B, value: &str) -> Self where B: MultiStr {
+        let element = self.element.as_ref();
+        let value = intern(value);
+
         name.each(|name| {
-            dom_operations::set_attribute(self.element.as_ref(), name, value).unwrap_throw();
+            bindings::set_attribute(element, &intern(name), &value);
         });
+
         self
     }
 
     #[inline]
     pub fn attribute_namespace<B>(self, namespace: &str, name: B, value: &str) -> Self where B: MultiStr {
+        let element = self.element.as_ref();
+        let namespace = intern(namespace);
+        let value = intern(value);
+
         name.each(|name| {
-            dom_operations::set_attribute_ns(self.element.as_ref(), namespace, name, value).unwrap_throw();
+            bindings::set_attribute_ns(element, &namespace, &intern(name), &value);
         });
+
         self
     }
 
     #[inline]
     pub fn class<B>(self, name: B) -> Self where B: MultiStr {
-        let list = self.element.as_ref().class_list();
+        let element = self.element.as_ref();
 
         name.each(|name| {
-            dom_operations::add_class(&list, name).unwrap_throw();
+            bindings::add_class(element, &intern(name));
         });
 
         self
@@ -630,14 +657,16 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
             match value {
                 Some(value) => {
                     let value = value.as_str();
+                    // TODO should this intern ?
+                    let value = intern(value);
 
                     name.each(|name| {
-                        dom_operations::set_attribute(element, &name, value).unwrap_throw();
+                        bindings::set_attribute(element, &intern(name), &value);
                     });
                 },
                 None => {
                     name.each(|name| {
-                        dom_operations::remove_attribute(element, &name).unwrap_throw();
+                        bindings::remove_attribute(element, &intern(name));
                     });
                 },
             }
@@ -662,20 +691,22 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
               D: OptionStr<Output = C>,
               E: Signal<Item = D> + 'static {
 
-        let namespace = namespace.to_owned();
+        let namespace = intern(namespace);
 
         set_option(self.element.as_ref().clone(), &mut self.callbacks, value, move |element, value| {
             match value {
                 Some(value) => {
                     let value = value.as_str();
+                    // TODO should this intern ?
+                    let value = intern(value);
 
                     name.each(|name| {
-                        dom_operations::set_attribute_ns(element, &namespace, &name, value).unwrap_throw();
+                        bindings::set_attribute_ns(element, &namespace, &intern(name), &value);
                     });
                 },
                 None => {
                     name.each(|name| {
-                        dom_operations::remove_attribute_ns(element, &namespace, &name).unwrap_throw();
+                        bindings::remove_attribute_ns(element, &namespace, &intern(name));
                     });
                 },
             }
@@ -698,7 +729,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         where B: MultiStr + 'static,
               C: Signal<Item = bool> + 'static {
 
-        let list = self.element.as_ref().class_list();
+        let element = self.element.as_ref().clone();
 
         let mut is_set = false;
 
@@ -708,7 +739,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
                     is_set = true;
 
                     name.each(|name| {
-                        dom_operations::add_class(&list, name).unwrap_throw();
+                        bindings::add_class(&element, &intern(name));
                     });
                 }
 
@@ -717,7 +748,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
                     is_set = false;
 
                     name.each(|name| {
-                        dom_operations::remove_class(&list, name).unwrap_throw();
+                        bindings::remove_class(&element, &intern(name));
                     });
                 }
             }
@@ -759,12 +790,14 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
     #[inline]
     pub fn scroll_left_signal<B>(mut self, signal: B) -> Self where B: Signal<Item = Option<i32>> + 'static {
+        // TODO bindings function for this ?
         self.set_scroll_signal(signal, Element::set_scroll_left);
         self
     }
 
     #[inline]
     pub fn scroll_top_signal<B>(mut self, signal: B) -> Self where B: Signal<Item = Option<i32>> + 'static {
+        // TODO bindings function for this ?
         self.set_scroll_signal(signal, Element::set_scroll_top);
         self
     }
@@ -775,7 +808,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
     pub fn style<B, C>(self, name: B, value: C) -> Self
         where B: MultiStr,
               C: MultiStr {
-        set_style(&self.element.as_ref().style(), &name, value, false);
+        set_style(self.element.as_ref(), &name, value, false, true);
         self
     }
 
@@ -783,7 +816,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
     pub fn style_important<B, C>(self, name: B, value: C) -> Self
         where B: MultiStr,
               C: MultiStr {
-        set_style(&self.element.as_ref().style(), &name, value, true);
+        set_style(self.element.as_ref(), &name, value, true, true);
         self
     }
 }
@@ -796,7 +829,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
               D: OptionStr<Output = C>,
               E: Signal<Item = D> + 'static {
 
-        set_style_signal(self.element.as_ref().style(), &mut self.callbacks, name, value, false);
+        set_style_signal(self.element.as_ref(), &mut self.callbacks, name, value, false);
         self
     }
 
@@ -807,7 +840,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
               D: OptionStr<Output = C>,
               E: Signal<Item = D> + 'static {
 
-        set_style_signal(self.element.as_ref().style(), &mut self.callbacks, name, value, true);
+        set_style_signal(self.element.as_ref(), &mut self.callbacks, name, value, true);
         self
     }
 
@@ -820,7 +853,12 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
         // This needs to use `after_insert` because calling `.focus()` on an element before it is in the DOM has no effect
         self.callbacks.after_insert(move |_| {
             // TODO avoid updating if the focused state hasn't changed ?
-            dom_operations::set_focused(&element, value).unwrap_throw();
+            if value {
+                bindings::focus(&element);
+
+            } else {
+                bindings::blur(&element);
+            }
         });
 
         self
@@ -837,7 +875,12 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
             // TODO verify that this is correct under all circumstances
             callbacks.after_remove(for_each(value, move |value| {
                 // TODO avoid updating if the focused state hasn't changed ?
-                dom_operations::set_focused(&element, value).unwrap_throw();
+                if value {
+                    bindings::focus(&element);
+
+                } else {
+                    bindings::blur(&element);
+                }
             }));
         });
     }
@@ -855,7 +898,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
 // TODO better warning message for must_use
 #[must_use]
 pub struct StylesheetBuilder {
-    element: CssStyleDeclaration,
+    element: CssStyleRule,
     callbacks: Callbacks,
 }
 
@@ -866,30 +909,14 @@ impl StylesheetBuilder {
         // TODO can this be made faster ?
         // TODO somehow share this safely between threads ?
         thread_local! {
-            static STYLESHEET: CssStyleSheet = {
-                // TODO use createElementNS ?
-                let e = document().create_element("style").unwrap_throw();
-                // TODO maybe don't use unchecked ?
-                let e: &HtmlStyleElement = e.unchecked_ref();
-
-                e.set_type("text/css");
-
-                document().head().unwrap_throw().append_child(e).unwrap_throw();
-
-                // TODO maybe don't use unchecked ?
-                e.sheet().unwrap_throw().unchecked_into()
-            };
+            static STYLESHEET: CssStyleSheet = bindings::create_stylesheet();
         }
 
-        let element = STYLESHEET.with(|stylesheet| {
-            let rules = stylesheet.css_rules().unwrap_throw();
+        // TODO maybe intern ?
+        let selector = JsString::from(selector);
 
-            let length = rules.length();
-
-            stylesheet.insert_rule_with_index(&format!("{}{{}}", selector), length).unwrap_throw();
-
-            // TODO maybe don't use unchecked ?
-            rules.get(length).unwrap_throw().unchecked_ref::<CssStyleRule>().style()
+        let element = STYLESHEET.with(move |stylesheet| {
+            bindings::make_style_rule(stylesheet, &selector)
         });
 
         Self {
@@ -902,7 +929,7 @@ impl StylesheetBuilder {
     pub fn style<B, C>(self, name: B, value: C) -> Self
         where B: MultiStr,
               C: MultiStr {
-        set_style(&self.element, &name, value, false);
+        set_style(&self.element, &name, value, false, true);
         self
     }
 
@@ -910,7 +937,7 @@ impl StylesheetBuilder {
     pub fn style_important<B, C>(self, name: B, value: C) -> Self
         where B: MultiStr,
               C: MultiStr {
-        set_style(&self.element, &name, value, true);
+        set_style(&self.element, &name, value, true, true);
         self
     }
 
@@ -921,7 +948,7 @@ impl StylesheetBuilder {
               D: OptionStr<Output = C>,
               E: Signal<Item = D> + 'static {
 
-        set_style_signal(self.element.clone(), &mut self.callbacks, name, value, false);
+        set_style_signal(&self.element, &mut self.callbacks, name, value, false);
         self
     }
 
@@ -932,7 +959,7 @@ impl StylesheetBuilder {
               D: OptionStr<Output = C>,
               E: Signal<Item = D> + 'static {
 
-        set_style_signal(self.element.clone(), &mut self.callbacks, name, value, true);
+        set_style_signal(&self.element, &mut self.callbacks, name, value, true);
         self
     }
 

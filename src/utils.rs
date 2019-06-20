@@ -1,8 +1,9 @@
 use std::mem::ManuallyDrop;
+
 use discard::Discard;
-use wasm_bindgen::UnwrapThrowExt;
-use web_sys::{window, Document, EventTarget};
+use web_sys::{EventTarget};
 use gloo::events::{EventListener, EventListenerOptions};
+
 use crate::traits::StaticEvent;
 
 
@@ -20,11 +21,6 @@ pub(crate) fn on_with_options<E, F>(element: &EventTarget, options: EventListene
     EventListener::new_with_options(element, E::EVENT_TYPE, options, move |e| {
         callback(E::unchecked_from_event(e.clone()));
     })
-}
-
-
-pub(crate) fn document() -> Document {
-    window().unwrap_throw().document().unwrap_throw()
 }
 
 
