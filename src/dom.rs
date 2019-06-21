@@ -184,9 +184,10 @@ pub fn is_window_loaded() -> impl Signal<Item = bool> {
 }
 
 
+// TODO should this intern ?
 #[inline]
 pub fn text(value: &str) -> Dom {
-    Dom::new(bindings::create_text_node(&intern(value)).into())
+    Dom::new(bindings::create_text_node(&JsString::from(value)).into())
 }
 
 
@@ -355,7 +356,8 @@ fn set_style_signal<A, B, C, D>(element: &JsValue, callbacks: &mut Callbacks, na
     set_option(element, callbacks, value, move |element, value| {
         match value {
             Some(value) => {
-                set_style(element, &name, value, important, false);
+                // TODO should this intern or not ?
+                set_style(element, &name, value, important, true);
             },
             None => {
                 name.each(|name| {
@@ -555,7 +557,8 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
     #[inline]
     pub fn text(mut self, value: &str) -> Self {
         self.check_children();
-        bindings::set_text_content(self.element.as_ref(), &intern(value));
+        // TODO should this intern ?
+        bindings::set_text_content(self.element.as_ref(), &JsString::from(value));
         self
     }
 
