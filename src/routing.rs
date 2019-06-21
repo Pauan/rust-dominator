@@ -4,10 +4,10 @@ use js_sys::JsString;
 use web_sys::{EventTarget, HtmlElement};
 use lazy_static::lazy_static;
 use futures_signals::signal::{Mutable, ReadOnlyMutable};
-use gloo::events::EventListener;
 
 use crate::bindings;
 use crate::dom::{Dom, DomBuilder};
+use crate::utils::EventListener;
 use crate::events;
 
 
@@ -35,12 +35,12 @@ impl CurrentUrl {
         let value = Mutable::new(String::from(bindings::current_url()));
 
         // TODO clean this up somehow ?
-        EventListener::new(&bindings::window(), "popstate", {
+        let _ = EventListener::new(bindings::window().into(), "popstate", {
             let value = value.clone();
             move |_| {
                 change_url(&value);
             }
-        }).forget();
+        });
 
         Self {
             value,

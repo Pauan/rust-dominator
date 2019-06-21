@@ -1,6 +1,6 @@
 use wasm_bindgen::prelude::*;
-use js_sys::JsString;
-use web_sys::{HtmlElement, Element, Node, Window, Text, Comment, CssStyleSheet, CssStyleRule};
+use js_sys::{Function, JsString};
+use web_sys::{HtmlElement, Element, Node, Window, Text, Comment, CssStyleSheet, CssStyleRule, EventTarget};
 
 use crate::cache::intern;
 
@@ -67,6 +67,34 @@ use crate::cache::intern;
     export function blur(elem) { elem.blur(); }
 
     export function set_property(obj, name, value) { obj[name] = value; }
+
+    export function add_event(elem, name, f) {
+        elem.addEventListener(name, f, {
+            capture: false,
+            once: false,
+            passive: true
+        });
+    }
+
+    export function add_event_once(elem, name, f) {
+        elem.addEventListener(name, f, {
+            capture: false,
+            once: true,
+            passive: true,
+        });
+    }
+
+    export function add_event_preventable(elem, name, f) {
+        elem.addEventListener(name, f, {
+            capture: false,
+            once: false,
+            passive: false
+        });
+    }
+
+    export function remove_event(elem, name, f) {
+        elem.removeEventListener(name, f, false);
+    }
 ")]
 extern "C" {
     pub(crate) fn body() -> HtmlElement;
@@ -118,6 +146,11 @@ extern "C" {
 
     // TODO maybe use Object for obj ?
     pub(crate) fn set_property(obj: &JsValue, name: &JsString, value: &JsValue);
+
+    pub(crate) fn add_event(elem: &EventTarget, name: &JsString, f: &Function);
+    pub(crate) fn add_event_once(elem: &EventTarget, name: &JsString, f: &Function);
+    pub(crate) fn add_event_preventable(elem: &EventTarget, name: &JsString, f: &Function);
+    pub(crate) fn remove_event(elem: &EventTarget, name: &JsString, f: &Function);
 }
 
 

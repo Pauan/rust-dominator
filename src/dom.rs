@@ -14,7 +14,6 @@ use discard::{Discard, DiscardOnDrop};
 use wasm_bindgen::{JsValue, UnwrapThrowExt, JsCast};
 use js_sys::JsString;
 use web_sys::{HtmlElement, Node, EventTarget, Element, CssStyleSheet, CssStyleRule};
-use gloo::events::{EventListener, EventListenerOptions};
 
 use crate::cache::intern;
 use crate::bindings;
@@ -22,7 +21,7 @@ use crate::callbacks::Callbacks;
 use crate::traits::*;
 use crate::operations;
 use crate::operations::{for_each, spawn_future};
-use crate::utils::{on, on_with_options, ValueDiscard, FnDiscard, EventDiscard};
+use crate::utils::{EventListener, on, on_preventable, ValueDiscard, FnDiscard};
 
 
 pub struct RefFn<A, B, C> where B: ?Sized {
@@ -152,7 +151,7 @@ impl Signal for IsWindowLoaded {
 
                     *self = IsWindowLoaded::Pending {
                         receiver,
-                        _event: EventListener::once(&bindings::window(), "load", move |_| {
+                        _event: EventListener::once(bindings::window().into(), "load", move |_| {
                             // TODO test this
                             sender.send(Some(true)).unwrap_throw();
                         }),
@@ -394,17 +393,17 @@ impl<A> DomBuilder<A> {
     }
 
     #[inline]
-    fn _event<T, F>(&mut self, element: &EventTarget, listener: F)
+    fn _event<T, F>(&mut self, element: EventTarget, listener: F)
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        self.callbacks.after_remove(EventDiscard::new(on(element, listener)));
+        self.callbacks.after_remove(on(element, listener));
     }
 
     #[inline]
-    fn _event_with_options<T, F>(&mut self, element: &EventTarget, options: EventListenerOptions, listener: F)
+    fn _event_preventable<T, F>(&mut self, element: EventTarget, listener: F)
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        self.callbacks.after_remove(EventDiscard::new(on_with_options(element, options, listener)));
+        self.callbacks.after_remove(on_preventable(element, listener));
     }
 
     // TODO add this to the StylesheetBuilder and ClassBuilder too
@@ -412,7 +411,7 @@ impl<A> DomBuilder<A> {
     pub fn global_event<T, F>(mut self, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        self._event(&bindings::window(), listener);
+        self._event(bindings::window().into(), listener);
         self
     }
 
@@ -518,7 +517,7 @@ impl<A> DomBuilder<A> where A: AsRef<EventTarget> {
         where T: StaticEvent,
               F: FnMut(T) + 'static {
         // TODO can this clone be avoided ?
-        self._event(&self.element.as_ref().clone(), listener);
+        self._event(self.element.as_ref().clone(), listener);
         self
     }
 
@@ -527,7 +526,7 @@ impl<A> DomBuilder<A> where A: AsRef<EventTarget> {
         where T: StaticEvent,
               F: FnMut(T) + 'static {
         // TODO can this clone be avoided ?
-        self._event_with_options(&self.element.as_ref().clone(), EventListenerOptions::enable_prevent_default(), listener);
+        self._event_preventable(self.element.as_ref().clone(), listener);
         self
     }
 }
