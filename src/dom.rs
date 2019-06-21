@@ -291,7 +291,7 @@ fn set_option<A, B, C, D, F>(element: A, callbacks: &mut Callbacks, value: D, mu
     }));
 }
 
-fn set_style<A, B>(element: &JsValue, name: &A, value: B, important: bool, should_intern: bool)
+fn set_style<A, B>(element: &JsValue, name: &A, value: B, important: bool)
     where A: MultiStr,
           B: MultiStr {
 
@@ -326,15 +326,8 @@ fn set_style<A, B>(element: &JsValue, name: &A, value: B, important: bool, shoul
         let name = intern(name);
 
         value.any(|value| {
-            // TODO maybe always intern the value ?
-            let value = if should_intern {
-                intern(value)
-
-            } else {
-                JsString::from(value)
-            };
-
-            try_set_style(element, &mut names, &mut values, &name, &value, important)
+            // TODO should this intern ?
+            try_set_style(element, &mut names, &mut values, &name, &JsString::from(value), important)
         })
     });
 
@@ -357,7 +350,7 @@ fn set_style_signal<A, B, C, D>(element: &JsValue, callbacks: &mut Callbacks, na
         match value {
             Some(value) => {
                 // TODO should this intern or not ?
-                set_style(element, &name, value, important, true);
+                set_style(element, &name, value, important);
             },
             None => {
                 name.each(|name| {
@@ -661,7 +654,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
                 Some(value) => {
                     let value = value.as_str();
                     // TODO should this intern ?
-                    let value = intern(value);
+                    let value = JsString::from(value);
 
                     name.each(|name| {
                         bindings::set_attribute(element, &intern(name), &value);
@@ -701,7 +694,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
                 Some(value) => {
                     let value = value.as_str();
                     // TODO should this intern ?
-                    let value = intern(value);
+                    let value = JsString::from(value);
 
                     name.each(|name| {
                         bindings::set_attribute_ns(element, &namespace, &intern(name), &value);
@@ -811,7 +804,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
     pub fn style<B, C>(self, name: B, value: C) -> Self
         where B: MultiStr,
               C: MultiStr {
-        set_style(self.element.as_ref(), &name, value, false, true);
+        set_style(self.element.as_ref(), &name, value, false);
         self
     }
 
@@ -819,7 +812,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
     pub fn style_important<B, C>(self, name: B, value: C) -> Self
         where B: MultiStr,
               C: MultiStr {
-        set_style(self.element.as_ref(), &name, value, true, true);
+        set_style(self.element.as_ref(), &name, value, true);
         self
     }
 }
@@ -932,7 +925,7 @@ impl StylesheetBuilder {
     pub fn style<B, C>(self, name: B, value: C) -> Self
         where B: MultiStr,
               C: MultiStr {
-        set_style(&self.element, &name, value, false, true);
+        set_style(&self.element, &name, value, false);
         self
     }
 
@@ -940,7 +933,7 @@ impl StylesheetBuilder {
     pub fn style_important<B, C>(self, name: B, value: C) -> Self
         where B: MultiStr,
               C: MultiStr {
-        set_style(&self.element, &name, value, true, true);
+        set_style(&self.element, &name, value, true);
         self
     }
 

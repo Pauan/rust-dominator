@@ -1,10 +1,10 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use js_sys::JsString;
 
 thread_local! {
     // TODO is it possible to avoid the RefCell ?
-    static CACHE: RefCell<HashMap<String, JsString>> = RefCell::new(HashMap::new());
+    static CACHE: RefCell<BTreeMap<String, JsString>> = RefCell::new(BTreeMap::new());
 }
 
 // TODO make this more efficient
