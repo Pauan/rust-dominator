@@ -95,42 +95,54 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
         });
     }
 
+    fn clear(state: &mut State, element: &Node) {
+        // TODO is this correct ?
+        if state.children.len() > 0 {
+            bindings::remove_all_children(element);
+
+            for dom in state.children.drain(..) {
+                dom.callbacks.discard();
+            }
+        }
+    }
+
+    fn insert_at(state: &mut State, element: &Node, new_index: usize, child: &Node) {
+        if let Some(dom) = state.children.get(new_index) {
+            bindings::insert_child_before(element, child, &dom.element);
+
+        } else {
+            bindings::append_child(element, child);
+        }
+    }
+
+    fn after_insert(is_inserted: bool, callbacks: &mut Callbacks) {
+        callbacks.leak();
+
+        if is_inserted {
+            callbacks.trigger_after_insert();
+        }
+    }
+
     fn process_change(state: &mut State, element: &Node, change: VecDiff<Dom>) {
         match change {
             VecDiff::Replace { values } => {
-                // TODO is this correct ?
-                if state.children.len() > 0 {
-                    bindings::remove_all_children(element);
-
-                    for dom in state.children.drain(..) {
-                        dom.callbacks.discard();
-                    }
-                }
+                clear(state, element);
 
                 state.children = values;
 
                 let is_inserted = state.is_inserted;
 
                 for dom in state.children.iter_mut() {
-                    dom.callbacks.leak();
-
                     bindings::append_child(element, &dom.element);
 
-                    if is_inserted {
-                        dom.callbacks.trigger_after_insert();
-                    }
+                    after_insert(is_inserted, &mut dom.callbacks);
                 }
             },
 
             VecDiff::InsertAt { index, mut value } => {
-                // TODO better usize -> u32 conversion
-                bindings::insert_at(element, index as u32, &value.element);
+                insert_at(state, element, index, &value.element);
 
-                value.callbacks.leak();
-
-                if state.is_inserted {
-                    value.callbacks.trigger_after_insert();
-                }
+                after_insert(state.is_inserted, &mut value.callbacks);
 
                 // TODO figure out a way to move this to the top
                 state.children.insert(index, value);
@@ -139,29 +151,22 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
             VecDiff::Push { mut value } => {
                 bindings::append_child(element, &value.element);
 
-                value.callbacks.leak();
-
-                if state.is_inserted {
-                    value.callbacks.trigger_after_insert();
-                }
+                after_insert(state.is_inserted, &mut value.callbacks);
 
                 // TODO figure out a way to move this to the top
                 state.children.push(value);
             },
 
             VecDiff::UpdateAt { index, mut value } => {
-                // TODO better usize -> u32 conversion
-                bindings::update_at(element, index as u32, &value.element);
+                let dom = &mut state.children[index];
 
-                value.callbacks.leak();
+                bindings::replace_child(element, &value.element, &dom.element);
 
-                if state.is_inserted {
-                    value.callbacks.trigger_after_insert();
-                }
+                after_insert(state.is_inserted, &mut value.callbacks);
 
                 // TODO figure out a way to move this to the top
                 // TODO test this
-                ::std::mem::swap(&mut state.children[index], &mut value);
+                ::std::mem::swap(dom, &mut value);
 
                 value.callbacks.discard();
             },
@@ -169,44 +174,34 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
             VecDiff::Move { old_index, new_index } => {
                 let value = state.children.remove(old_index);
 
-                bindings::remove_child(element, &value.element);
-                // TODO better usize -> u32 conversion
-                bindings::insert_at(element, new_index as u32, &value.element);
+                insert_at(state, element, new_index, &value.element);
 
                 state.children.insert(new_index, value);
             },
 
             VecDiff::RemoveAt { index } => {
-                // TODO better usize -> u32 conversion
-                bindings::remove_at(element, index as u32);
+                let dom = state.children.remove(index);
 
-                state.children.remove(index).callbacks.discard();
+                bindings::remove_child(element, &dom.element);
+
+                dom.callbacks.discard();
             },
 
             VecDiff::Pop {} => {
-                let index = state.children.len() - 1;
+                let dom = state.children.pop().unwrap_throw();
 
-                // TODO create remove_last_child function ?
-                // TODO better usize -> u32 conversion
-                bindings::remove_at(element, index as u32);
+                bindings::remove_child(element, &dom.element);
 
-                state.children.pop().unwrap_throw().callbacks.discard();
+                dom.callbacks.discard();
             },
 
             VecDiff::Clear {} => {
-                // TODO is this correct ?
-                // TODO is this needed, or is it guaranteed by VecDiff ?
-                if state.children.len() > 0 {
-                    bindings::remove_all_children(element);
-
-                    for dom in state.children.drain(..) {
-                        dom.callbacks.discard();
-                    }
-                }
+                clear(state, element);
             },
         }
     }
 
+    // TODO maybe move this into the after_insert callback and remove State
     // TODO verify that this will drop `children`
     callbacks.after_remove(for_each_vec(signal, move |change| {
         let mut state = state.lock().unwrap_throw();

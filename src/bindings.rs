@@ -57,7 +57,6 @@ use crate::cache::intern;
         elem.style.setProperty(name, value, (important ? \"important\" : \"\"));
     }
 
-    export function get_at(parent, index) { return parent.childNodes[index]; }
     export function insert_child_before(parent, child, other) { parent.insertBefore(child, other); }
     export function replace_child(parent, child, other) { parent.replaceChild(child, other); }
     export function append_child(parent, child) { parent.appendChild(child); }
@@ -135,7 +134,6 @@ extern "C" {
     pub(crate) fn remove_style(elem: &JsValue, name: &JsString);
     pub(crate) fn set_style(elem: &JsValue, name: &JsString, value: &JsString, important: bool);
 
-    pub(crate) fn get_at(parent: &Node, index: u32) -> Node;
     pub(crate) fn insert_child_before(parent: &Node, child: &Node, other: &Node);
     pub(crate) fn replace_child(parent: &Node, child: &Node, other: &Node);
     pub(crate) fn append_child(parent: &Node, child: &Node);
@@ -157,22 +155,4 @@ extern "C" {
 #[inline]
 pub(crate) fn remove_all_children(node: &Node) {
     set_text_content(node, &intern(""));
-}
-
-// TODO make this more efficient
-#[inline]
-pub(crate) fn insert_at(parent: &Node, index: u32, child: &Node) {
-    insert_child_before(parent, child, &get_at(parent, index));
-}
-
-// TODO make this more efficient
-#[inline]
-pub(crate) fn update_at(parent: &Node, index: u32, child: &Node) {
-    replace_child(parent, child, &get_at(parent, index));
-}
-
-// TODO make this more efficient
-#[inline]
-pub(crate) fn remove_at(parent: &Node, index: u32) {
-    remove_child(parent, &get_at(parent, index));
 }
