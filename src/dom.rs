@@ -96,6 +96,11 @@ pub fn body() -> HtmlElement {
 }
 
 
+pub fn get_id(id: &str) -> Element {
+    bindings::window().document().unwrap_throw().get_element_by_id(id).unwrap_throw()
+}
+
+
 pub struct DomHandle {
     parent: Node,
     dom: Dom,

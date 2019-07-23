@@ -36,7 +36,7 @@ features = [
     #"CssStyleDeclaration",
     "CssStyleRule",
     "CssStyleSheet",
-    #"Document",
+    "Document",
     #"DocumentFragment",
     #"DomTokenList",
     "Element",
