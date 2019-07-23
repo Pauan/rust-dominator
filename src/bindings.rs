@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::{JsCast, intern};
 use js_sys::Function;
-use web_sys::{HtmlElement, Element, Node, Window, History, Document, Text, Comment, CssStyleSheet, CssStyleDeclaration, HtmlStyleElement, CssStyleRule, EventTarget};
+use web_sys::{HtmlElement, Element, Node, Window, History, Document, Text, Comment, DomTokenList, CssStyleSheet, CssStyleDeclaration, HtmlStyleElement, CssStyleRule, EventTarget};
 
 
 #[wasm_bindgen(inline_js = "
@@ -93,7 +93,7 @@ pub(crate) fn make_style_rule(sheet: &CssStyleSheet, selector: &str) -> CssStyle
     let rules = sheet.css_rules().unwrap_throw();
     let length = rules.length();
     // TODO don't return u32 ?
-    sheet.insert_rule_with_index(&format!("{} {{}}", selector), length).unwrap_throw();
+    sheet.insert_rule_with_index(&format!("{}{{}}", selector), length).unwrap_throw();
     // TODO use dyn_into ?
     rules.get(length).unwrap_throw().unchecked_into()
 }
@@ -141,12 +141,12 @@ pub(crate) fn remove_attribute_ns(elem: &Element, namespace: &str, key: &str) {
     elem.remove_attribute_ns(Some(namespace), key).unwrap_throw();
 }
 
-pub(crate) fn add_class(elem: &Element, value: &str) {
-    elem.class_list().add_1(value).unwrap_throw();
+pub(crate) fn add_class(classes: &DomTokenList, value: &str) {
+    classes.add_1(value).unwrap_throw();
 }
 
-pub(crate) fn remove_class(elem: &Element, value: &str) {
-    elem.class_list().remove_1(value).unwrap_throw();
+pub(crate) fn remove_class(classes: &DomTokenList, value: &str) {
+    classes.remove_1(value).unwrap_throw();
 }
 
 pub(crate) fn set_text_content(elem: &Node, value: &str) {

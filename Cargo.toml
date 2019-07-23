@@ -18,7 +18,8 @@ pin-utils = "0.1.0-alpha.4"
 futures-channel-preview = "0.3.0-alpha.16"
 futures-util-preview = "0.3.0-alpha.16"
 futures-signals = "0.3.5"
-wasm-bindgen = "0.2.45"
+# TODO should this enable interning ?
+wasm-bindgen = { version = "0.2.45", features = ["enable-interning"] }
 js-sys = "0.3.22"
 
 [dependencies.wasm-bindgen-futures]

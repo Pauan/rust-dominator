@@ -619,10 +619,10 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
     #[inline]
     pub fn class<B>(self, name: B) -> Self where B: MultiStr {
-        let element = self.element.as_ref();
+        let classes = self.element.as_ref().class_list();
 
         name.each(|name| {
-            bindings::add_class(element, intern(name));
+            bindings::add_class(&classes, intern(name));
         });
 
         self
@@ -723,7 +723,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         where B: MultiStr + 'static,
               C: Signal<Item = bool> + 'static {
 
-        let element = self.element.as_ref().clone();
+        let element = self.element.as_ref().class_list();
 
         let mut is_set = false;
 
