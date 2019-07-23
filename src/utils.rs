@@ -1,51 +1,49 @@
 use std::mem::ManuallyDrop;
 
-use wasm_bindgen::{JsCast, UnwrapThrowExt};
+use wasm_bindgen::{JsCast, UnwrapThrowExt, intern};
 use wasm_bindgen::closure::Closure;
-use js_sys::JsString;
 use discard::Discard;
 use web_sys::{EventTarget, Event};
 
 use crate::bindings;
-use crate::cache::intern;
 use crate::traits::StaticEvent;
 
 
 // TODO should use gloo::events, but it doesn't support interning or Discard
 pub(crate) struct EventListener {
     elem: EventTarget,
-    name: JsString,
+    name: &'static str,
     closure: Option<Closure<dyn FnMut(&Event)>>,
 }
 
 // TODO should these inline ?
 impl EventListener {
     #[inline]
-    pub(crate) fn new<F>(elem: EventTarget, name: &str, callback: F) -> Self where F: FnMut(&Event) + 'static {
+    pub(crate) fn new<F>(elem: EventTarget, name: &'static str, callback: F) -> Self where F: FnMut(&Event) + 'static {
         let closure = Closure::wrap(Box::new(callback) as Box<dyn FnMut(&Event)>);
-        let name = intern(name);
+        let name: &'static str = intern(name);
 
-        bindings::add_event(&elem, &name, closure.as_ref().unchecked_ref());
+        bindings::add_event(&elem, name, closure.as_ref().unchecked_ref());
 
         Self { elem, name, closure: Some(closure) }
     }
 
     #[inline]
-    pub(crate) fn new_preventable<F>(elem: EventTarget, name: &str, callback: F) -> Self where F: FnMut(&Event) + 'static {
+    pub(crate) fn new_preventable<F>(elem: EventTarget, name: &'static str, callback: F) -> Self where F: FnMut(&Event) + 'static {
         let closure = Closure::wrap(Box::new(callback) as Box<dyn FnMut(&Event)>);
-        let name = intern(name);
+        let name: &'static str = intern(name);
 
-        bindings::add_event_preventable(&elem, &name, closure.as_ref().unchecked_ref());
+        bindings::add_event_preventable(&elem, name, closure.as_ref().unchecked_ref());
 
         Self { elem, name, closure: Some(closure) }
     }
 
     #[inline]
-    pub(crate) fn once<F>(elem: EventTarget, name: &str, callback: F) -> Self where F: FnOnce(&Event) + 'static {
+    pub(crate) fn once<F>(elem: EventTarget, name: &'static str, callback: F) -> Self where F: FnOnce(&Event) + 'static {
         let closure = Closure::once(callback);
-        let name = intern(name);
+        let name: &'static str = intern(name);
 
-        bindings::add_event_once(&elem, &name, closure.as_ref().unchecked_ref());
+        bindings::add_event_once(&elem, name, closure.as_ref().unchecked_ref());
 
         Self { elem, name, closure: Some(closure) }
     }

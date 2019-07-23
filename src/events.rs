@@ -82,7 +82,6 @@ make_event!(Input, "input" => web_sys::InputEvent);
 
 impl Input {
     // TODO should this work on other types as well ?
-    // TODO return JsString ?
     pub fn value(&self) -> Option<String> {
         let target = self.target()?;
 

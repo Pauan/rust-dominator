@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 
-use js_sys::JsString;
 use web_sys::{EventTarget, HtmlElement};
 use lazy_static::lazy_static;
 use futures_signals::signal::{Mutable, ReadOnlyMutable};
@@ -35,7 +34,7 @@ impl CurrentUrl {
         let value = Mutable::new(String::from(bindings::current_url()));
 
         // TODO clean this up somehow ?
-        let _ = EventListener::new(bindings::window().into(), "popstate", {
+        let _ = EventListener::new(bindings::window_event_target(), "popstate", {
             let value = value.clone();
             move |_| {
                 change_url(&value);
@@ -64,7 +63,7 @@ pub fn url() -> ReadOnlyMutable<String> {
 #[inline]
 pub fn go_to_url(new_url: &str) {
     // TODO intern ?
-    bindings::go_to_url(&JsString::from(new_url));
+    bindings::go_to_url(new_url);
 
     change_url(&URL.value);
 }

@@ -1,70 +1,10 @@
 use wasm_bindgen::prelude::*;
-use js_sys::{Function, JsString};
-use web_sys::{HtmlElement, Element, Node, Window, Text, Comment, CssStyleSheet, CssStyleRule, EventTarget};
-
-use crate::cache::intern;
+use wasm_bindgen::{JsCast, intern};
+use js_sys::Function;
+use web_sys::{HtmlElement, Element, Node, Window, History, Document, Text, Comment, CssStyleSheet, CssStyleDeclaration, HtmlStyleElement, CssStyleRule, EventTarget};
 
 
 #[wasm_bindgen(inline_js = "
-    export function body() { return document.body; }
-    export function _window() { return window; }
-
-    export function ready_state() { return document.readyState; }
-
-    export function current_url() { return location.href; }
-    export function go_to_url(url) { history.pushState(null, \"\", url); }
-
-    export function create_stylesheet() {
-        // TODO use createElementNS ?
-        var e = document.createElement(\"style\");
-        e.type = \"text/css\";
-        document.head.appendChild(e);
-        return e.sheet;
-    }
-
-    export function make_style_rule(sheet, selector) {
-        var rules = sheet.cssRules;
-        var length = rules.length;
-        sheet.insertRule(selector + \" {}\", length);
-        return rules[length];
-    }
-
-    export function create_element(name) { return document.createElement(name); }
-    export function create_element_ns(namespace, name) { return document.createElementNS(namespace, name); }
-
-    export function create_text_node(value) { return document.createTextNode(value); }
-
-    // http://jsperf.com/textnode-performance
-    export function set_text(elem, value) { elem.data = value; }
-
-    export function create_comment(value) { return document.createComment(value); }
-
-    export function set_attribute(elem, key, value) { elem.setAttribute(key, value); }
-    export function set_attribute_ns(elem, namespace, key, value) { elem.setAttributeNS(namespace, key, value); }
-
-    export function remove_attribute(elem, key) { elem.removeAttribute(key); }
-    export function remove_attribute_ns(elem, namespace, key) { elem.removeAttributeNS(namespace, key); }
-
-    export function add_class(elem, value) { elem.classList.add(value); }
-    export function remove_class(elem, value) { elem.classList.remove(value); }
-
-    export function set_text_content(elem, value) { elem.textContent = value; }
-
-    export function get_style(elem, name) { return elem.style.getPropertyValue(name); }
-    export function remove_style(elem, name) { return elem.style.removeProperty(name); }
-
-    export function set_style(elem, name, value, important) {
-        elem.style.setProperty(name, value, (important ? \"important\" : \"\"));
-    }
-
-    export function insert_child_before(parent, child, other) { parent.insertBefore(child, other); }
-    export function replace_child(parent, child, other) { parent.replaceChild(child, other); }
-    export function append_child(parent, child) { parent.appendChild(child); }
-    export function remove_child(parent, child) { parent.removeChild(child); }
-
-    export function focus(elem) { elem.focus(); }
-    export function blur(elem) { elem.blur(); }
-
     export function set_property(obj, name, value) { obj[name] = value; }
 
     export function add_event(elem, name, f) {
@@ -96,63 +36,166 @@ use crate::cache::intern;
     }
 ")]
 extern "C" {
-    pub(crate) fn body() -> HtmlElement;
-
-    #[wasm_bindgen(js_name = _window)]
-    pub(crate) fn window() -> Window;
-
-    pub(crate) fn ready_state() -> JsString;
-
-    pub(crate) fn current_url() -> JsString;
-    pub(crate) fn go_to_url(url: &JsString);
-
-    pub(crate) fn create_stylesheet() -> CssStyleSheet;
-    pub(crate) fn make_style_rule(sheet: &CssStyleSheet, selector: &JsString) -> CssStyleRule;
-
-    pub(crate) fn create_element(name: &JsString) -> Element;
-    pub(crate) fn create_element_ns(namespace: &JsString, name: &JsString) -> Element;
-
-    pub(crate) fn create_text_node(value: &JsString) -> Text;
-    pub(crate) fn set_text(elem: &Text, value: &JsString);
-
-    pub(crate) fn create_comment(value: &JsString) -> Comment;
-
-    // TODO check that the attribute *actually* was changed
-    pub(crate) fn set_attribute(elem: &Element, key: &JsString, value: &JsString);
-    pub(crate) fn set_attribute_ns(elem: &Element, namespace: &JsString, key: &JsString, value: &JsString);
-
-    pub(crate) fn remove_attribute(elem: &Element, key: &JsString);
-    pub(crate) fn remove_attribute_ns(elem: &Element, namespace: &JsString, key: &JsString);
-
-    pub(crate) fn add_class(elem: &Element, value: &JsString);
-    pub(crate) fn remove_class(elem: &Element, value: &JsString);
-
-    pub(crate) fn set_text_content(elem: &Node, value: &JsString);
-
-    // TODO better type for elem
-    pub(crate) fn get_style(elem: &JsValue, name: &JsString) -> JsString;
-    pub(crate) fn remove_style(elem: &JsValue, name: &JsString);
-    pub(crate) fn set_style(elem: &JsValue, name: &JsString, value: &JsString, important: bool);
-
-    pub(crate) fn insert_child_before(parent: &Node, child: &Node, other: &Node);
-    pub(crate) fn replace_child(parent: &Node, child: &Node, other: &Node);
-    pub(crate) fn append_child(parent: &Node, child: &Node);
-    pub(crate) fn remove_child(parent: &Node, child: &Node);
-
-    pub(crate) fn focus(elem: &HtmlElement);
-    pub(crate) fn blur(elem: &HtmlElement);
-
+    // TODO move this into wasm-bindgen or gloo or something
     // TODO maybe use Object for obj ?
-    pub(crate) fn set_property(obj: &JsValue, name: &JsString, value: &JsValue);
+    pub(crate) fn set_property(obj: &JsValue, name: &str, value: &JsValue);
 
-    pub(crate) fn add_event(elem: &EventTarget, name: &JsString, f: &Function);
-    pub(crate) fn add_event_once(elem: &EventTarget, name: &JsString, f: &Function);
-    pub(crate) fn add_event_preventable(elem: &EventTarget, name: &JsString, f: &Function);
-    pub(crate) fn remove_event(elem: &EventTarget, name: &JsString, f: &Function);
+    // TODO replace with gloo-events
+    pub(crate) fn add_event(elem: &EventTarget, name: &str, f: &Function);
+    pub(crate) fn add_event_once(elem: &EventTarget, name: &str, f: &Function);
+    pub(crate) fn add_event_preventable(elem: &EventTarget, name: &str, f: &Function);
+    pub(crate) fn remove_event(elem: &EventTarget, name: &str, f: &Function);
 }
 
 
+thread_local! {
+    static WINDOW: Window = web_sys::window().unwrap_throw();
+    static DOCUMENT: Document = WINDOW.with(|w| w.document().unwrap_throw());
+    static HISTORY: History = WINDOW.with(|w| w.history().unwrap_throw());
+}
+
+pub(crate) fn window_event_target() -> EventTarget {
+    // TODO avoid the clone somehow ?
+    WINDOW.with(|w| w.clone().into())
+}
+
+pub(crate) fn body() -> HtmlElement {
+    DOCUMENT.with(|d| d.body().unwrap_throw())
+}
+
+pub(crate) fn ready_state() -> String {
+    DOCUMENT.with(|d| d.ready_state())
+}
+
+pub(crate) fn current_url() -> String {
+    WINDOW.with(|w| w.location().href().unwrap_throw())
+}
+
+pub(crate) fn go_to_url(url: &str) {
+    HISTORY.with(|h| {
+        h.push_state_with_url(&JsValue::NULL, "", Some(url)).unwrap_throw();
+    });
+}
+
+pub(crate) fn create_stylesheet() -> CssStyleSheet {
+    DOCUMENT.with(|document| {
+        // TODO use createElementNS ?
+        // TODO use dyn_into ?
+        let e: HtmlStyleElement = document.create_element("style").unwrap_throw().unchecked_into();
+        e.set_type("text/css");
+        append_child(&document.head().unwrap_throw(), &e);
+        // TODO use dyn_into ?
+        e.sheet().unwrap_throw().unchecked_into()
+    })
+}
+
+pub(crate) fn make_style_rule(sheet: &CssStyleSheet, selector: &str) -> CssStyleRule {
+    let rules = sheet.css_rules().unwrap_throw();
+    let length = rules.length();
+    // TODO don't return u32 ?
+    sheet.insert_rule_with_index(&format!("{} {{}}", selector), length).unwrap_throw();
+    // TODO use dyn_into ?
+    rules.get(length).unwrap_throw().unchecked_into()
+}
+
+
+pub(crate) fn get_element_by_id(id: &str) -> Element {
+    DOCUMENT.with(|d| d.get_element_by_id(id).unwrap_throw())
+}
+
+pub(crate) fn create_element(name: &str) -> Element {
+    DOCUMENT.with(|d| d.create_element(name).unwrap_throw())
+}
+
+pub(crate) fn create_element_ns(namespace: &str, name: &str) -> Element {
+    DOCUMENT.with(|d| d.create_element_ns(Some(namespace), name).unwrap_throw())
+}
+
+pub(crate) fn create_text_node(value: &str) -> Text {
+    DOCUMENT.with(|d| d.create_text_node(value))
+}
+
+pub(crate) fn set_text(elem: &Text, value: &str) {
+    // http://jsperf.com/textnode-performance
+    elem.set_data(value);
+}
+
+pub(crate) fn create_comment(value: &str) -> Comment {
+    DOCUMENT.with(|d| d.create_comment(value))
+}
+
+// TODO check that the attribute *actually* was changed
+pub(crate) fn set_attribute(elem: &Element, key: &str, value: &str) {
+    elem.set_attribute(key, value).unwrap_throw();
+}
+
+pub(crate) fn set_attribute_ns(elem: &Element, namespace: &str, key: &str, value: &str) {
+    elem.set_attribute_ns(Some(namespace), key, value).unwrap_throw();
+}
+
+pub(crate) fn remove_attribute(elem: &Element, key: &str) {
+    elem.remove_attribute(key).unwrap_throw();
+}
+
+pub(crate) fn remove_attribute_ns(elem: &Element, namespace: &str, key: &str) {
+    elem.remove_attribute_ns(Some(namespace), key).unwrap_throw();
+}
+
+pub(crate) fn add_class(elem: &Element, value: &str) {
+    elem.class_list().add_1(value).unwrap_throw();
+}
+
+pub(crate) fn remove_class(elem: &Element, value: &str) {
+    elem.class_list().remove_1(value).unwrap_throw();
+}
+
+pub(crate) fn set_text_content(elem: &Node, value: &str) {
+    elem.set_text_content(Some(value));
+}
+
+pub(crate) fn get_style(style: &CssStyleDeclaration, name: &str) -> String {
+    style.get_property_value(name).unwrap_throw()
+}
+
+pub(crate) fn remove_style(style: &CssStyleDeclaration, name: &str) {
+    // TODO don't return String ?
+    style.remove_property(name).unwrap_throw();
+}
+
+pub(crate) fn set_style(style: &CssStyleDeclaration, name: &str, value: &str, important: bool) {
+    let priority = if important { intern("important") } else { intern("") };
+    style.set_property_with_priority(name, value, priority).unwrap_throw();
+}
+
+pub(crate) fn insert_child_before(parent: &Node, child: &Node, other: &Node) {
+    // TODO don't return Node ?
+    parent.insert_before(child, Some(other)).unwrap_throw();
+}
+
+pub(crate) fn replace_child(parent: &Node, child: &Node, other: &Node) {
+    // TODO don't return Node ?
+    parent.replace_child(child, other).unwrap_throw();
+}
+
+pub(crate) fn append_child(parent: &Node, child: &Node) {
+    // TODO don't return Node ?
+    parent.append_child(child).unwrap_throw();
+}
+
+pub(crate) fn remove_child(parent: &Node, child: &Node) {
+    // TODO don't return Node ?
+    parent.remove_child(child).unwrap_throw();
+}
+
+pub(crate) fn focus(elem: &HtmlElement) {
+    elem.focus().unwrap_throw();
+}
+
+pub(crate) fn blur(elem: &HtmlElement) {
+    elem.blur().unwrap_throw();
+}
+
 #[inline]
 pub(crate) fn remove_all_children(node: &Node) {
-    set_text_content(node, &intern(""));
+    set_text_content(node, intern(""));
 }
