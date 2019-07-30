@@ -438,6 +438,12 @@ impl<A> DomBuilder<A> {
 
 impl<A> DomBuilder<A> where A: Clone {
     #[inline]
+    #[doc(hidden)]
+    pub fn __internal_element(&self) -> A {
+        self.element.clone()
+    }
+
+    #[inline]
     pub fn with_element<B, F>(self, f: F) -> B where F: FnOnce(Self, A) -> B {
         let element = self.element.clone();
         f(self, element)

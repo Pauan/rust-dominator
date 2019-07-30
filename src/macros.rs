@@ -4,8 +4,8 @@ macro_rules! __internal_builder_method {
     ($this:expr,) => {
         $this
     };
-    ($this:expr, .$name:ident!($($args:expr),*) $($rest:tt)*) => {
-        $crate::__internal_builder_method!($name!($this, $($args),*), $($rest)*)
+    ($this:expr, .$name:ident!($($args:tt)*) $($rest:tt)*) => {
+        $crate::__internal_builder_method!($name!($this, $($args)*), $($rest)*)
     };
     ($this:expr, .$name:ident($($args:expr),*) $($rest:tt)*) => {
         $crate::__internal_builder_method!($this.$name($($args),*), $($rest)*)
@@ -16,6 +16,12 @@ macro_rules! __internal_builder_method {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __internal_builder {
+    ($default:ty, $name:ident => $make:expr, $kind:expr) => {
+        $crate::__internal_builder!($default, $name => $make, $kind => $default, {})
+    };
+    ($default:ty, $name:ident => $make:expr, $kind:expr, $($rest:tt)*) => {
+        $crate::__internal_builder!($default, $name => $make, $kind => $default, $($rest)*)
+    };
     ($default:ty, $name:ident => $make:expr, $kind:expr => $t:ty) => {
         $crate::__internal_builder!($default, $name => $make, $kind => $t, {})
     };
@@ -28,13 +34,15 @@ macro_rules! __internal_builder {
         let c = $crate::__internal_builder_method!(b, $($methods)*);
         $crate::DomBuilder::into_dom(c)
     }};
+}
 
-    ($default:ty, $name:ident => $make:expr, $kind:expr) => {
-        $crate::__internal_builder!($default, $name => $make, $kind => $default)
-    };
-    ($default:ty, $name:ident => $make:expr, $kind:expr, { $($methods:tt)* }) => {
-        $crate::__internal_builder!($default, $name => $make, $kind => $default, { $($methods)* })
-    };
+
+#[macro_export]
+macro_rules! with_node {
+    ($this:expr, $name:ident => { $($methods:tt)* }) => {{
+        let $name = $crate::DomBuilder::__internal_element(&$this);
+        $crate::__internal_builder_method!($this, $($methods)*)
+    }};
 }
 
 
