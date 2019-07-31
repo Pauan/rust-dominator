@@ -69,6 +69,7 @@ pub fn go_to_url(new_url: &str) {
 }
 
 
+#[deprecated(since = "0.5.1", note = "Use the on_click_go_to_url macro instead")]
 #[inline]
 pub fn on_click_go_to_url<A, B>(new_url: A) -> impl FnOnce(DomBuilder<B>) -> DomBuilder<B>
     where A: Into<Cow<'static, str>>,
@@ -87,6 +88,8 @@ pub fn on_click_go_to_url<A, B>(new_url: A) -> impl FnOnce(DomBuilder<B>) -> Dom
 
 // TODO better type than HtmlElement
 // TODO maybe make this a macro ?
+#[deprecated(since = "0.5.1", note = "Use the link macro instead")]
+#[allow(deprecated)]
 #[inline]
 pub fn link<A, F>(url: A, f: F) -> Dom
     where A: Into<Cow<'static, str>>,
@@ -98,4 +101,32 @@ pub fn link<A, F>(url: A, f: F) -> Dom
         .apply(on_click_go_to_url(url))
         .apply(f)
     })
+}
+
+
+// TODO test this
+#[macro_export]
+macro_rules! on_click_go_to_url {
+    ($this:ident, $url:expr) => {{
+        let url = $url;
+
+        $this.event_preventable(move |e: $crate::events::Click| {
+            e.prevent_default();
+            $crate::routing::go_to_url(&url);
+        })
+    }};
+}
+
+// TODO test this
+#[macro_export]
+macro_rules! link {
+    ($url:expr, { $($methods:tt)* }) => {{
+        let url = $url;
+
+        $crate::html!("a", {
+            .attribute("href", &url)
+            .apply(move |dom| $crate::on_click_go_to_url!(dom, url))
+            $($methods)*
+        })
+    }};
 }

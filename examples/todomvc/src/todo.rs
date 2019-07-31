@@ -2,10 +2,9 @@ use std::rc::Rc;
 
 use wasm_bindgen::prelude::*;
 use serde_derive::{Serialize, Deserialize};
-use web_sys::HtmlElement;
 use futures_signals::map_ref;
 use futures_signals::signal::{SignalExt, Mutable};
-use dominator::{Dom, html, clone, events};
+use dominator::{Dom, html, clone, events, with_node};
 
 use crate::util::trim;
 use crate::app::App;
@@ -120,20 +119,19 @@ impl Todo {
                     .focused_signal(todo.editing.signal_cloned()
                         .map(|x| x.is_some()))
 
-                    .event(clone!(todo => move |event: events::KeyDown| {
-                        match event.key().as_str() {
-                            "Enter" => {
-                                event.dyn_target::<HtmlElement>()
-                                    .unwrap_throw()
-                                    .blur()
-                                    .unwrap_throw();
-                            },
-                            "Escape" => {
-                                todo.cancel_editing();
-                            },
-                            _ => {}
-                        }
-                    }))
+                    .with_node!(element => {
+                        .event(clone!(todo => move |event: events::KeyDown| {
+                            match event.key().as_str() {
+                                "Enter" => {
+                                    element.blur().unwrap_throw();
+                                },
+                                "Escape" => {
+                                    todo.cancel_editing();
+                                },
+                                _ => {}
+                            }
+                        }))
+                    })
 
                     .event(clone!(todo => move |event: events::Input| {
                         todo.editing.set_neq(Some(event.value().unwrap_throw()));

@@ -5,7 +5,7 @@ use wasm_bindgen::prelude::*;
 use serde_derive::{Serialize, Deserialize};
 use futures_signals::signal::{Signal, SignalExt, Mutable};
 use futures_signals::signal_vec::{SignalVec, SignalVecExt, MutableVec};
-use dominator::{Dom, text_signal, routing, html, clone, events};
+use dominator::{Dom, text_signal, html, clone, events, link};
 
 use crate::todo::Todo;
 use crate::routing::Route;
@@ -166,7 +166,7 @@ impl App {
     fn render_button(text: &str, route: Route) -> Dom {
         html!("li", {
             .children(&mut [
-                routing::link(route.url(), |dom| { dom
+                link!(route.url(), {
                     .text(text)
                     .class_signal("selected", Route::signal().map(move |x| x == route))
                 })

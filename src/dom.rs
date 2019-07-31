@@ -380,6 +380,18 @@ pub struct DomBuilder<A> {
     has_children: bool,
 }
 
+impl<A> DomBuilder<A> where A: JsCast {
+    #[inline]
+    pub fn new_html(name: &str) -> Self {
+        Self::new(create_element(name))
+    }
+
+    #[inline]
+    pub fn new_svg(name: &str) -> Self {
+        Self::new(create_element_ns(name, SVG_NAMESPACE))
+    }
+}
+
 impl<A> DomBuilder<A> {
     #[inline]
     pub fn new(value: A) -> Self {
@@ -443,6 +455,7 @@ impl<A> DomBuilder<A> where A: Clone {
         self.element.clone()
     }
 
+    #[deprecated(since = "0.5.1", note = "Use the with_node macro instead")]
     #[inline]
     pub fn with_element<B, F>(self, f: F) -> B where F: FnOnce(Self, A) -> B {
         let element = self.element.clone();

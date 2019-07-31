@@ -1,14 +1,16 @@
-#[doc(hidden)]
 #[macro_export]
-macro_rules! __internal_builder_method {
-    ($this:expr,) => {
+macro_rules! apply_methods {
+    ($this:expr, {}) => {
         $this
     };
-    ($this:expr, .$name:ident!($($args:tt)*) $($rest:tt)*) => {
-        $crate::__internal_builder_method!($name!($this, $($args)*), $($rest)*)
+    ($this:expr, { .$name:ident!($($args:tt)*) $($rest:tt)* }) => {
+        $crate::apply_methods!({
+            let this = $this;
+            $name!(this, $($args)*)
+        }, { $($rest)* })
     };
-    ($this:expr, .$name:ident($($args:expr),*) $($rest:tt)*) => {
-        $crate::__internal_builder_method!($this.$name($($args),*), $($rest)*)
+    ($this:expr, { .$name:ident($($args:expr),*) $($rest:tt)* }) => {
+        $crate::apply_methods!($this.$name($($args),*), { $($rest)* })
     };
 }
 
@@ -16,32 +18,28 @@ macro_rules! __internal_builder_method {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __internal_builder {
-    ($default:ty, $name:ident => $make:expr, $kind:expr) => {
-        $crate::__internal_builder!($default, $name => $make, $kind => $default, {})
+    ($default:ty, $make:ident, $kind:expr) => {
+        $crate::__internal_builder!($default, $make, $kind => $default, {})
     };
-    ($default:ty, $name:ident => $make:expr, $kind:expr, $($rest:tt)*) => {
-        $crate::__internal_builder!($default, $name => $make, $kind => $default, $($rest)*)
+    ($default:ty, $make:ident, $kind:expr, $($rest:tt)*) => {
+        $crate::__internal_builder!($default, $make, $kind => $default, $($rest)*)
     };
-    ($default:ty, $name:ident => $make:expr, $kind:expr => $t:ty) => {
-        $crate::__internal_builder!($default, $name => $make, $kind => $t, {})
+    ($default:ty, $make:ident, $kind:expr => $t:ty) => {
+        $crate::__internal_builder!($default, $make, $kind => $t, {})
     };
-    ($default:ty, $name:ident => $make:expr, $kind:expr => $t:ty, { $($methods:tt)* }) => {{
-        let a: $t = {
-            let $name = $kind;
-            $make
-        };
-        let b = $crate::DomBuilder::new(a);
-        let c = $crate::__internal_builder_method!(b, $($methods)*);
-        $crate::DomBuilder::into_dom(c)
+    ($default:ty, $make:ident, $kind:expr => $t:ty, $($methods:tt)*) => {{
+        let builder = $crate::DomBuilder::<$t>::$make($kind);
+        let output = $crate::apply_methods!(builder, $($methods)*);
+        $crate::DomBuilder::into_dom(output)
     }};
 }
 
 
 #[macro_export]
 macro_rules! with_node {
-    ($this:expr, $name:ident => { $($methods:tt)* }) => {{
+    ($this:ident, $name:ident => { $($methods:tt)* }) => {{
         let $name = $crate::DomBuilder::__internal_element(&$this);
-        $crate::__internal_builder_method!($this, $($methods)*)
+        $crate::apply_methods!($this, { $($methods)* })
     }};
 }
 
@@ -49,7 +47,7 @@ macro_rules! with_node {
 #[macro_export]
 macro_rules! html {
     ($($args:tt)+) => {
-        $crate::__internal_builder!($crate::HtmlElement, kind => $crate::create_element(kind), $($args)+)
+        $crate::__internal_builder!($crate::HtmlElement, new_html, $($args)+)
     };
 }
 
@@ -57,7 +55,7 @@ macro_rules! html {
 #[macro_export]
 macro_rules! svg {
     ($($args:tt)+) => {
-        $crate::__internal_builder!($crate::SvgElement, kind => $crate::create_element_ns(kind, $crate::SVG_NAMESPACE), $($args)+)
+        $crate::__internal_builder!($crate::SvgElement, new_svg, $($args)+)
     };
 }
 
@@ -67,19 +65,17 @@ macro_rules! stylesheet {
     ($rule:expr) => {
         $crate::stylesheet!($rule, {})
     };
-    ($rule:expr, { $($methods:tt)* }) => {{
-        let a = $crate::StylesheetBuilder::new($rule);
-        $crate::__internal_builder_method!(a, $($methods)*).done()
-    }};
+    ($rule:expr, { $($methods:tt)* }) => {
+        $crate::apply_methods!($crate::StylesheetBuilder::new($rule), { $($methods)* }).done()
+    };
 }
 
 
 #[macro_export]
 macro_rules! class {
-    ($($methods:tt)*) => {{
-        let a = $crate::ClassBuilder::new();
-        $crate::__internal_builder_method!(a, $($methods)*).done()
-    }};
+    ($($methods:tt)*) => {
+        $crate::apply_methods!($crate::ClassBuilder::new(), { $($methods)* }).done()
+    };
 }
 
 
