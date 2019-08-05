@@ -3,7 +3,6 @@ use std::convert::AsRef;
 use std::marker::PhantomData;
 use std::future::Future;
 use std::task::{Context, Poll};
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use lazy_static::lazy_static;
 use futures_signals::signal::{Signal, not};
@@ -301,7 +300,7 @@ fn set_style<A, B>(style: &CssStyleDeclaration, name: &A, value: B, important: b
     let mut names = vec![];
     let mut values = vec![];
 
-    fn try_set_style(style: &CssStyleDeclaration, names: &mut Vec<String>, values: &mut Vec<String>, name: &str, value: &str, important: bool) -> bool {
+    fn try_set_style(style: &CssStyleDeclaration, names: &mut Vec<String>, values: &mut Vec<String>, name: &str, value: &str, important: bool) -> Option<()> {
         assert!(value != "");
 
         // TODO handle browser prefixes ?
@@ -313,25 +312,25 @@ fn set_style<A, B>(style: &CssStyleDeclaration, name: &A, value: B, important: b
         let is_changed = bindings::get_style(style, name) != "";
 
         if is_changed {
-            true
+            Some(())
 
         } else {
             names.push(String::from(name));
             values.push(String::from(value));
-            false
+            None
         }
     }
 
-    let okay = name.any(|name| {
+    let okay = name.find_map(|name| {
         let name: &str = intern(name);
 
-        value.any(|value| {
+        value.find_map(|value| {
             // TODO should this intern ?
             try_set_style(style, &mut names, &mut values, &name, &value, important)
         })
     });
 
-    if !okay {
+    if let None = okay {
         // TODO maybe make this configurable
         panic!("style is incorrect:\n  names: {}\n  values: {}", names.join(", "), values.join(", "));
     }
@@ -917,17 +916,41 @@ pub struct StylesheetBuilder {
 
 // TODO remove the CssStyleRule when this is discarded
 impl StylesheetBuilder {
+    // TODO should this inline ?
+    #[doc(hidden)]
     #[inline]
-    pub fn new(selector: &str) -> Self {
+    pub fn __internal_new<A>(selector: A) -> Self where A: MultiStr {
         // TODO can this be made faster ?
         // TODO somehow share this safely between threads ?
         thread_local! {
             static STYLESHEET: CssStyleSheet = bindings::create_stylesheet();
         }
 
-        let element = STYLESHEET.with(move |stylesheet| {
+        fn try_make(stylesheet: &CssStyleSheet, selector: &str, selectors: &mut Vec<String>) -> Option<CssStyleDeclaration> {
             // TODO maybe intern the selector ?
-            bindings::make_style_rule(stylesheet, &selector).style()
+            if let Ok(declaration) = bindings::make_style_rule(stylesheet, selector) {
+                Some(declaration.style())
+
+            } else {
+                selectors.push(String::from(selector));
+                None
+            }
+        }
+
+        let element = STYLESHEET.with(move |stylesheet| {
+            let mut selectors = vec![];
+
+            let okay = selector.find_map(|selector| {
+                try_make(stylesheet, selector, &mut selectors)
+            });
+
+            if let Some(okay) = okay {
+                okay
+
+            } else {
+                // TODO maybe make this configurable
+                panic!("selectors are incorrect:\n  {}", selectors.join("\n  "));
+            }
         });
 
         Self {
@@ -976,7 +999,8 @@ impl StylesheetBuilder {
 
     // TODO return a Handle
     #[inline]
-    pub fn done(mut self) {
+    #[doc(hidden)]
+    pub fn __internal_done(mut self) {
         self.callbacks.trigger_after_insert();
 
         // This prevents it from triggering after_remove
@@ -993,25 +1017,22 @@ pub struct ClassBuilder {
 }
 
 impl ClassBuilder {
+    #[doc(hidden)]
     #[inline]
-    pub fn new() -> Self {
-        let class_name = {
-            // TODO replace this with a global counter in JavaScript ?
-            // TODO can this be made more efficient ?
-            static CLASS_ID: AtomicU32 = AtomicU32::new(0);
-
-            // TODO check for overflow ?
-            let id = CLASS_ID.fetch_add(1, Ordering::Relaxed);
-
-            // TODO make this more efficient ?
-            format!("__class_{}__", id)
-        };
+    pub fn __internal_new() -> Self {
+        let class_name = __internal::make_class_id();
 
         Self {
             // TODO make this more efficient ?
-            stylesheet: StylesheetBuilder::new(&format!(".{}", class_name)),
+            stylesheet: StylesheetBuilder::__internal_new(&format!(".{}", class_name)),
             class_name,
         }
+    }
+
+    #[doc(hidden)]
+    #[inline]
+    pub fn __internal_class_name(&self) -> &str {
+        &self.class_name
     }
 
     #[inline]
@@ -1053,13 +1074,56 @@ impl ClassBuilder {
     }
 
     // TODO return a Handle ?
+    #[doc(hidden)]
     #[inline]
-    pub fn done(self) -> String {
-        self.stylesheet.done();
+    pub fn __internal_done(self) -> String {
+        self.stylesheet.__internal_done();
         self.class_name
     }
 }
 
+
+#[doc(hidden)]
+pub mod __internal {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use crate::traits::MultiStr;
+
+
+    pub fn make_class_id() -> String {
+        // TODO replace this with a global counter in JavaScript ?
+        // TODO can this be made more efficient ?
+        static CLASS_ID: AtomicU32 = AtomicU32::new(0);
+
+        // TODO check for overflow ?
+        // TODO should this be SeqCst ?
+        let id = CLASS_ID.fetch_add(1, Ordering::Relaxed);
+
+        // TODO make this more efficient ?
+        format!("__class_{}__", id)
+    }
+
+
+    pub struct Pseudo<'a, A> {
+        class_name: &'a str,
+        pseudos: A,
+    }
+
+    impl<'a, A> Pseudo<'a, A> where A: MultiStr {
+        #[inline]
+        pub fn new(class_name: &'a str, pseudos: A) -> Self {
+            Self { class_name, pseudos }
+        }
+    }
+
+    impl<'a, A> MultiStr for Pseudo<'a, A> where A: MultiStr {
+        #[inline]
+        fn find_map<B, F>(&self, mut f: F) -> Option<B> where F: FnMut(&str) -> Option<B> {
+            self.pseudos.find_map(|x| {
+                f(&format!(".{}{}", self.class_name, x))
+            })
+        }
+    }
+}
 
 
 #[cfg(test)]

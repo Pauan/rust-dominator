@@ -89,13 +89,13 @@ pub(crate) fn create_stylesheet() -> CssStyleSheet {
     })
 }
 
-pub(crate) fn make_style_rule(sheet: &CssStyleSheet, selector: &str) -> CssStyleRule {
+pub(crate) fn make_style_rule(sheet: &CssStyleSheet, selector: &str) -> Result<CssStyleRule, JsValue> {
     let rules = sheet.css_rules().unwrap_throw();
     let length = rules.length();
     // TODO don't return u32 ?
-    sheet.insert_rule_with_index(&format!("{}{{}}", selector), length).unwrap_throw();
+    sheet.insert_rule_with_index(&format!("{}{{}}", selector), length)?;
     // TODO use dyn_into ?
-    rules.get(length).unwrap_throw().unchecked_into()
+    Ok(rules.get(length).unwrap_throw().unchecked_into())
 }
 
 

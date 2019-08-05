@@ -67,20 +67,20 @@ impl<A, C> AsStr for RefFn<A, str, C> where C: Fn(&A) -> &str {
 
 
 pub trait MultiStr {
-    fn any<F>(&self, f: F) -> bool where F: FnMut(&str) -> bool;
+    fn find_map<A, F>(&self, f: F) -> Option<A> where F: FnMut(&str) -> Option<A>;
 
     #[inline]
     fn each<F>(&self, mut f: F) where F: FnMut(&str) {
-        self.any(|x| {
+        let _: Option<()> = self.find_map(|x| {
             f(x);
-            false
+            None
         });
     }
 }
 
 impl<A> MultiStr for A where A: AsStr {
     #[inline]
-    fn any<F>(&self, mut f: F) -> bool where F: FnMut(&str) -> bool {
+    fn find_map<B, F>(&self, mut f: F) -> Option<B> where F: FnMut(&str) -> Option<B> {
         f(self.as_str())
     }
 }
@@ -96,8 +96,8 @@ impl<A> MultiStr for A where A: AsStr {
 // TODO it would be great to use IntoIterator or Iterator instead
 impl<'a, A, C> MultiStr for RefFn<A, [&'a str], C> where C: Fn(&A) -> &[&'a str] {
     #[inline]
-    fn any<F>(&self, mut f: F) -> bool where F: FnMut(&str) -> bool {
-        self.call_ref().iter().any(|x| f(x))
+    fn find_map<B, F>(&self, mut f: F) -> Option<B> where F: FnMut(&str) -> Option<B> {
+        self.call_ref().iter().find_map(|x| f(x))
     }
 }
 
@@ -105,8 +105,8 @@ macro_rules! array_multi_str {
     ($size:expr) => {
         impl<A> MultiStr for [A; $size] where A: AsStr {
             #[inline]
-            fn any<F>(&self, mut f: F) -> bool where F: FnMut(&str) -> bool {
-                self.iter().any(|x| f(x.as_str()))
+            fn find_map<B, F>(&self, mut f: F) -> Option<B> where F: FnMut(&str) -> Option<B> {
+                self.iter().find_map(|x| f(x.as_str()))
             }
         }
     };

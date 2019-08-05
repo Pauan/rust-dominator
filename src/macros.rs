@@ -66,16 +66,28 @@ macro_rules! stylesheet {
         $crate::stylesheet!($rule, {})
     };
     ($rule:expr, { $($methods:tt)* }) => {
-        $crate::apply_methods!($crate::StylesheetBuilder::new($rule), { $($methods)* }).done()
+        $crate::StylesheetBuilder::__internal_done($crate::apply_methods!($crate::StylesheetBuilder::__internal_new($rule), { $($methods)* }))
     };
 }
 
 
 #[macro_export]
 macro_rules! class {
-    ($($methods:tt)*) => {
-        $crate::apply_methods!($crate::ClassBuilder::new(), { $($methods)* }).done()
+    ($($methods:tt)*) => {{
+        $crate::ClassBuilder::__internal_done($crate::apply_methods!($crate::ClassBuilder::__internal_new(), { $($methods)* }))
+    }};
+}
+
+
+#[macro_export]
+macro_rules! pseudo {
+    ($this:ident, $rules:expr) => {
+        $crate::pseudo!($this, $rules, {})
     };
+    ($this:ident, $rules:expr, { $($methods:tt)* }) => {{
+        $crate::stylesheet!($crate::__internal::Pseudo::new($crate::ClassBuilder::__internal_class_name(&$this), $rules), { $($methods)* });
+        $this
+    }};
 }
 
 
