@@ -47,7 +47,7 @@ macro_rules! with_node {
 #[macro_export]
 macro_rules! html {
     ($($args:tt)+) => {
-        $crate::__internal_builder!($crate::HtmlElement, new_html, $($args)+)
+        $crate::__internal_builder!($crate::__internal::HtmlElement, new_html, $($args)+)
     };
 }
 
@@ -55,7 +55,7 @@ macro_rules! html {
 #[macro_export]
 macro_rules! svg {
     ($($args:tt)+) => {
-        $crate::__internal_builder!($crate::SvgElement, new_svg, $($args)+)
+        $crate::__internal_builder!($crate::__internal::SvgElement, new_svg, $($args)+)
     };
 }
 

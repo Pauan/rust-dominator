@@ -73,8 +73,8 @@ impl<A, B, C> RefFn<A, B, C> where B: ?Sized, C: Fn(&A) -> &B {
 
 
 // https://developer.mozilla.org/en-US/docs/Web/API/Document/createElementNS#Valid%20Namespace%20URIs
-pub const HTML_NAMESPACE: &str = "http://www.w3.org/1999/xhtml";
-pub const SVG_NAMESPACE: &str = "http://www.w3.org/2000/svg";
+const HTML_NAMESPACE: &str = "http://www.w3.org/1999/xhtml";
+const SVG_NAMESPACE: &str = "http://www.w3.org/2000/svg";
 
 // 32-bit signed int
 pub const HIGHEST_ZINDEX: &str = "2147483647";
@@ -258,12 +258,12 @@ impl Dom {
 
 
 #[inline]
-pub fn create_element<A>(name: &str) -> A where A: JsCast {
+fn create_element<A>(name: &str) -> A where A: JsCast {
     bindings::create_element(intern(name)).dyn_into().unwrap_throw()
 }
 
 #[inline]
-pub fn create_element_ns<A>(name: &str, namespace: &str) -> A where A: JsCast {
+fn create_element_ns<A>(name: &str, namespace: &str) -> A where A: JsCast {
     bindings::create_element_ns(intern(namespace), intern(name)).dyn_into().unwrap_throw()
 }
 
@@ -1087,6 +1087,10 @@ impl ClassBuilder {
 pub mod __internal {
     use std::sync::atomic::{AtomicU32, Ordering};
     use crate::traits::MultiStr;
+
+
+    pub use web_sys::HtmlElement;
+    pub use web_sys::SvgElement;
 
 
     pub fn make_class_id() -> String {

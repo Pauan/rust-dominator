@@ -16,6 +16,3 @@ pub mod traits;
 pub mod animation;
 pub mod routing;
 pub mod events;
-
-pub use web_sys::HtmlElement;
-pub use web_sys::SvgElement;
