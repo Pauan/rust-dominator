@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::pin::Pin;
 use std::marker::Unpin;
-use std::sync::{Arc, Weak, Mutex, RwLock};
+use std::sync::{Arc, Weak, Mutex};
 use std::task::{Poll, Waker, Context};
 
 use futures_util::future::{ready, FutureExt};
@@ -77,36 +77,51 @@ impl Drop for Raf {
 }
 
 
-struct TimestampsInner {
+struct TimestampsManager {
     raf: Option<Raf>,
     // TODO make this more efficient
     states: Vec<Weak<Mutex<TimestampsState>>>,
 }
 
-struct TimestampsGlobal {
-    inner: Mutex<TimestampsInner>,
-    value: Arc<RwLock<Option<f64>>>,
+impl TimestampsManager {
+    fn new() -> Self {
+        Self {
+            raf: None,
+            states: vec![],
+        }
+    }
 }
 
-#[derive(Debug)]
-enum TimestampsEnum {
-    First,
-    Changed,
-    NotChanged,
-}
 
 #[derive(Debug)]
 struct TimestampsState {
-    state: TimestampsEnum,
+    changed: bool,
+    value: Option<f64>,
     waker: Option<Waker>,
 }
 
-// TODO must_use ?
+impl TimestampsState {
+    fn new() -> Self {
+        Self {
+            changed: true,
+            value: None,
+            waker: None,
+        }
+    }
+}
+
+#[must_use = "Signals do nothing unless polled"]
 #[derive(Debug)]
 pub struct Timestamps {
     state: Arc<Mutex<TimestampsState>>,
-    // TODO verify that there aren't any Arc cycles
-    value: Arc<RwLock<Option<f64>>>,
+}
+
+impl Timestamps {
+    fn new() -> Self {
+        Self {
+            state: Arc::new(Mutex::new(TimestampsState::new())),
+        }
+    }
 }
 
 impl Signal for Timestamps {
@@ -116,63 +131,44 @@ impl Signal for Timestamps {
     fn poll_change(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         let mut lock = self.state.lock().unwrap_throw();
 
-        match lock.state {
-            TimestampsEnum::Changed => {
-                lock.state = TimestampsEnum::NotChanged;
-                Poll::Ready(Some(*self.value.read().unwrap_throw()))
-            },
-            TimestampsEnum::First => {
-                lock.state = TimestampsEnum::NotChanged;
-                Poll::Ready(Some(None))
-            },
-            TimestampsEnum::NotChanged => {
-                lock.waker = Some(cx.waker().clone());
-                Poll::Pending
-            },
+        if lock.changed {
+            lock.changed = false;
+            Poll::Ready(Some(lock.value))
+
+        } else {
+            lock.waker = Some(cx.waker().clone());
+            Poll::Pending
         }
     }
 }
 
+
 // TODO somehow share this safely between threads ?
 thread_local! {
-    static TIMESTAMPS_MANAGER: Arc<TimestampsGlobal> = Arc::new(TimestampsGlobal {
-        inner: Mutex::new(TimestampsInner {
-            raf: None,
-            states: vec![],
-        }),
-        value: Arc::new(RwLock::new(None)),
-    });
+    static TIMESTAMPS_MANAGER: Arc<Mutex<TimestampsManager>> = Arc::new(Mutex::new(TimestampsManager::new()));
 }
 
 pub fn timestamps() -> Timestamps {
     TIMESTAMPS_MANAGER.with(|timestamps_manager| {
-        let timestamps = Timestamps {
-            state: Arc::new(Mutex::new(TimestampsState {
-                state: TimestampsEnum::First,
-                waker: None,
-            })),
-            value: timestamps_manager.value.clone(),
-        };
+        let timestamps = Timestamps::new();
 
         {
-            let mut lock = timestamps_manager.inner.lock().unwrap_throw();
+            let mut lock = timestamps_manager.lock().unwrap_throw();
 
             lock.states.push(Arc::downgrade(&timestamps.state));
 
             if let None = lock.raf {
-                let global = timestamps_manager.clone();
+                let timestamps_manager = timestamps_manager.clone();
 
                 lock.raf = Some(Raf::new(move |time| {
-                    let mut lock = global.inner.lock().unwrap_throw();
-                    let mut value = global.value.write().unwrap_throw();
-
-                    *value = Some(time);
+                    let mut lock = timestamps_manager.lock().unwrap_throw();
 
                     lock.states.retain(|state| {
                         if let Some(state) = state.upgrade() {
                             let mut lock = state.lock().unwrap_throw();
 
-                            lock.state = TimestampsEnum::Changed;
+                            lock.changed = true;
+                            lock.value = Some(time);
 
                             if let Some(waker) = lock.waker.take() {
                                 drop(lock);
