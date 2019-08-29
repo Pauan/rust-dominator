@@ -73,7 +73,6 @@ impl<A, B, C> RefFn<A, B, C> where B: ?Sized, C: Fn(&A) -> &B {
 
 
 // https://developer.mozilla.org/en-US/docs/Web/API/Document/createElementNS#Valid%20Namespace%20URIs
-const HTML_NAMESPACE: &str = "http://www.w3.org/1999/xhtml";
 const SVG_NAMESPACE: &str = "http://www.w3.org/2000/svg";
 
 // 32-bit signed int

@@ -16,7 +16,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 dominator = { path = "../.." }
-wasm-bindgen = "0.2.45"
+wasm-bindgen = "0.2.48"
 futures-signals = "0.3.0"
 lazy_static = "1.0.0"
 
