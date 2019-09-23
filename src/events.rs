@@ -57,6 +57,9 @@ macro_rules! make_mouse_event {
             #[inline] pub fn shift_key(&self) -> bool { self.event.shift_key() }
             #[inline] pub fn alt_key(&self) -> bool { self.event.alt_key() }
 
+            #[inline] pub fn mouse_x(&self) -> i32 { self.event.client_x() }
+            #[inline] pub fn mouse_y(&self) -> i32 { self.event.client_y() }
+
             pub fn button(&self) -> MouseButton {
                 match self.event.button() {
                     0 => MouseButton::Left,
