@@ -33,6 +33,15 @@ macro_rules! make_event {
     };
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum MouseButton {
+    Left,
+    Middle,
+    Right,
+    Button4,
+    Button5,
+}
+
 macro_rules! make_mouse_event {
     ($name:ident, $type:literal) => {
         make_event!($name, $type => web_sys::MouseEvent);
@@ -43,6 +52,21 @@ macro_rules! make_mouse_event {
 
             #[inline] pub fn screen_x(&self) -> i32 { self.event.screen_x() }
             #[inline] pub fn screen_y(&self) -> i32 { self.event.screen_y() }
+
+            #[inline] pub fn ctrl_key(&self) -> bool { self.event.ctrl_key() || self.event.meta_key() }
+            #[inline] pub fn shift_key(&self) -> bool { self.event.shift_key() }
+            #[inline] pub fn alt_key(&self) -> bool { self.event.alt_key() }
+
+            pub fn button(&self) -> MouseButton {
+                match self.event.button() {
+                    0 => MouseButton::Left,
+                    1 => MouseButton::Middle,
+                    2 => MouseButton::Right,
+                    3 => MouseButton::Button4,
+                    4 => MouseButton::Button5,
+                    _ => unreachable!("Unexpected MouseEvent.button value"),
+                }
+            }
         }
     };
 }
@@ -54,6 +78,10 @@ macro_rules! make_keyboard_event {
         impl $name {
             // TODO return enum or something
             #[inline] pub fn key(&self) -> String { self.event.key() }
+
+            #[inline] pub fn ctrl_key(&self) -> bool { self.event.ctrl_key() || self.event.meta_key() }
+            #[inline] pub fn shift_key(&self) -> bool { self.event.shift_key() }
+            #[inline] pub fn alt_key(&self) -> bool { self.event.alt_key() }
         }
     };
 }
@@ -66,6 +94,9 @@ macro_rules! make_focus_event {
 
 
 make_mouse_event!(Click, "click");
+make_mouse_event!(MouseDown, "mousedown");
+make_mouse_event!(MouseUp, "mouseup");
+make_mouse_event!(MouseMove, "mousemove");
 make_mouse_event!(MouseEnter, "mouseenter");
 make_mouse_event!(MouseLeave, "mouseleave");
 make_mouse_event!(DoubleClick, "dblclick");
@@ -78,6 +109,8 @@ make_focus_event!(Focus, "focus");
 make_focus_event!(Blur, "blur");
 
 
+make_event!(Scroll, "scroll" => web_sys::Event);
+make_event!(Resize, "resize" => web_sys::UiEvent);
 make_event!(Input, "input" => web_sys::InputEvent);
 
 impl Input {

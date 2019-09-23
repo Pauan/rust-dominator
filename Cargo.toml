@@ -8,7 +8,7 @@ homepage = "https://github.com/Pauan/rust-dominator"
 readme = "README.md"
 license = "MIT"
 keywords = ["javascript", "dom", "reactive", "signal", "frp"]
-categories = ["web-programming", "template-engine", "wasm"]
+categories = ["gui", "web-programming", "wasm"]
 edition = "2018"
 
 [dependencies]
@@ -56,6 +56,7 @@ features = [
     "StyleSheet",
     "SvgElement",
     "Text",
+    "UiEvent",
     "Window",
 ]
 
