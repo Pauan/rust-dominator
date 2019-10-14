@@ -825,4 +825,258 @@ pub mod easing {
             }
         })
     }
+
+
+    /*pub struct Point {
+        pub x: f64,
+        pub y: f64,
+    }*/
+
+    /*impl Point {
+        fn range_inclusive(percentage: f64, from: &Self, to: &Self) -> Self {
+            Point {
+                x: range_inclusive(percentage, from.x, to.x),
+                y: range_inclusive(percentage, from.y, to.y),
+            }
+        }
+    }*/
+
+    /*#[inline]
+    fn get_values(start: f64, end: f64) -> (f64, f64, f64) {
+        let start = 3.0 * start;
+        let end = 3.0 * end;
+        let a = 1.0 - end + start;
+        let b = end - (2.0 * start);
+        (a, b, start)
+    }
+
+    fn interpolate(p: f64, start: f64, end: f64) -> f64 {
+        let (a, b, c) = get_values(start, end);
+        ((a * p + b) * p + c) * p
+    }
+
+    fn get_slope(p: f64, start: f64, end: f64) -> f64 {
+        let (a, b, c) = get_values(start, end);
+        (3.0 * a * p * p) + (2.0 * b * p) + c
+    }*/
+
+
+    const EPSILON: f64 = 1e-6;
+
+    pub struct CubicBezier {
+        ax: f64,
+        bx: f64,
+        cx: f64,
+
+        ay: f64,
+        by: f64,
+        cy: f64,
+    }
+
+    impl CubicBezier {
+        pub fn new(x1: f64, y1: f64, x2: f64, y2: f64) -> Self {
+            assert!(x1 >= 0.0 && x1 <= 1.0);
+            assert!(y1 >= 0.0 && y1 <= 1.0);
+            assert!(x2 >= 0.0 && x2 <= 1.0);
+            assert!(y2 >= 0.0 && y2 <= 1.0);
+
+            let cx = 3.0 * x1;
+            let bx = 3.0 * (x2 - x1) - cx;
+            let ax = 1.0 - cx - bx;
+
+            let cy = 3.0 * y1;
+            let by = 3.0 * (y2 - y1) - cy;
+            let ay = 1.0 - cy - by;
+
+            Self { ax, bx, cx, ay, by, cy }
+        }
+
+        /*fn values(p: f64) -> (f64, f64, f64, f64) {
+            let t2 = p * p;
+            let one_t = 1.0 - p;
+            let one_t2 = one_t * one_t;
+            (
+                one_t2 * one_t,
+                3.0 * one_t2 * p,
+                3.0 * one_t * t2,
+                t2 * p,
+            )
+        }*/
+
+        pub fn easing(&self, p: Percentage) -> Percentage {
+            // TODO is unchecked okay ?
+            p.map_unchecked(|p| {
+                if p == 0.0 {
+                    0.0
+
+                } else if p == 1.0 {
+                    1.0
+
+                } else {
+                    self.y(self.get_t_for_x(p))
+                }
+            })
+        }
+
+        /*pub fn point(&self, p: Percentage) -> Point {
+            let p = p.into_f64();
+
+            Point {
+                x: self.x(p),
+                y: self.y(p),
+            }
+        }*/
+
+        fn x(&self, p: f64) -> f64 {
+            ((self.ax * p + self.bx) * p + self.cx) * p
+
+            /*let p1 = range_inclusive(p, self.start.x, self.ctrl1.x);
+            let p2 = range_inclusive(p, self.ctrl1.x, self.ctrl2.x);
+            let p3 = range_inclusive(p, self.ctrl2.x, self.end.x);
+
+            let p4 = range_inclusive(p, p1, p2);
+            let p5 = range_inclusive(p, p2, p3);
+
+            range_inclusive(p, p4, p5)*/
+        }
+
+        fn x_derivative(&self, p: f64) -> f64 {
+            (3.0 * self.ax * p + 2.0 * self.bx) * p + self.cx
+        }
+
+        /*fn x(&self, values: (f64, f64, f64, f64)) -> f64 {
+            self.start.x * values.0 +
+            self.ctrl1.x * values.1 +
+            self.ctrl2.x * values.2 +
+            self.end.x * values.3
+        }*/
+
+        fn y(&self, p: f64) -> f64 {
+            ((self.ay * p + self.by) * p + self.cy) * p
+
+            /*let p1 = range_inclusive(p, self.start.y, self.ctrl1.y);
+            let p2 = range_inclusive(p, self.ctrl1.y, self.ctrl2.y);
+            let p3 = range_inclusive(p, self.ctrl2.y, self.end.y);
+
+            let p4 = range_inclusive(p, p1, p2);
+            let p5 = range_inclusive(p, p2, p3);
+
+            range_inclusive(p, p4, p5)*/
+        }
+
+        /*fn y(&self, values: (f64, f64, f64, f64)) -> f64 {
+            self.start.y * values.0 +
+            self.ctrl1.y * values.1 +
+            self.ctrl2.y * values.2 +
+            self.end.y * values.3
+        }*/
+
+        fn bisect(&self, x: f64) -> f64 {
+            let mut start = 0.0;
+            let mut end = 1.0;
+            let mut t = x;
+
+            debug_assert!(t >= start);
+            debug_assert!(t <= end);
+
+            while start < end {
+                let x = self.x(t) - x;
+
+                if x.abs() < EPSILON {
+                    return t;
+                }
+
+                if x > 0.0 {
+                    end = t;
+
+                } else {
+                    start = t;
+                }
+
+                t = (end - start) * 0.5 + start;
+            }
+
+            t
+        }
+
+        fn get_t_for_x(&self, x: f64) -> f64 {
+            let mut t = x;
+
+            // Use Newton's method first, because it's faster
+            for _ in 0..8 {
+                let x = self.x(t) - x;
+
+                if x.abs() < EPSILON {
+                    return t;
+                }
+
+                let d = self.x_derivative(t);
+
+                if d.abs() < EPSILON {
+                    break;
+                }
+
+                t -= x / d;
+            }
+
+            // No solution found, bisect instead
+            self.bisect(x)
+        }
+
+        /*fn get_t_for_x(&self, x: f64) -> f64 {
+            const NEWTON_ITERATIONS: usize = 100;
+
+            let mut t = x;
+
+            for _ in 0..NEWTON_ITERATIONS {
+                let slope = get_slope(t, self.ctrl1.x, self.ctrl2.x);
+
+                if slope == 0.0 {
+                    break;
+
+                } else {
+                    let new_x = self.x(t) - x;
+                    t -= new_x / slope;
+                }
+            }
+
+            t
+        }*/
+
+        /*fn get_t_for_x(&self, x: f64) -> f64 {
+            const MAX_ITERATIONS: usize = 1000;
+            //const TOLERANCE: f64 = 0.0001;
+            const TOLERANCE: f64 = 0.0000000001;
+
+            let mut start = 0.0;
+            let mut end = 1.0;
+            let mut iterations = 0;
+
+            loop {
+                let t = (end - start) / 2.0 + start;
+                let new_x = self.x(t) - x;
+
+                iterations += 1;
+
+                if iterations == MAX_ITERATIONS || new_x.abs() <= TOLERANCE {
+                    web_sys::console::log_1(&wasm_bindgen::JsValue::from(&format!("{} {} {} {} {}", iterations, start, end, t, new_x)));
+                    return t;
+
+                } else if new_x > 0.0 {
+                    end = t;
+
+                } else {
+                    start = t;
+                }
+            }
+        }*/
+    }
 }
+
+
+/*cubic_bezier(t,
+    Percentage::new(1.0),
+    Percentage::new(0.0),
+    Percentage::new(0.66),
+    Percentage::new(0.66),
+)*/
