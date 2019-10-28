@@ -92,12 +92,13 @@ macro_rules! pseudo {
 
 
 // TODO this is pretty inefficient, it iterates over the token tree one token at a time
+// TODO this should only work for ::std::clone::Clone::clone
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __internal_clone_split {
     (($($x:ident)*), $t:ident => $y:expr) => {{
-        $(let $x = ::std::clone::Clone::clone(&$x);)*
-        let $t = ::std::clone::Clone::clone(&$t);
+        $(let $x = $x.clone();)*
+        let $t = $t.clone();
         $y
     }};
     (($($x:ident)*), $t:ident, $($after:tt)*) => {
