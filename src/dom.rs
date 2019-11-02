@@ -3,6 +3,8 @@ use std::convert::AsRef;
 use std::marker::PhantomData;
 use std::future::Future;
 use std::task::{Context, Poll};
+use std::rc::Rc;
+use std::cell::RefCell;
 
 use lazy_static::lazy_static;
 use futures_signals::signal::{Signal, not};
@@ -605,6 +607,33 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
         self
     }
 }
+
+impl<A> DomBuilder<A> where A: AsRef<Node> {
+    #[inline]
+    pub fn child_signal<B>(mut self, signal: B) -> Self
+        where B: Signal<Item = Dom> + 'static {
+
+        assert_eq!(self.has_children, false);
+        self.has_children = true;
+
+        let element = self.element.as_ref().clone();
+        let callbacks = &mut self.callbacks;
+        let state: Rc<RefCell<Option<Dom>>> = Rc::new(RefCell::new(None));
+
+        callbacks.after_remove(for_each(signal, move |mut dom| {
+            if state.borrow().is_some() {
+                bindings::remove_all_children(&element);
+            }
+
+            bindings::append_child(&element, &dom.element);
+            dom.callbacks.trigger_after_insert();
+            *state.borrow_mut() = Some(dom)
+        }));
+
+        self
+    }
+}
+
 
 impl<A> DomBuilder<A> where A: AsRef<Element> {
     #[inline]
