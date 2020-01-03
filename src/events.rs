@@ -1,8 +1,8 @@
 use crate::traits::StaticEvent;
-use wasm_bindgen::JsCast;
+use wasm_bindgen::{JsCast};
 use web_sys::{EventTarget, HtmlInputElement, HtmlTextAreaElement};
 
-
+#[macro_export]
 macro_rules! make_event {
     ($name:ident, $type:literal => $event:path) => {
         pub struct $name {
@@ -31,6 +31,60 @@ macro_rules! make_event {
             }
         }
     };
+}
+
+#[macro_export]
+macro_rules! make_custom_event {
+    ($name:ident, $type:literal) => {
+        $crate::make_event!($name, $type => web_sys::CustomEvent);
+        impl $name {
+            pub fn detail(&self) -> JsValue { self.event.detail() }
+        }
+    }
+}
+
+/// requires that wasm-bindgen have "serde-serialize" enabled
+/// however, since this is only a macro, there's no need to feature-gate it here
+/// Example:
+/// 
+/// JS (e.g. from a CustomElement)
+/// 
+/// ```javascript
+/// this.dispatchEvent(new CustomEvent('todo-input', {
+///     detail: {label: value}
+/// }));
+/// ```
+/// 
+/// Rust - first register the event
+/// 
+/// ```rust
+/// 
+/// #[derive(Serialize, Deserialize)]
+/// pub struct TodoInputEventData {
+///     pub label: String 
+/// }
+/// make_custom_event_serde!(TodoInputEvent, "todo-input", TodoInputEventData);
+/// ``` 
+/// 
+/// then use it
+///
+/// ```
+/// html!("todo-custom", {
+///     .event(|event:TodoInputEvent| {
+///         let label:&str = event.data().label;
+///     })
+/// })
+/// ```
+#[macro_export]
+macro_rules! make_custom_event_serde {
+    ($name:ident, $type:literal, $data:ident) => {
+        $crate::make_custom_event!($name, $type);
+        impl $name {
+            pub fn data(&self) -> $data { 
+                self.detail().into_serde().unwrap()
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
