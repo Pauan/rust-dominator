@@ -1,5 +1,5 @@
 use crate::traits::StaticEvent;
-use wasm_bindgen::{JsCast};
+use wasm_bindgen::JsCast;
 use web_sys::{EventTarget, HtmlInputElement, HtmlTextAreaElement};
 
 #[macro_export]
