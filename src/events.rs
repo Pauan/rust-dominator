@@ -43,6 +43,12 @@ macro_rules! make_custom_event {
     }
 }
 
+/// first arg is name of the new struct to create
+/// second arg is literal name of the event
+/// third arg is the data structure. 
+/// 
+/// the data structure needs to already be defined and derive `Deserialize`
+/// 
 /// requires that wasm-bindgen have "serde-serialize" enabled
 /// however, since this is only a macro, there's no need to feature-gate it here
 /// Example:
@@ -59,7 +65,7 @@ macro_rules! make_custom_event {
 /// 
 /// ```rust
 /// 
-/// #[derive(Serialize, Deserialize)]
+/// #[derive(Deserialize)]
 /// pub struct TodoInputEventData {
 ///     pub label: String 
 /// }
