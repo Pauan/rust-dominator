@@ -49,7 +49,7 @@ macro_rules! make_custom_event {
 /// 
 /// the data structure needs to already be defined and derive `Deserialize`
 /// 
-/// requires that wasm-bindgen have "serde-serialize" enabled
+/// requires that the serde_wasm_bindgen crate be installed 
 /// however, since this is only a macro, there's no need to feature-gate it here
 /// Example:
 /// 
@@ -87,7 +87,7 @@ macro_rules! make_custom_event_serde {
         $crate::make_custom_event!($name, $type);
         impl $name {
             pub fn data(&self) -> $data { 
-                self.detail().into_serde().unwrap()
+                serde_wasm_bindgen::from_value(&self).unwrap()
             }
         }
     }
