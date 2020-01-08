@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::future::Future;
 use std::iter::IntoIterator;
 
@@ -64,17 +65,74 @@ pub(crate) fn insert_children_iter<'a, A: IntoIterator<Item = &'a mut Dom>>(elem
 }
 
 
+fn after_insert(is_inserted: bool, callbacks: &mut Callbacks) {
+    callbacks.leak();
+
+    if is_inserted {
+        callbacks.trigger_after_insert();
+    }
+}
+
+
+pub(crate) fn insert_child_signal<A>(element: Node, callbacks: &mut Callbacks, signal: A)
+    where A: Signal<Item = Option<Dom>> + 'static {
+
+    struct State {
+        is_inserted: bool,
+        child: Option<Dom>,
+    }
+
+    let state = Rc::new(RefCell::new(State {
+        is_inserted: false,
+        child: None,
+    }));
+
+    {
+        let state = state.clone();
+
+        callbacks.after_insert(move |_| {
+            let mut state = state.borrow_mut();
+
+            if !state.is_inserted {
+                state.is_inserted = true;
+
+                if let Some(ref mut child) = state.child {
+                    child.callbacks.trigger_after_insert();
+                }
+            }
+        });
+    }
+
+    // TODO verify that this will drop `child`
+    callbacks.after_remove(for_each(signal, move |mut child| {
+        let mut state = state.borrow_mut();
+
+        if let Some(old_child) = state.child.take() {
+            bindings::remove_child(&element, &old_child.element);
+
+            old_child.callbacks.discard();
+        }
+
+        if let Some(ref mut new_child) = child {
+            bindings::append_child(&element, &new_child.element);
+
+            after_insert(state.is_inserted, &mut new_child.callbacks);
+        }
+
+        state.child = child;
+    }));
+}
+
+
 pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callbacks, signal: A)
     where A: SignalVec<Item = Dom> + 'static {
 
-    // TODO does this create a new struct type every time ?
     struct State {
         is_inserted: bool,
         children: Vec<Dom>,
     }
 
-    // TODO use two separate Arcs ?
-    let state = Arc::new(Mutex::new(State {
+    let state = Rc::new(RefCell::new(State {
         is_inserted: false,
         children: vec![],
     }));
@@ -83,7 +141,7 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
         let state = state.clone();
 
         callbacks.after_insert(move |_| {
-            let mut state = state.lock().unwrap_throw();
+            let mut state = state.borrow_mut();
 
             if !state.is_inserted {
                 state.is_inserted = true;
@@ -112,14 +170,6 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
 
         } else {
             bindings::append_child(element, child);
-        }
-    }
-
-    fn after_insert(is_inserted: bool, callbacks: &mut Callbacks) {
-        callbacks.leak();
-
-        if is_inserted {
-            callbacks.trigger_after_insert();
         }
     }
 
@@ -204,7 +254,7 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
     // TODO maybe move this into the after_insert callback and remove State
     // TODO verify that this will drop `children`
     callbacks.after_remove(for_each_vec(signal, move |change| {
-        let mut state = state.lock().unwrap_throw();
+        let mut state = state.borrow_mut();
 
         process_change(&mut state, &element, change);
     }));

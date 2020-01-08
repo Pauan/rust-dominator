@@ -145,7 +145,7 @@ impl Signal for Timestamps {
 
 // TODO somehow share this safely between threads ?
 thread_local! {
-    static TIMESTAMPS_MANAGER: Arc<Mutex<TimestampsManager>> = Arc::new(Mutex::new(TimestampsManager::new()));
+    static TIMESTAMPS_MANAGER: Rc<RefCell<TimestampsManager>> = Rc::new(RefCell::new(TimestampsManager::new()));
 }
 
 pub fn timestamps() -> Timestamps {
@@ -153,7 +153,7 @@ pub fn timestamps() -> Timestamps {
         let timestamps = Timestamps::new();
 
         {
-            let mut lock = timestamps_manager.lock().unwrap_throw();
+            let mut lock = timestamps_manager.borrow_mut();
 
             lock.states.push(Arc::downgrade(&timestamps.state));
 
@@ -161,7 +161,7 @@ pub fn timestamps() -> Timestamps {
                 let timestamps_manager = timestamps_manager.clone();
 
                 lock.raf = Some(Raf::new(move |time| {
-                    let mut lock = timestamps_manager.lock().unwrap_throw();
+                    let mut lock = timestamps_manager.borrow_mut();
 
                     lock.states.retain(|state| {
                         if let Some(state) = state.upgrade() {
@@ -619,6 +619,7 @@ impl Signal for MutableAnimationSignal {
 }
 
 
+// TODO verify that this is Sync and Send
 struct MutableAnimationState {
     playing: bool,
     duration: f64,

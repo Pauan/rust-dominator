@@ -1,4 +1,3 @@
-#![recursion_limit="128"]
 #![warn(unreachable_pub)]
 #![deny(warnings)]
 
