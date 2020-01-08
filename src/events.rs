@@ -87,7 +87,7 @@ macro_rules! make_custom_event_serde {
         $crate::make_custom_event!($name, $type);
         impl $name {
             pub fn data(&self) -> $data { 
-                serde_wasm_bindgen::from_value(&self).unwrap()
+                serde_wasm_bindgen::from_value(self.detail()).unwrap()
             }
         }
     }
