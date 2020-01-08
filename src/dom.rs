@@ -591,17 +591,22 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
         self.set_text_signal(value);
         self
     }
-}
 
-impl<A> DomBuilder<A> where A: AsRef<Node> {
     #[inline]
     pub fn children_signal_vec<B>(mut self, children: B) -> Self
         where B: SignalVec<Item = Dom> + 'static {
 
-        assert_eq!(self.has_children, false);
-        self.has_children = true;
-
+        self.check_children();
         operations::insert_children_signal_vec(self.element.as_ref().clone(), &mut self.callbacks, children);
+        self
+    }
+
+    #[inline]
+    pub fn child_signal<B>(mut self, child: B) -> Self
+        where B: Signal<Item = Option<Dom>> + 'static {
+
+        self.check_children();
+        operations::insert_child_signal(self.element.as_ref().clone(), &mut self.callbacks, child);
         self
     }
 }
