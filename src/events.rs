@@ -69,7 +69,7 @@ macro_rules! make_custom_event {
 /// pub struct TodoInputEventData {
 ///     pub label: String 
 /// }
-/// make_custom_event_serde!(TodoInputEvent, "todo-input", TodoInputEventData);
+/// make_custom_event_serde!("todo-input", TodoInputEvent, TodoInputEventData);
 /// ``` 
 /// 
 /// then use it
@@ -77,13 +77,14 @@ macro_rules! make_custom_event {
 /// ```
 /// html!("todo-custom", {
 ///     .event(|event:TodoInputEvent| {
+///         //event.data() is a TodoInputEventData
 ///         let label:&str = event.data().label;
 ///     })
 /// })
 /// ```
 #[macro_export]
 macro_rules! make_custom_event_serde {
-    ($name:ident, $type:literal, $data:ident) => {
+    ($type:literal, $name:ident, $data:ident) => {
         $crate::make_custom_event!($name, $type);
         impl $name {
             pub fn data(&self) -> $data { 
