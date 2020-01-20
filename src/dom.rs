@@ -1,6 +1,5 @@
 use std::pin::Pin;
 use std::convert::AsRef;
-use std::marker::PhantomData;
 use std::future::Future;
 use std::task::{Context, Poll};
 
@@ -21,10 +20,9 @@ use crate::operations::{for_each, spawn_future};
 use crate::utils::{EventListener, on, on_preventable, ValueDiscard, FnDiscard};
 
 
-pub struct RefFn<A, B, C> where B: ?Sized {
+pub struct RefFn<A, B, C> where B: ?Sized, C: Fn(&A) -> &B {
     value: A,
     callback: C,
-    return_value: PhantomData<B>,
 }
 
 impl<A, B, C> RefFn<A, B, C> where B: ?Sized, C: Fn(&A) -> &B {
@@ -33,7 +31,6 @@ impl<A, B, C> RefFn<A, B, C> where B: ?Sized, C: Fn(&A) -> &B {
         Self {
             value,
             callback,
-            return_value: PhantomData,
         }
     }
 
@@ -420,6 +417,15 @@ impl<A> DomBuilder<A> {
         where T: StaticEvent,
               F: FnMut(T) + 'static {
         self._event(bindings::window_event_target(), listener);
+        self
+    }
+
+    // TODO add this to the StylesheetBuilder and ClassBuilder too
+    #[inline]
+    pub fn global_event_preventable<T, F>(mut self, listener: F) -> Self
+        where T: StaticEvent,
+              F: FnMut(T) + 'static {
+        self._event_preventable(bindings::window_event_target(), listener);
         self
     }
 
