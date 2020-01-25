@@ -560,9 +560,10 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
     }
 
     #[inline]
-    pub fn children<B>(mut self, children: B) -> Self
+    pub fn children<B, C>(mut self, children: B) -> Self
         where
-            B: IntoIterator<Item = Dom>,
+            B: IntoIterator<Item = C>,
+            C: Into<Dom>,
     {
         self.check_children();
         operations::insert_children_iter(self.element.as_ref(), &mut self.callbacks, children);
@@ -918,6 +919,11 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
     }
 }
 
+impl<A> From<DomBuilder<A>> for Dom where A: Into<Node> {
+    fn from(builder: DomBuilder<A>) -> Self {
+        builder.into_dom()
+    }
+}
 
 // TODO better warning message for must_use
 #[must_use]
