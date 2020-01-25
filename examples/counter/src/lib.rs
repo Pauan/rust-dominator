@@ -41,7 +41,7 @@ impl State {
         html!("div", {
             .class(&*ROOT_CLASS)
 
-            .children(&mut [
+            .children(vec![
                 html!("div", {
                     .class(&*TEXT_CLASS)
                     .text_signal(state.counter.signal().map(|x| format!("Counter: {}", x)))

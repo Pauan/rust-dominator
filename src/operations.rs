@@ -54,8 +54,11 @@ fn for_each_vec<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
 
 
 #[inline]
-pub(crate) fn insert_children_iter<'a, A: IntoIterator<Item = &'a mut Dom>>(element: &Node, callbacks: &mut Callbacks, value: A) {
-    for dom in value.into_iter() {
+pub(crate) fn insert_children_iter<A>(element: &Node, callbacks: &mut Callbacks, children: A)
+    where
+        A: IntoIterator<Item = Dom>,
+{
+    for mut dom in children.into_iter() {
         // TODO can this be made more efficient ?
         callbacks.after_insert.append(&mut dom.callbacks.after_insert);
         callbacks.after_remove.append(&mut dom.callbacks.after_remove);

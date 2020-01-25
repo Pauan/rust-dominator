@@ -559,9 +559,11 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
         self.has_children = true;
     }
 
-    // TODO figure out how to make this owned rather than &mut
     #[inline]
-    pub fn children<'a, B: IntoIterator<Item = &'a mut Dom>>(mut self, children: B) -> Self {
+    pub fn children<B>(mut self, children: B) -> Self
+        where
+            B: IntoIterator<Item = Dom>,
+    {
         self.check_children();
         operations::insert_children_iter(self.element.as_ref(), &mut self.callbacks, children);
         self

@@ -101,7 +101,7 @@ impl App {
     fn render_header(app: Rc<Self>) -> Dom {
         html!("header", {
             .class("header")
-            .children(&mut [
+            .children(vec![
                 html!("h1", {
                     .text("todos")
                 }),
@@ -136,7 +136,7 @@ impl App {
                 .len()
                 .map(|len| len > 0))
 
-            .children(&mut [
+            .children(vec![
                 html!("input", {
                     .class("toggle-all")
                     .attribute("id", "toggle-all")
@@ -165,7 +165,7 @@ impl App {
 
     fn render_button(text: &str, route: Route) -> Dom {
         html!("li", {
-            .children(&mut [
+            .children(vec![
                 link!(route.url(), {
                     .text(text)
                     .class_signal("selected", Route::signal().map(move |x| x == route))
@@ -183,11 +183,11 @@ impl App {
                 .len()
                 .map(|len| len > 0))
 
-            .children(&mut [
+            .children(vec![
                 html!("span", {
                     .class("todo-count")
 
-                    .children(&mut [
+                    .children(vec![
                         html!("strong", {
                             .text_signal(app.not_completed_len().map(|len| len.to_string()))
                         }),
@@ -204,7 +204,7 @@ impl App {
 
                 html!("ul", {
                     .class("filters")
-                    .children(&mut [
+                    .children(vec![
                         Self::render_button("All", Route::All),
                         Self::render_button("Active", Route::Active),
                         Self::render_button("Completed", Route::Completed),
@@ -231,7 +231,7 @@ impl App {
     pub fn render(app: Rc<Self>) -> Dom {
         html!("section", {
             .class("todoapp")
-            .children(&mut [
+            .children(vec![
                 Self::render_header(app.clone()),
                 Self::render_main(app.clone()),
                 Self::render_footer(app.clone()),

@@ -74,10 +74,10 @@ impl Todo {
                 )
                 .dedupe())
 
-            .children(&mut [
+            .children(vec![
                 html!("div", {
                     .class("view")
-                    .children(&mut [
+                    .children(vec![
                         html!("input", {
                             .attribute("type", "checkbox")
                             .class("toggle")

@@ -152,7 +152,7 @@ pub fn main_js() -> Result<(), JsValue> {
             html!("div", {
                 .style("display", "flex")
 
-                .children(&mut [
+                .children(vec![
                     html!("div", {
                         .children_signal_vec(state.boxes.signal_vec()
                             .animated_map(2000.0, |value, t| {
