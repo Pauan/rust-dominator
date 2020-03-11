@@ -1142,14 +1142,14 @@ pub mod __internal {
 
 #[cfg(test)]
 mod tests {
-    use super::{create_element_ns, DomBuilder, HTML_NAMESPACE, text_signal, RefFn};
+    use super::{DomBuilder, text_signal, RefFn};
     use futures_signals::signal::{always, SignalExt};
     use lazy_static::lazy_static;
     use web_sys::HtmlElement;
 
     #[test]
     fn apply() {
-        let a: DomBuilder<HtmlElement> = DomBuilder::new(create_element_ns("div", HTML_NAMESPACE));
+        let a: DomBuilder<HtmlElement> = DomBuilder::new_html("div");
 
         fn my_mixin<A: AsRef<HtmlElement>>(builder: DomBuilder<A>) -> DomBuilder<A> {
             builder.style("foo", "bar")
@@ -1175,7 +1175,7 @@ mod tests {
 
     #[test]
     fn property_signal_types() {
-        let _a: DomBuilder<HtmlElement> = DomBuilder::new(create_element_ns("div", HTML_NAMESPACE))
+        let _a: DomBuilder<HtmlElement> = DomBuilder::new_html("div")
             .property("foo", "hi")
             .property("foo", 5)
             .property(["foo", "-webkit-foo", "-ms-foo"], "hi")
@@ -1192,7 +1192,7 @@ mod tests {
 
     #[test]
     fn attribute_signal_types() {
-        let _a: DomBuilder<HtmlElement> = DomBuilder::new(create_element_ns("div", HTML_NAMESPACE))
+        let _a: DomBuilder<HtmlElement> = DomBuilder::new_html("div")
             .attribute("foo", "hi")
             .attribute(["foo", "-webkit-foo", "-ms-foo"], "hi")
 
@@ -1206,7 +1206,7 @@ mod tests {
 
     #[test]
     fn class_signal_types() {
-        let _a: DomBuilder<HtmlElement> = DomBuilder::new(create_element_ns("div", HTML_NAMESPACE))
+        let _a: DomBuilder<HtmlElement> = DomBuilder::new_html("div")
             .class("foo")
             .class(["foo", "-webkit-foo", "-ms-foo"])
 
@@ -1221,7 +1221,7 @@ mod tests {
             static ref FOO: String = "foo".to_owned();
         }
 
-        let _a: DomBuilder<HtmlElement> = DomBuilder::new(create_element_ns("div", HTML_NAMESPACE))
+        let _a: DomBuilder<HtmlElement> = DomBuilder::new_html("div")
             .style_signal("foo", always("bar"))
             .style_signal("foo", always("bar".to_owned()))
             .style_signal("foo", always("bar".to_owned()).map(|x| RefFn::new(x, |x| x.as_str())))
