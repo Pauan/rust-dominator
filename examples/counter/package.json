@@ -1,17 +1,14 @@
 {
-  "author": "Pauan <pcxunlimited@gmail.com>",
+  "private": true,
+  "author": "Pauan <pauanyu+github@pm.me>",
   "name": "counter",
   "version": "0.1.0",
   "scripts": {
-    "build": "rimraf dist pkg && webpack",
-    "start": "rimraf dist pkg && webpack-dev-server -d"
+    "build": "rimraf dist/js && rollup --config"
   },
   "devDependencies": {
-    "@wasm-tool/wasm-pack-plugin": "^0.4.2",
-    "copy-webpack-plugin": "^5.0.3",
-    "rimraf": "^2.6.3",
-    "webpack": "^4.33.0",
-    "webpack-cli": "^3.3.3",
-    "webpack-dev-server": "^3.7.1"
+    "@wasm-tool/rollup-plugin-rust": "^1.0.0",
+    "rimraf": "^3.0.2",
+    "rollup": "^1.31.0"
   }
 }

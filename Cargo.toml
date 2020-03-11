@@ -1,7 +1,7 @@
 [package]
 name = "dominator"
 version = "0.5.7"
-authors = ["Pauan <pcxunlimited@gmail.com>"]
+authors = ["Pauan <pauanyu+github@pm.me>"]
 description = "Zero cost declarative DOM library using FRP signals"
 repository = "https://github.com/Pauan/rust-dominator"
 homepage = "https://github.com/Pauan/rust-dominator"
@@ -19,15 +19,12 @@ default = ["wasm-bindgen/enable-interning"]
 lazy_static = "1.3.0"
 discard = "1.0.3"
 pin-utils = "0.1.0-alpha.4"
-futures-channel-preview = "0.3.0-alpha.16"
-futures-util-preview = "0.3.0-alpha.16"
+futures-channel = "0.3.0"
+futures-util = "0.3.0"
 futures-signals = "0.3.5"
 wasm-bindgen = "0.2.48"
 js-sys = "0.3.22"
-
-[dependencies.wasm-bindgen-futures]
-version = "0.3.22"
-features = ["futures_0_3"]
+wasm-bindgen-futures = "0.4.9"
 
 [dependencies.web-sys]
 version = "0.3.22"

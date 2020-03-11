@@ -10,7 +10,7 @@ use futures_signals::signal::{Signal, SignalExt};
 use futures_signals::signal_vec::{VecDiff, SignalVec, SignalVecExt};
 use web_sys::Node;
 use wasm_bindgen::UnwrapThrowExt;
-use wasm_bindgen_futures::futures_0_3::spawn_local;
+use wasm_bindgen_futures::spawn_local;
 
 use crate::bindings;
 use crate::dom::Dom;
