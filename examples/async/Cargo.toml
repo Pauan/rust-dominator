@@ -1,0 +1,41 @@
+[package]
+name = "async"
+version = "0.1.0"
+description = "Async example using dominator"
+authors = ["Pauan <pauanyu+github@pm.me>"]
+categories = ["wasm"]
+readme = "README.md"
+license = "MIT"
+edition = "2018"
+
+[profile.release]
+lto = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+console_error_panic_hook = "0.1.5"
+dominator = "0.5.0"
+futures = "0.3.4"
+futures-signals = "0.3.0"
+wasm-bindgen-futures = "0.4.9"
+wasm-bindgen = "0.2.48"
+gloo-timers = { version = "0.2.1", features = ["futures"] }
+js-sys = "0.3.36"
+serde_json = "1.0.10"
+serde_derive = "1.0.27"
+serde = "1.0.27"
+lazy_static = "1.0.0"
+
+[dependencies.web-sys]
+version = "0.3.22"
+features = [
+"console",
+    "AbortController",
+    "AbortSignal",
+    "Headers",
+    "Response",
+    "RequestInit",
+    "Window",
+]

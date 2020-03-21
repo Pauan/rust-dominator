@@ -1,0 +1,14 @@
+{
+  "private": true,
+  "author": "Pauan <pauanyu+github@pm.me>",
+  "name": "async",
+  "version": "0.1.0",
+  "scripts": {
+    "build": "rimraf dist/js && rollup --config"
+  },
+  "devDependencies": {
+    "@wasm-tool/rollup-plugin-rust": "^1.0.0",
+    "rimraf": "^3.0.2",
+    "rollup": "^1.31.0"
+  }
+}
