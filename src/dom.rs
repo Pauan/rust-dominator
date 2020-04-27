@@ -1,4 +1,5 @@
 use std::pin::Pin;
+use std::borrow::BorrowMut;
 use std::convert::AsRef;
 use std::future::Future;
 use std::task::{Context, Poll};
@@ -264,6 +265,7 @@ fn create_element_ns<A>(name: &str, namespace: &str) -> A where A: JsCast {
 }
 
 
+// TODO should this inline ?
 fn set_option<A, B, C, D, F>(element: A, callbacks: &mut Callbacks, value: D, mut f: F)
     where A: 'static,
           C: OptionStr<Output = B>,
@@ -289,6 +291,7 @@ fn set_option<A, B, C, D, F>(element: A, callbacks: &mut Callbacks, value: D, mu
     }));
 }
 
+// TODO should this inline ?
 fn set_style<A, B>(style: &CssStyleDeclaration, name: &A, value: B, important: bool)
     where A: MultiStr,
           B: MultiStr {
@@ -332,6 +335,7 @@ fn set_style<A, B>(style: &CssStyleDeclaration, name: &A, value: B, important: b
     }
 }
 
+// TODO should this inline ?
 fn set_style_signal<A, B, C, D>(style: CssStyleDeclaration, callbacks: &mut Callbacks, name: A, value: D, important: bool)
     where A: MultiStr + 'static,
           B: MultiStr,
@@ -356,6 +360,7 @@ fn set_style_signal<A, B, C, D>(style: CssStyleDeclaration, callbacks: &mut Call
 
 // TODO check that the property *actually* was changed ?
 // TODO maybe use AsRef<Object> ?
+// TODO should this inline ?
 fn set_property<A, B, C>(element: &A, name: &B, value: C) where A: AsRef<JsValue>, B: MultiStr, C: Into<JsValue> {
     let element = element.as_ref();
     let value = value.into();
@@ -509,6 +514,7 @@ impl<A> DomBuilder<A> where A: AsRef<JsValue> {
 }
 
 impl<A> DomBuilder<A> where A: AsRef<JsValue> {
+    // TODO should this inline ?
     fn set_property_signal<B, C, D>(&mut self, name: B, value: D)
         where B: MultiStr + 'static,
               C: Into<JsValue>,
@@ -561,7 +567,7 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
 
     // TODO figure out how to make this owned rather than &mut
     #[inline]
-    pub fn children<'a, B: IntoIterator<Item = &'a mut Dom>>(mut self, children: B) -> Self {
+    pub fn children<'a, B: BorrowMut<Dom>, C: IntoIterator<Item = B>>(mut self, children: C) -> Self {
         self.check_children();
         operations::insert_children_iter(self.element.as_ref(), &mut self.callbacks, children);
         self
@@ -575,6 +581,7 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
         self
     }
 
+    // TODO should this inline ?
     fn set_text_signal<B, C>(&mut self, value: C)
         where B: AsStr,
               C: Signal<Item = B> + 'static {
@@ -670,6 +677,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 }
 
 impl<A> DomBuilder<A> where A: AsRef<Element> {
+    // TODO should this inline ?
     fn set_attribute_signal<B, C, D, E>(&mut self, name: B, value: E)
         where B: MultiStr + 'static,
               C: AsStr,
@@ -695,7 +703,6 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         });
     }
 
-
     #[inline]
     pub fn attribute_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
@@ -707,6 +714,8 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         self
     }
 
+
+    // TODO should this inline ?
     fn set_attribute_namespace_signal<B, C, D, E>(&mut self, namespace: &str, name: B, value: E)
         where B: MultiStr + 'static,
               C: AsStr,
@@ -747,6 +756,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
     }
 
 
+    // TODO should this inline ?
     fn set_class_signal<B, C>(&mut self, name: B, value: C)
         where B: MultiStr + 'static,
               C: Signal<Item = bool> + 'static {
@@ -794,6 +804,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
 
     // TODO use OptionStr ?
+    // TODO should this inline ?
     fn set_scroll_signal<B, F>(&mut self, signal: B, mut f: F)
         where B: Signal<Item = Option<i32>> + 'static,
               F: FnMut(&Element, i32) + 'static {
@@ -887,6 +898,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
     }
 
 
+    // TODO should this inline ?
     fn set_focused_signal<B>(&mut self, value: B)
         where B: Signal<Item = bool> + 'static {
 
@@ -1156,6 +1168,26 @@ mod tests {
         }
 
         let _ = a.apply(my_mixin);
+    }
+
+    #[test]
+    fn children_mut() {
+        let _a: DomBuilder<HtmlElement> = DomBuilder::new_html("div")
+            .children(&mut [
+                DomBuilder::<HtmlElement>::new_html("div").into_dom(),
+                DomBuilder::<HtmlElement>::new_html("div").into_dom(),
+                DomBuilder::<HtmlElement>::new_html("div").into_dom(),
+            ]);
+    }
+
+    #[test]
+    fn children_value() {
+        let v: Vec<u32> = vec![];
+
+        let _a: DomBuilder<HtmlElement> = DomBuilder::new_html("div")
+            .children(v.iter().map(|_| {
+                DomBuilder::<HtmlElement>::new_html("div").into_dom()
+            }));
     }
 
     #[test]
