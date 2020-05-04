@@ -45,6 +45,16 @@ macro_rules! with_node {
 
 
 #[macro_export]
+macro_rules! shadow_root {
+    ($this:ident, $mode:expr => { $($methods:tt)* }) => {{
+        let shadow = $crate::DomBuilder::__internal_shadow_root(&$this, $mode);
+        let shadow = $crate::apply_methods!(shadow, { $($methods)* });
+        $crate::DomBuilder::__internal_transfer_callbacks($this, shadow)
+    }};
+}
+
+
+#[macro_export]
 macro_rules! html {
     ($($args:tt)+) => {
         $crate::__internal_builder!($crate::__internal::HtmlElement, new_html, $($args)+)

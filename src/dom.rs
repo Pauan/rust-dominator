@@ -11,7 +11,7 @@ use futures_util::FutureExt;
 use futures_channel::oneshot;
 use discard::{Discard, DiscardOnDrop};
 use wasm_bindgen::{JsValue, UnwrapThrowExt, JsCast, intern};
-use web_sys::{HtmlElement, Node, EventTarget, Element, CssStyleSheet, CssStyleDeclaration};
+use web_sys::{HtmlElement, Node, EventTarget, Element, CssStyleSheet, CssStyleDeclaration, ShadowRoot, ShadowRootMode, ShadowRootInit};
 
 use crate::bindings;
 use crate::callbacks::Callbacks;
@@ -394,6 +394,14 @@ impl<A> DomBuilder<A> where A: JsCast {
 
 impl<A> DomBuilder<A> {
     #[inline]
+    #[doc(hidden)]
+    pub fn __internal_transfer_callbacks<B>(mut self, mut shadow: DomBuilder<B>) -> Self {
+        self.callbacks.after_insert.append(&mut shadow.callbacks.after_insert);
+        self.callbacks.after_remove.append(&mut shadow.callbacks.after_remove);
+        self
+    }
+
+    #[inline]
     pub fn new(value: A) -> Self {
         Self {
             element: value,
@@ -567,7 +575,7 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
 
     // TODO figure out how to make this owned rather than &mut
     #[inline]
-    pub fn children<'a, B: BorrowMut<Dom>, C: IntoIterator<Item = B>>(mut self, children: C) -> Self {
+    pub fn children<B: BorrowMut<Dom>, C: IntoIterator<Item = B>>(mut self, children: C) -> Self {
         self.check_children();
         operations::insert_children_iter(self.element.as_ref(), &mut self.callbacks, children);
         self
@@ -625,6 +633,13 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
 }
 
 impl<A> DomBuilder<A> where A: AsRef<Element> {
+    #[inline]
+    #[doc(hidden)]
+    pub fn __internal_shadow_root(&self, mode: ShadowRootMode) -> DomBuilder<ShadowRoot> {
+        let shadow = self.element.as_ref().attach_shadow(&ShadowRootInit::new(mode)).unwrap_throw();
+        DomBuilder::new(shadow)
+    }
+
     #[inline]
     pub fn attribute<B>(self, name: B, value: &str) -> Self where B: MultiStr {
         let element = self.element.as_ref();
@@ -1155,6 +1170,7 @@ pub mod __internal {
 #[cfg(test)]
 mod tests {
     use super::{DomBuilder, text_signal, RefFn};
+    use crate::{html, shadow_root, ShadowRootMode};
     use futures_signals::signal::{always, SignalExt};
     use lazy_static::lazy_static;
     use web_sys::HtmlElement;
@@ -1288,5 +1304,16 @@ mod tests {
             .style_signal(["-moz-foo", "-webkit-foo", "foo"], always(Some("bar".to_owned())))
             .style_signal(["-moz-foo", "-webkit-foo", "foo"], always("bar".to_owned()).map(|x| Some(RefFn::new(x, |x| x.as_str()))))
             ;
+    }
+
+    #[test]
+    fn shadow_root() {
+        let _a = html!("div", {
+            .shadow_root!(ShadowRootMode::Closed => {
+                .children(&mut [
+                    html!("span")
+                ])
+            })
+        });
     }
 }

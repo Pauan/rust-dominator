@@ -10,6 +10,7 @@ mod callbacks;
 mod operations;
 mod dom;
 
+pub use web_sys::ShadowRootMode;
 pub use dom::*;
 pub mod traits;
 pub mod animation;
