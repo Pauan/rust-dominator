@@ -1170,7 +1170,7 @@ pub mod __internal {
 #[cfg(test)]
 mod tests {
     use super::{DomBuilder, text_signal, RefFn};
-    use crate::{html, shadow_root, ShadowRootMode};
+    use crate::{html, shadow_root, ShadowRootMode, with_cfg};
     use futures_signals::signal::{always, SignalExt};
     use lazy_static::lazy_static;
     use web_sys::HtmlElement;
@@ -1313,6 +1313,19 @@ mod tests {
                 .children(&mut [
                     html!("span")
                 ])
+            })
+        });
+    }
+
+    #[test]
+    fn with_cfg() {
+        let _a = html!("div", {
+            .with_cfg!(target_arch = "wasm32", {
+                .attribute("foo", "bar")
+            })
+
+            .with_cfg!(all(not(foo), bar = "test", feature = "hi"), {
+                .attribute("foo", "bar")
             })
         });
     }

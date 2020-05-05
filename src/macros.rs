@@ -45,6 +45,20 @@ macro_rules! with_node {
 
 
 #[macro_export]
+macro_rules! with_cfg {
+    ($this:ident, $cfg:meta, { $($methods:tt)* }) => {{
+        #[cfg($cfg)]
+        let this = $crate::apply_methods!($this, { $($methods)* });
+
+        #[cfg(not($cfg))]
+        let this = $this;
+
+        this
+    }};
+}
+
+
+#[macro_export]
 macro_rules! shadow_root {
     ($this:ident, $mode:expr => { $($methods:tt)* }) => {{
         let shadow = $crate::DomBuilder::__internal_shadow_root(&$this, $mode);
