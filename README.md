@@ -14,3 +14,8 @@ Running the examples
 ====================
 
 Just do `yarn` and then `yarn start` (it will take a while to compile the dependencies, please be patient)
+
+Community
+=========
+
+We have a [Discord server](https://discord.gg/fDFGvnR).
