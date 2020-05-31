@@ -18,4 +18,4 @@ Just do `yarn` and then `yarn start` (it will take a while to compile the depend
 Community
 =========
 
-We have a [Discord server](https://discord.gg/fDFGvnR).
+We have a [Discord server](https://discord.gg/fDFGvnR). Feel free to ask any Dominator questions there.
