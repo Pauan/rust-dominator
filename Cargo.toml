@@ -18,7 +18,7 @@ default = ["wasm-bindgen/enable-interning"]
 [dependencies]
 lazy_static = "1.3.0"
 discard = "1.0.3"
-pin-utils = "0.1.0-alpha.4"
+pin-project = "0.4"
 futures-channel = "0.3.0"
 futures-util = "0.3.0"
 futures-signals = "0.3.5"
