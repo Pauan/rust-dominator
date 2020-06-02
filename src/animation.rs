@@ -238,7 +238,7 @@ struct AnimatedMapState {
 }
 
 // TODO move this into signals crate and also generalize it to work with any future, not just animations
-#[pin_project]
+#[pin_project(project = AnimatedMapProj)]
 #[derive(Debug)]
 pub struct AnimatedMap<A, B> {
     duration: f64,
@@ -322,12 +322,10 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
     type Item = A;
 
     // TODO this can probably be implemented more efficiently
-    #[pin_project::project]
     fn poll_vec_change(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<VecDiff<Self::Item>>> {
         let mut is_done = true;
 
-        #[project]
-        let AnimatedMap { mut animations, mut signal, callback, duration, .. } = self.project();
+        let AnimatedMapProj { mut animations, mut signal, callback, duration, .. } = self.project();
 
         // TODO is this loop correct ?
         while let Some(result) = signal.as_mut().as_pin_mut().map(|signal| signal.poll_vec_change(cx)) {
