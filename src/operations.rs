@@ -53,19 +53,21 @@ fn for_each_vec<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
 }
 
 
+pub(crate) fn insert_children_one(element: &Node, callbacks: &mut Callbacks, children: &mut usize, dom: &mut Dom) {
+    // TODO can this be made more efficient ?
+    callbacks.after_insert.append(&mut dom.callbacks.after_insert);
+    callbacks.after_remove.append(&mut dom.callbacks.after_remove);
+
+    bindings::append_child(element, &dom.element);
+
+    *children += 1;
+}
+
 #[inline]
-pub(crate) fn insert_children_iter<A: std::borrow::BorrowMut<Dom>, B: IntoIterator<Item = A>>(element: &Node, callbacks: &mut Callbacks, value: B) {
-    fn insert_children_one(element: &Node, callbacks: &mut Callbacks, dom: &mut Dom) {
-        // TODO can this be made more efficient ?
-        callbacks.after_insert.append(&mut dom.callbacks.after_insert);
-        callbacks.after_remove.append(&mut dom.callbacks.after_remove);
-
-        bindings::append_child(element, &dom.element);
-    }
-
+pub(crate) fn insert_children_iter<A: std::borrow::BorrowMut<Dom>, B: IntoIterator<Item = A>>(element: &Node, callbacks: &mut Callbacks, children: &mut usize, value: B) {
     for mut dom in value {
         let dom = std::borrow::BorrowMut::borrow_mut(&mut dom);
-        insert_children_one(element, callbacks, dom);
+        insert_children_one(element, callbacks, children, dom);
     }
 }
 
