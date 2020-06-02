@@ -149,10 +149,6 @@ pub(crate) fn remove_class(classes: &DomTokenList, value: &str) {
     classes.remove_1(value).unwrap_throw();
 }
 
-pub(crate) fn set_text_content(elem: &Node, value: &str) {
-    elem.set_text_content(Some(value));
-}
-
 pub(crate) fn get_style(style: &CssStyleDeclaration, name: &str) -> String {
     style.get_property_value(name).unwrap_throw()
 }
@@ -197,5 +193,5 @@ pub(crate) fn blur(elem: &HtmlElement) {
 
 #[inline]
 pub(crate) fn remove_all_children(node: &Node) {
-    set_text_content(node, intern(""));
+    node.set_text_content(Some(intern("")));
 }

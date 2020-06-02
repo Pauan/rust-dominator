@@ -11,7 +11,7 @@ use futures_util::FutureExt;
 use futures_channel::oneshot;
 use discard::{Discard, DiscardOnDrop};
 use wasm_bindgen::{JsValue, UnwrapThrowExt, JsCast, intern};
-use web_sys::{HtmlElement, Node, EventTarget, Element, CssStyleSheet, CssStyleDeclaration, ShadowRoot, ShadowRootMode, ShadowRootInit};
+use web_sys::{HtmlElement, Node, EventTarget, Element, CssStyleSheet, CssStyleDeclaration, ShadowRoot, ShadowRootMode, ShadowRootInit, Text};
 
 use crate::bindings;
 use crate::callbacks::Callbacks;
@@ -190,14 +190,11 @@ pub fn text(value: &str) -> Dom {
 }
 
 
-// TODO should this inline ?
-pub fn text_signal<A, B>(value: B) -> Dom
+fn make_text_signal<A, B>(callbacks: &mut Callbacks, value: B) -> Text
     where A: AsStr,
           B: Signal<Item = A> + 'static {
 
     let element = bindings::create_text_node(intern(""));
-
-    let mut callbacks = Callbacks::new();
 
     {
         let element = element.clone();
@@ -209,6 +206,18 @@ pub fn text_signal<A, B>(value: B) -> Dom
             bindings::set_text(&element, value);
         }));
     }
+
+    element
+}
+
+// TODO should this inline ?
+pub fn text_signal<A, B>(value: B) -> Dom
+    where A: AsStr,
+          B: Signal<Item = A> + 'static {
+
+    let mut callbacks = Callbacks::new();
+
+    let element = make_text_signal(&mut callbacks, value);
 
     Dom {
         element: element.into(),
@@ -585,22 +594,8 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
     pub fn text(mut self, value: &str) -> Self {
         self.check_children();
         // TODO should this intern ?
-        bindings::set_text_content(self.element.as_ref(), &value);
+        bindings::append_child(self.element.as_ref(), &bindings::create_text_node(value));
         self
-    }
-
-    // TODO should this inline ?
-    fn set_text_signal<B, C>(&mut self, value: C)
-        where B: AsStr,
-              C: Signal<Item = B> + 'static {
-
-        let element = self.element.as_ref().clone();
-
-        self.callbacks.after_remove(for_each(value, move |value| {
-            let value = value.as_str();
-            // TODO maybe intern this ?
-            bindings::set_text_content(&element, &value);
-        }));
     }
 
     #[inline]
@@ -609,7 +604,8 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
               C: Signal<Item = B> + 'static {
 
         self.check_children();
-        self.set_text_signal(value);
+        let element = make_text_signal(&mut self.callbacks, value);
+        bindings::append_child(self.element.as_ref(), &element);
         self
     }
 
