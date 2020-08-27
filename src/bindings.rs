@@ -9,7 +9,7 @@ use web_sys::{HtmlElement, Element, Node, Window, History, Document, Text, Comme
 
     export function add_event(elem, name, f) {
         elem.addEventListener(name, f, {
-            capture: false,
+            capture: true,
             once: false,
             passive: true
         });
@@ -17,7 +17,7 @@ use web_sys::{HtmlElement, Element, Node, Window, History, Document, Text, Comme
 
     export function add_event_once(elem, name, f) {
         elem.addEventListener(name, f, {
-            capture: false,
+            capture: true,
             once: true,
             passive: true,
         });
@@ -25,14 +25,14 @@ use web_sys::{HtmlElement, Element, Node, Window, History, Document, Text, Comme
 
     export function add_event_preventable(elem, name, f) {
         elem.addEventListener(name, f, {
-            capture: false,
+            capture: true,
             once: false,
             passive: false
         });
     }
 
     export function remove_event(elem, name, f) {
-        elem.removeEventListener(name, f, false);
+        elem.removeEventListener(name, f, true);
     }
 ")]
 extern "C" {
