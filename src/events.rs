@@ -95,6 +95,16 @@ macro_rules! make_focus_event {
     };
 }
 
+macro_rules! make_drag_event {
+    ($name:ident, $type:literal) => {
+        make_event!($name, $type => web_sys::DragEvent);
+
+        impl $name {
+            #[inline] pub fn data_transfer(&self) -> Option<web_sys::DataTransfer> { self.event.data_transfer() }
+        }
+    };
+}
+
 
 make_mouse_event!(Click, "click");
 make_mouse_event!(MouseDown, "mousedown");
@@ -110,6 +120,14 @@ make_keyboard_event!(KeyUp, "keyup");
 
 make_focus_event!(Focus, "focus");
 make_focus_event!(Blur, "blur");
+
+make_drag_event!(DragStart, "dragstart");
+make_drag_event!(Drag, "drag");
+make_drag_event!(DragEnd, "dragend");
+make_drag_event!(DragOver, "dragover");
+make_drag_event!(DragEnter, "dragenter");
+make_drag_event!(DragLeave, "dragleave");
+make_drag_event!(Drop, "drop");
 
 
 make_event!(Scroll, "scroll" => web_sys::Event);
