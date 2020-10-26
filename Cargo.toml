@@ -1,6 +1,6 @@
 [package]
 name = "dominator"
-version = "0.5.13"
+version = "0.5.14"
 authors = ["Pauan <pauanyu+github@pm.me>"]
 description = "Zero cost declarative DOM library using FRP signals"
 repository = "https://github.com/Pauan/rust-dominator"
