@@ -385,7 +385,6 @@ fn set_property<A, B, C>(element: &A, name: &B, value: C) where A: AsRef<JsValue
 pub struct DomBuilder<A> {
     element: A,
     callbacks: Callbacks,
-    children: usize,
     // TODO verify this with static types instead ?
     dynamic_children: bool,
 }
@@ -416,7 +415,6 @@ impl<A> DomBuilder<A> {
         Self {
             element: value,
             callbacks: Callbacks::new(),
-            children: 0,
             dynamic_children: false,
         }
     }
@@ -584,9 +582,9 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
     }
 
     #[inline]
-    pub fn child(mut self, mut child: Dom) -> Self {
+    pub fn child<B: BorrowMut<Dom>>(mut self, mut child: B) -> Self {
         self.check_children();
-        operations::insert_children_one(self.element.as_ref(), &mut self.callbacks, &mut self.children, &mut child);
+        operations::insert_children_one(self.element.as_ref(), &mut self.callbacks, child.borrow_mut());
         self
     }
 
@@ -594,14 +592,13 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
     #[inline]
     pub fn children<B: BorrowMut<Dom>, C: IntoIterator<Item = B>>(mut self, children: C) -> Self {
         self.check_children();
-        operations::insert_children_iter(self.element.as_ref(), &mut self.callbacks, &mut self.children, children);
+        operations::insert_children_iter(self.element.as_ref(), &mut self.callbacks, children);
         self
     }
 
     #[inline]
-    pub fn text(mut self, value: &str) -> Self {
+    pub fn text(self, value: &str) -> Self {
         self.check_children();
-        self.children += 1;
         // TODO should this intern ?
         bindings::append_child(self.element.as_ref(), &bindings::create_text_node(value));
         self
@@ -613,7 +610,6 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
               C: Signal<Item = B> + 'static {
 
         self.check_children();
-        self.children += 1;
         let element = make_text_signal(&mut self.callbacks, value);
         bindings::append_child(self.element.as_ref(), &element);
         self

@@ -53,21 +53,19 @@ fn for_each_vec<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
 }
 
 
-pub(crate) fn insert_children_one(element: &Node, callbacks: &mut Callbacks, children: &mut usize, dom: &mut Dom) {
+pub(crate) fn insert_children_one(element: &Node, callbacks: &mut Callbacks, dom: &mut Dom) {
     // TODO can this be made more efficient ?
     callbacks.after_insert.append(&mut dom.callbacks.after_insert);
     callbacks.after_remove.append(&mut dom.callbacks.after_remove);
 
     bindings::append_child(element, &dom.element);
-
-    *children += 1;
 }
 
 #[inline]
-pub(crate) fn insert_children_iter<A: std::borrow::BorrowMut<Dom>, B: IntoIterator<Item = A>>(element: &Node, callbacks: &mut Callbacks, children: &mut usize, value: B) {
+pub(crate) fn insert_children_iter<A: std::borrow::BorrowMut<Dom>, B: IntoIterator<Item = A>>(element: &Node, callbacks: &mut Callbacks, value: B) {
     for mut dom in value {
         let dom = std::borrow::BorrowMut::borrow_mut(&mut dom);
-        insert_children_one(element, callbacks, children, dom);
+        insert_children_one(element, callbacks, dom);
     }
 }
 
@@ -173,13 +171,9 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
         }
 
         fn clear(&mut self, element: &Node) {
-            // TODO is this correct ?
-            if self.children.len() > 0 {
-                bindings::remove_all_children(element);
-
-                for dom in self.children.drain(..) {
-                    dom.callbacks.discard();
-                }
+            for dom in self.children.drain(..) {
+                bindings::remove_child(element, &dom.element);
+                dom.callbacks.discard();
             }
         }
 

@@ -190,8 +190,3 @@ pub(crate) fn focus(elem: &HtmlElement) {
 pub(crate) fn blur(elem: &HtmlElement) {
     elem.blur().unwrap_throw();
 }
-
-#[inline]
-pub(crate) fn remove_all_children(node: &Node) {
-    node.set_text_content(Some(intern("")));
-}
