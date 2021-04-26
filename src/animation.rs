@@ -631,6 +631,8 @@ struct MutableAnimationInner {
 
 // TODO deref to ReadOnlyMutable ?
 // TODO provide read_only() method ?
+// TODO add `is_playing` method ?
+#[derive(Clone)]
 pub struct MutableAnimation {
     inner: Arc<MutableAnimationInner>,
 }
