@@ -5,6 +5,7 @@ use web_sys::{EventTarget, HtmlInputElement, HtmlTextAreaElement};
 
 macro_rules! make_event {
     ($name:ident, $type:literal => $event:path) => {
+        #[derive(Debug)]
         pub struct $name {
             event: $event,
         }
@@ -130,6 +131,7 @@ make_drag_event!(DragLeave, "dragleave");
 make_drag_event!(Drop, "drop");
 
 
+make_event!(Load, "load" => web_sys::Event);
 make_event!(Scroll, "scroll" => web_sys::Event);
 make_event!(Resize, "resize" => web_sys::UiEvent);
 make_event!(Input, "input" => web_sys::InputEvent);
