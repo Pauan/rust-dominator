@@ -111,28 +111,26 @@ pub(crate) fn insert_child_signal<A>(element: Node, callbacks: &mut Callbacks, s
         }
 
         // TODO verify that this will drop `child`
-        fn after_remove(&mut self, element: &Node, mut child: Option<Dom>) {
+        fn after_remove(&mut self, element: &Node, child: Option<Dom>) {
             if let Some(old_child) = self.child.take() {
                 bindings::remove_child(&element, &old_child.element);
 
                 old_child.callbacks.discard();
             }
 
-            if let Some(ref mut new_child) = child {
+            self.child = child;
+
+            if let Some(new_child) = &mut self.child {
                 bindings::append_child(&element, &new_child.element);
 
                 after_insert(self.is_inserted, &mut new_child.callbacks);
             }
-
-            self.child = child;
         }
 
         fn on_remove(&mut self) {
             if let Some(old_child) = self.child.take() {
                 old_child.callbacks.discard();
             }
-
-            self.child = None;
         }
     }
 
