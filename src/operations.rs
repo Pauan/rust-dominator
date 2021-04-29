@@ -126,11 +126,30 @@ pub(crate) fn insert_child_signal<A>(element: Node, callbacks: &mut Callbacks, s
 
             self.child = child;
         }
+
+        fn on_remove(&mut self) {
+            if let Some(old_child) = self.child.take() {
+                old_child.callbacks.discard();
+            }
+
+            self.child = None;
+        }
+    }
+
+    struct OnRemove(Rc<RefCell<State>>);
+
+    impl Discard for OnRemove {
+        #[inline]
+        fn discard(self) {
+            self.0.borrow_mut().on_remove();
+        }
     }
 
     let state = State::new();
 
     State::after_insert(state.clone(), callbacks);
+
+    callbacks.after_remove(OnRemove(state.clone()));
 
     callbacks.after_remove(for_each(signal, move |child| {
         let mut state = state.borrow_mut();
