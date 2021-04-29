@@ -144,13 +144,15 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
     where A: SignalVec<Item = Dom> + 'static {
 
     struct State {
+        element: Node,
         is_inserted: bool,
         children: Vec<Dom>,
     }
 
     impl State {
-        fn new() -> Rc<RefCell<Self>> {
+        fn new(element: Node) -> Rc<RefCell<Self>> {
             Rc::new(RefCell::new(State {
+                element,
                 is_inserted: false,
                 children: vec![],
             }))
@@ -170,41 +172,47 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
             });
         }
 
-        fn clear(&mut self, element: &Node) {
+        fn clear(&mut self) {
             for dom in self.children.drain(..) {
-                bindings::remove_child(element, &dom.element);
+                bindings::remove_child(&self.element, &dom.element);
                 dom.callbacks.discard();
             }
         }
 
-        fn insert_at(&self, element: &Node, new_index: usize, child: &Node) {
+        fn on_remove(&mut self) {
+            for dom in self.children.drain(..) {
+                dom.callbacks.discard();
+            }
+        }
+
+        fn insert_at(&self, new_index: usize, child: &Node) {
             if let Some(dom) = self.children.get(new_index) {
-                bindings::insert_child_before(element, child, &dom.element);
+                bindings::insert_child_before(&self.element, child, &dom.element);
 
             } else {
-                bindings::append_child(element, child);
+                bindings::append_child(&self.element, child);
             }
         }
 
         // TODO verify that this will drop `children`
-        fn process_change(&mut self, element: &Node, change: VecDiff<Dom>) {
+        fn process_change(&mut self, change: VecDiff<Dom>) {
             match change {
                 VecDiff::Replace { values } => {
-                    self.clear(element);
+                    self.clear();
 
                     self.children = values;
 
                     let is_inserted = self.is_inserted;
 
                     for dom in self.children.iter_mut() {
-                        bindings::append_child(element, &dom.element);
+                        bindings::append_child(&self.element, &dom.element);
 
                         after_insert(is_inserted, &mut dom.callbacks);
                     }
                 },
 
                 VecDiff::InsertAt { index, mut value } => {
-                    self.insert_at(element, index, &value.element);
+                    self.insert_at(index, &value.element);
 
                     after_insert(self.is_inserted, &mut value.callbacks);
 
@@ -213,7 +221,7 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
                 },
 
                 VecDiff::Push { mut value } => {
-                    bindings::append_child(element, &value.element);
+                    bindings::append_child(&self.element, &value.element);
 
                     after_insert(self.is_inserted, &mut value.callbacks);
 
@@ -224,7 +232,7 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
                 VecDiff::UpdateAt { index, mut value } => {
                     let dom = &mut self.children[index];
 
-                    bindings::replace_child(element, &value.element, &dom.element);
+                    bindings::replace_child(&self.element, &value.element, &dom.element);
 
                     after_insert(self.is_inserted, &mut value.callbacks);
 
@@ -238,7 +246,7 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
                 VecDiff::Move { old_index, new_index } => {
                     let value = self.children.remove(old_index);
 
-                    self.insert_at(element, new_index, &value.element);
+                    self.insert_at(new_index, &value.element);
 
                     self.children.insert(new_index, value);
                 },
@@ -246,7 +254,7 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
                 VecDiff::RemoveAt { index } => {
                     let dom = self.children.remove(index);
 
-                    bindings::remove_child(element, &dom.element);
+                    bindings::remove_child(&self.element, &dom.element);
 
                     dom.callbacks.discard();
                 },
@@ -254,24 +262,35 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
                 VecDiff::Pop {} => {
                     let dom = self.children.pop().unwrap_throw();
 
-                    bindings::remove_child(element, &dom.element);
+                    bindings::remove_child(&self.element, &dom.element);
 
                     dom.callbacks.discard();
                 },
 
                 VecDiff::Clear {} => {
-                    self.clear(element);
+                    self.clear();
                 },
             }
         }
     }
 
-    let state = State::new();
+    struct OnRemove(Rc<RefCell<State>>);
+
+    impl Discard for OnRemove {
+        #[inline]
+        fn discard(self) {
+            self.0.borrow_mut().on_remove();
+        }
+    }
+
+    let state = State::new(element);
 
     State::after_insert(state.clone(), callbacks);
 
+    callbacks.after_remove(OnRemove(state.clone()));
+
     callbacks.after_remove(for_each_vec(signal, move |change| {
         let mut state = state.borrow_mut();
-        state.process_change(&element, change);
+        state.process_change(change);
     }));
 }
