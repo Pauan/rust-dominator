@@ -249,7 +249,7 @@ impl Dom {
         Self::new(bindings::create_comment(intern("")).into())
     }
 
-    #[deprecated(since = "0.5.14", note = "Store the data explicitly in a component struct instead")]
+    #[deprecated(since = "0.5.15", note = "Store the data explicitly in a component struct instead")]
     #[inline]
     pub fn with_state<A, F>(mut state: A, initializer: F) -> Dom
         where A: 'static,
