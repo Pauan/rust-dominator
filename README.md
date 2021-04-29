@@ -6,9 +6,11 @@ Zero-cost ultra-high-performance declarative DOM library using FRP signals for R
 Overview
 ========
 
-Dominator is one of the fastest DOM frameworks in the world ([it is just as fast as Inferno][benchmark]),
-and it scales incredibly well even with very large applications, because updates are `O(1)` time. It is
-close to the metal and has almost no overhead.
+Dominator is one of the fastest DOM frameworks in the world ([it is just as fast as Inferno][benchmark]).
+It is close to the metal and has almost no overhead.
+
+It scales incredibly well even with very large applications, because updates are `O(1)` time, no matter
+how big your application is.
 
 Despite that, it doesn't sacrifice ergonomics: it provides a convenient high level declarative API which
 feels similar to React, but is designed for Rust and FRP signals.
