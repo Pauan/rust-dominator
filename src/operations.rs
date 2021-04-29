@@ -134,12 +134,16 @@ pub(crate) fn insert_child_signal<A>(element: Node, callbacks: &mut Callbacks, s
         }
     }
 
-    struct OnRemove(Rc<RefCell<State>>);
+    struct OnRemove {
+        state: Rc<RefCell<State>>,
+        signal: CancelableFutureHandle,
+    }
 
     impl Discard for OnRemove {
         #[inline]
         fn discard(self) {
-            self.0.borrow_mut().on_remove();
+            self.signal.discard();
+            self.state.borrow_mut().on_remove();
         }
     }
 
@@ -147,12 +151,13 @@ pub(crate) fn insert_child_signal<A>(element: Node, callbacks: &mut Callbacks, s
 
     State::after_insert(state.clone(), callbacks);
 
-    callbacks.after_remove(OnRemove(state.clone()));
-
-    callbacks.after_remove(for_each(signal, move |child| {
-        let mut state = state.borrow_mut();
-        state.after_remove(&element, child);
-    }));
+    callbacks.after_remove(OnRemove {
+        state: state.clone(),
+        signal: for_each(signal, move |child| {
+            let mut state = state.borrow_mut();
+            state.after_remove(&element, child);
+        }),
+    });
 }
 
 
@@ -291,12 +296,16 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
         }
     }
 
-    struct OnRemove(Rc<RefCell<State>>);
+    struct OnRemove {
+        state: Rc<RefCell<State>>,
+        signal: CancelableFutureHandle,
+    }
 
     impl Discard for OnRemove {
         #[inline]
         fn discard(self) {
-            self.0.borrow_mut().on_remove();
+            self.signal.discard();
+            self.state.borrow_mut().on_remove();
         }
     }
 
@@ -304,10 +313,11 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
 
     State::after_insert(state.clone(), callbacks);
 
-    callbacks.after_remove(OnRemove(state.clone()));
-
-    callbacks.after_remove(for_each_vec(signal, move |change| {
-        let mut state = state.borrow_mut();
-        state.process_change(change);
-    }));
+    callbacks.after_remove(OnRemove {
+        state: state.clone(),
+        signal: for_each_vec(signal, move |change| {
+            let mut state = state.borrow_mut();
+            state.process_change(change);
+        }),
+    });
 }
