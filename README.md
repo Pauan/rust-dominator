@@ -1,20 +1,25 @@
 [![crates.io](http://meritbadge.herokuapp.com/dominator)](https://crates.io/crates/dominator)
 [![docs.rs](https://docs.rs/dominator/badge.svg)](https://docs.rs/dominator)
 
-Zero cost declarative DOM library using FRP signals for Rust!
+Zero-cost ultra-high-performance declarative DOM library using FRP signals for Rust!
 
 Status
 ======
+
+Dominator is one of the fastest DOM frameworks in the world ([it is just as fast as Inferno][benchmark]),
+and it scales incredibly well even with very large applications.
+
+Dominator is close to the metal, it has almost no overhead, which means it is almost never the bottleneck,
+instead the bottleneck is the browser itself.
+
+Despite that, it doesn't sacrifice ergonomics: it provides a convenient high level declarative API which
+feels similar to React, but is designed for Rust and FRP signals.
 
 It is generally feature complete, though more convenience methods might be added over time.
 
 It is quite stable: breaking changes are very rare, and are handled with the normal semver system.
 
 I have successfully used Dominator on multiple large applications, and it performed excellently.
-
-Dominator is one of the fastest DOM frameworks in the world ([it is just as fast as Inferno][benchmark]),
-and it scales incredibly well even with very large applications. Dominator is so fast that it is
-almost never the bottleneck, instead the real bottleneck is the browser itself.
 
 Running the examples
 ====================

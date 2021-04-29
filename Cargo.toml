@@ -2,7 +2,7 @@
 name = "dominator"
 version = "0.5.15"
 authors = ["Pauan <pauanyu+github@pm.me>"]
-description = "Zero cost declarative DOM library using FRP signals"
+description = "Zero-cost ultra-high-performance declarative DOM library using FRP signals"
 repository = "https://github.com/Pauan/rust-dominator"
 homepage = "https://github.com/Pauan/rust-dominator"
 readme = "README.md"
