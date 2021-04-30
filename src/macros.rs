@@ -85,6 +85,16 @@ macro_rules! svg {
 
 
 #[macro_export]
+macro_rules! dom_builder {
+    ($node:expr, { $($methods:tt)* }) => {{
+        let builder = $crate::DomBuilder::new($node);
+        let output = $crate::apply_methods!(builder, { $($methods)* });
+        $crate::DomBuilder::into_dom(output)
+    }};
+}
+
+
+#[macro_export]
 macro_rules! stylesheet {
     ($rule:expr) => {
         $crate::stylesheet!($rule, {})
