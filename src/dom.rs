@@ -245,8 +245,7 @@ impl Dom {
 
     #[inline]
     pub fn empty() -> Self {
-        // TODO is there a better way of doing this ?
-        Self::new(bindings::create_comment(intern("")).into())
+        Self::new(bindings::create_empty_node())
     }
 
     #[deprecated(since = "0.5.15", note = "Store the data explicitly in a component struct instead")]
@@ -386,8 +385,6 @@ fn set_property<A, B, C>(element: &A, name: &B, value: C) where A: AsRef<JsValue
 pub struct DomBuilder<A> {
     element: A,
     callbacks: Callbacks,
-    // TODO verify this with static types instead ?
-    dynamic_children: bool,
 }
 
 impl<A> DomBuilder<A> where A: JsCast {
@@ -416,7 +413,6 @@ impl<A> DomBuilder<A> {
         Self {
             element: value,
             callbacks: Callbacks::new(),
-            dynamic_children: false,
         }
     }
 
@@ -578,13 +574,7 @@ impl<A> DomBuilder<A> where A: AsRef<EventTarget> {
 
 impl<A> DomBuilder<A> where A: AsRef<Node> {
     #[inline]
-    fn check_children(&self) {
-        assert_eq!(self.dynamic_children, false);
-    }
-
-    #[inline]
     pub fn child<B: BorrowMut<Dom>>(mut self, mut child: B) -> Self {
-        self.check_children();
         operations::insert_children_one(self.element.as_ref(), &mut self.callbacks, child.borrow_mut());
         self
     }
@@ -592,14 +582,12 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
     // TODO figure out how to make this owned rather than &mut
     #[inline]
     pub fn children<B: BorrowMut<Dom>, C: IntoIterator<Item = B>>(mut self, children: C) -> Self {
-        self.check_children();
         operations::insert_children_iter(self.element.as_ref(), &mut self.callbacks, children);
         self
     }
 
     #[inline]
     pub fn text(self, value: &str) -> Self {
-        self.check_children();
         // TODO should this intern ?
         bindings::append_child(self.element.as_ref(), &bindings::create_text_node(value));
         self
@@ -610,7 +598,6 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
         where B: AsStr,
               C: Signal<Item = B> + 'static {
 
-        self.check_children();
         let element = make_text_signal(&mut self.callbacks, value);
         bindings::append_child(self.element.as_ref(), &element);
         self
@@ -620,8 +607,6 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
     pub fn children_signal_vec<B>(mut self, children: B) -> Self
         where B: SignalVec<Item = Dom> + 'static {
 
-        self.check_children();
-        self.dynamic_children = true;
         operations::insert_children_signal_vec(self.element.as_ref().clone(), &mut self.callbacks, children);
         self
     }
@@ -630,8 +615,6 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
     pub fn child_signal<B>(mut self, child: B) -> Self
         where B: Signal<Item = Option<Dom>> + 'static {
 
-        self.check_children();
-        self.dynamic_children = true;
         operations::insert_child_signal(self.element.as_ref().clone(), &mut self.callbacks, child);
         self
     }

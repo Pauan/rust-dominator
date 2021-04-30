@@ -124,6 +124,12 @@ pub(crate) fn create_comment(value: &str) -> Comment {
     DOCUMENT.with(|d| d.create_comment(value))
 }
 
+#[inline]
+pub(crate) fn create_empty_node() -> Node {
+    // TODO is there a better way of doing this ?
+    create_comment(intern("")).into()
+}
+
 // TODO check that the attribute *actually* was changed
 pub(crate) fn set_attribute(elem: &Element, key: &str, value: &str) {
     elem.set_attribute(key, value).unwrap_throw();

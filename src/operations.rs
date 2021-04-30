@@ -111,7 +111,7 @@ pub(crate) fn insert_child_signal<A>(element: Node, callbacks: &mut Callbacks, s
         }
 
         // TODO verify that this will drop `child`
-        fn after_remove(&mut self, element: &Node, child: Option<Dom>) {
+        fn after_remove(&mut self, element: &Node, marker: &Node, child: Option<Dom>) {
             if let Some(old_child) = self.child.take() {
                 bindings::remove_child(&element, &old_child.element);
 
@@ -121,7 +121,7 @@ pub(crate) fn insert_child_signal<A>(element: Node, callbacks: &mut Callbacks, s
             self.child = child;
 
             if let Some(new_child) = &mut self.child {
-                bindings::append_child(&element, &new_child.element);
+                bindings::insert_child_before(element, &new_child.element, marker);
 
                 after_insert(self.is_inserted, &mut new_child.callbacks);
             }
@@ -147,6 +147,11 @@ pub(crate) fn insert_child_signal<A>(element: Node, callbacks: &mut Callbacks, s
         }
     }
 
+    // TODO replace with https://github.com/whatwg/dom/issues/736
+    let marker = bindings::create_empty_node();
+
+    bindings::append_child(&element, &marker);
+
     let state = State::new();
 
     State::after_insert(state.clone(), callbacks);
@@ -155,7 +160,7 @@ pub(crate) fn insert_child_signal<A>(element: Node, callbacks: &mut Callbacks, s
         state: state.clone(),
         signal: for_each(signal, move |child| {
             let mut state = state.borrow_mut();
-            state.after_remove(&element, child);
+            state.after_remove(&element, &marker, child);
         }),
     });
 }
@@ -167,14 +172,16 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
 
     struct State {
         element: Node,
+        marker: Node,
         is_inserted: bool,
         children: Vec<Dom>,
     }
 
     impl State {
-        fn new(element: Node) -> Rc<RefCell<Self>> {
+        fn new(element: Node, marker: Node) -> Rc<RefCell<Self>> {
             Rc::new(RefCell::new(State {
                 element,
+                marker,
                 is_inserted: false,
                 children: vec![],
             }))
@@ -212,7 +219,7 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
                 bindings::insert_child_before(&self.element, child, &dom.element);
 
             } else {
-                bindings::append_child(&self.element, child);
+                bindings::insert_child_before(&self.element, child, &self.marker);
             }
         }
 
@@ -226,8 +233,9 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
 
                     let is_inserted = self.is_inserted;
 
+                    // TODO use createDocumentFragment ?
                     for dom in self.children.iter_mut() {
-                        bindings::append_child(&self.element, &dom.element);
+                        bindings::insert_child_before(&self.element, &dom.element, &self.marker);
 
                         after_insert(is_inserted, &mut dom.callbacks);
                     }
@@ -243,7 +251,7 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
                 },
 
                 VecDiff::Push { mut value } => {
-                    bindings::append_child(&self.element, &value.element);
+                    bindings::insert_child_before(&self.element, &value.element, &self.marker);
 
                     after_insert(self.is_inserted, &mut value.callbacks);
 
@@ -309,7 +317,12 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
         }
     }
 
-    let state = State::new(element);
+    // TODO replace with https://github.com/whatwg/dom/issues/736
+    let marker = bindings::create_empty_node();
+
+    bindings::append_child(&element, &marker);
+
+    let state = State::new(element, marker);
 
     State::after_insert(state.clone(), callbacks);
 
