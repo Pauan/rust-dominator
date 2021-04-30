@@ -14,7 +14,7 @@ has almost no overhead: everything is inlined to raw DOM operations.
 It scales incredibly well even with very large applications, because updates are always `O(1)` time, no
 matter how big or deeply nested your application is.
 
-It provides a convenient high level declarative API which feels similar to React components, but is
+It has a convenient high level declarative API which works similar to React components, but is
 designed for Rust and FRP signals.
 
 It is generally feature complete, though more convenience methods might be added over time.
