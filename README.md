@@ -7,10 +7,12 @@ Overview
 ========
 
 Dominator is one of the fastest DOM frameworks in the world ([it is just as fast as Inferno][benchmark]).
-It is close to the metal and has almost no overhead.
 
-It scales incredibly well even with very large applications, because updates are `O(1)` time, no matter
-how big or deeply nested your application is.
+It does not use VDOM, instead it uses raw DOM nodes for maximum performance. It is close to the metal and
+has almost no overhead: everything is inlined to raw DOM operations.
+
+It scales incredibly well even with very large applications, because updates are always `O(1)` time, no
+matter how big or deeply nested your application is.
 
 Despite that, it doesn't sacrifice ergonomics: it provides a convenient high level declarative API which
 feels similar to React, but is designed for Rust and FRP signals.
