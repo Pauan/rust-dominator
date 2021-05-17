@@ -3,15 +3,15 @@ macro_rules! apply_methods {
     ($this:expr, {}) => {
         $this
     };
-    ($this:expr, { .$name:ident!($($args:tt)*) $($rest:tt)* }) => {
-        $crate::apply_methods!({
-            let this = $this;
-            $name!(this, $($args)*)
-        }, { $($rest)* })
-    };
-    ($this:expr, { .$name:ident($($args:expr),*) $($rest:tt)* }) => {
-        $crate::apply_methods!($this.$name($($args),*), { $($rest)* })
-    };
+    ($this:expr, { .$name:ident!($($args:tt)*) $($rest:tt)* }) => {{
+        let this = $this;
+        let this = $name!(this, $($args)*);
+        $crate::apply_methods!(this, { $($rest)* })
+    }};
+    ($this:expr, { .$name:ident($($args:expr),*) $($rest:tt)* }) => {{
+        let this = $this.$name($($args),*);
+        $crate::apply_methods!(this, { $($rest)* })
+    }};
 }
 
 

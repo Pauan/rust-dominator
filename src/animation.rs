@@ -621,7 +621,7 @@ struct MutableAnimationState {
     playing: bool,
     duration: f64,
     end: Percentage,
-    animating: Option<OnTimestampDiff>,
+    _animating: Option<OnTimestampDiff>,
 }
 
 struct MutableAnimationInner {
@@ -661,7 +661,7 @@ impl MutableAnimation {
                     playing: true,
                     duration: duration,
                     end: initial,
-                    animating: None,
+                    _animating: None,
                 }),
                 value: Mutable::new(initial),
             }),
@@ -682,7 +682,7 @@ impl MutableAnimation {
 
     #[inline]
     fn stop_animating(lock: &mut MutableAnimationState) {
-        lock.animating = None;
+        lock._animating = None;
     }
 
     fn start_animating(&self, lock: &mut MutableAnimationState) {
@@ -697,7 +697,7 @@ impl MutableAnimation {
 
                     let state = self.raw_clone();
 
-                    lock.animating = Some(OnTimestampDiff::new(move |diff| {
+                    lock._animating = Some(OnTimestampDiff::new(move |diff| {
                         let diff = diff / duration;
 
                         // TODO test the performance of set_neq
