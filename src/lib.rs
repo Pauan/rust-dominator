@@ -1,6 +1,9 @@
 #![warn(unreachable_pub)]
 #![deny(warnings)]
 
+#![cfg_attr(feature = "nightly", allow(incomplete_features))]
+#![cfg_attr(feature = "nightly", feature(const_generics))]
+
 
 #[macro_use]
 mod macros;

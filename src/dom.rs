@@ -265,11 +265,13 @@ impl Dom {
 
 #[inline]
 fn create_element<A>(name: &str) -> A where A: JsCast {
+    // TODO use unchecked_into in release mode ?
     bindings::create_element(intern(name)).dyn_into().unwrap_throw()
 }
 
 #[inline]
 fn create_element_ns<A>(name: &str, namespace: &str) -> A where A: JsCast {
+    // TODO use unchecked_into in release mode ?
     bindings::create_element_ns(intern(namespace), intern(name)).dyn_into().unwrap_throw()
 }
 

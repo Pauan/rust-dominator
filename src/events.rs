@@ -3,6 +3,39 @@ use wasm_bindgen::JsCast;
 use web_sys::{EventTarget, HtmlInputElement, HtmlTextAreaElement};
 
 
+#[cfg(feature = "nightly")]
+pub struct Event<const NAME: &'static str, T> {
+    event: T,
+}
+
+#[cfg(feature = "nightly")]
+impl<T, const NAME: &'static str> StaticEvent for Event<NAME, T> where T: JsCast {
+    const EVENT_TYPE: &'static str = NAME;
+
+    #[inline]
+    fn unchecked_from_event(event: web_sys::Event) -> Self {
+        Self {
+            // TODO use unchecked_into in release mode ?
+            event: event.dyn_into().unwrap(),
+        }
+    }
+}
+
+// TODO code duplication
+// TODO implement the rest of the methods
+#[cfg(feature = "nightly")]
+impl<T, const NAME: &'static str> Event<NAME, T> where T: AsRef<web_sys::Event> {
+    #[inline] pub fn prevent_default(&self) { self.event.as_ref().prevent_default(); }
+
+    #[inline] pub fn target(&self) -> Option<EventTarget> { self.event.as_ref().target() }
+
+    #[inline]
+    pub fn dyn_target<A>(&self) -> Option<A> where A: JsCast {
+        self.target()?.dyn_into().ok()
+    }
+}
+
+
 macro_rules! make_event {
     ($name:ident, $type:literal => $event:path) => {
         #[derive(Debug)]
