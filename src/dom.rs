@@ -200,10 +200,10 @@ fn make_text_signal<A, B>(callbacks: &mut Callbacks, value: B) -> Text
         let element = element.clone();
 
         callbacks.after_remove(for_each(value, move |value| {
-            let value = value.as_str();
-
-            // TODO maybe this should intern ?
-            bindings::set_text(&element, value);
+            value.with_str(|value| {
+                // TODO maybe this should intern ?
+                bindings::set_text(&element, value);
+            });
         }));
     }
 
@@ -521,6 +521,12 @@ impl<A> DomBuilder<A> where A: Into<Node> {
 
 impl<A> DomBuilder<A> where A: AsRef<JsValue> {
     #[inline]
+    pub fn prop<B, C>(self, name: B, value: C) -> Self where B: MultiStr, C: Into<JsValue> {
+        self.property(name, value)
+    }
+
+    /// The same as the [`prop`](#method.prop) method.
+    #[inline]
     pub fn property<B, C>(self, name: B, value: C) -> Self where B: MultiStr, C: Into<JsValue> {
         set_property(&self.element, &name, value);
         self
@@ -541,6 +547,15 @@ impl<A> DomBuilder<A> where A: AsRef<JsValue> {
         }));
     }
 
+    #[inline]
+    pub fn prop_signal<B, C, D>(self, name: B, value: D) -> Self
+        where B: MultiStr + 'static,
+              C: Into<JsValue>,
+              D: Signal<Item = C> + 'static {
+        self.property_signal(name, value)
+    }
+
+    /// The same as the [`prop_signal`](#method.prop_signal) method.
     #[inline]
     pub fn property_signal<B, C, D>(mut self, name: B, value: D) -> Self
         where B: MultiStr + 'static,
@@ -574,19 +589,6 @@ impl<A> DomBuilder<A> where A: AsRef<EventTarget> {
 
 impl<A> DomBuilder<A> where A: AsRef<Node> {
     #[inline]
-    pub fn child<B: BorrowMut<Dom>>(mut self, mut child: B) -> Self {
-        operations::insert_children_one(self.element.as_ref(), &mut self.callbacks, child.borrow_mut());
-        self
-    }
-
-    // TODO figure out how to make this owned rather than &mut
-    #[inline]
-    pub fn children<B: BorrowMut<Dom>, C: IntoIterator<Item = B>>(mut self, children: C) -> Self {
-        operations::insert_children_iter(self.element.as_ref(), &mut self.callbacks, children);
-        self
-    }
-
-    #[inline]
     pub fn text(self, value: &str) -> Self {
         // TODO should this intern ?
         bindings::append_child(self.element.as_ref(), &bindings::create_text_node(value));
@@ -604,10 +606,8 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
     }
 
     #[inline]
-    pub fn children_signal_vec<B>(mut self, children: B) -> Self
-        where B: SignalVec<Item = Dom> + 'static {
-
-        operations::insert_children_signal_vec(self.element.as_ref().clone(), &mut self.callbacks, children);
+    pub fn child<B: BorrowMut<Dom>>(mut self, mut child: B) -> Self {
+        operations::insert_children_one(self.element.as_ref(), &mut self.callbacks, child.borrow_mut());
         self
     }
 
@@ -616,6 +616,21 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
         where B: Signal<Item = Option<Dom>> + 'static {
 
         operations::insert_child_signal(self.element.as_ref().clone(), &mut self.callbacks, child);
+        self
+    }
+
+    // TODO figure out how to make this owned rather than &mut
+    #[inline]
+    pub fn children<B: BorrowMut<Dom>, C: IntoIterator<Item = B>>(mut self, children: C) -> Self {
+        operations::insert_children_iter(self.element.as_ref(), &mut self.callbacks, children);
+        self
+    }
+
+    #[inline]
+    pub fn children_signal_vec<B>(mut self, children: B) -> Self
+        where B: SignalVec<Item = Dom> + 'static {
+
+        operations::insert_children_signal_vec(self.element.as_ref().clone(), &mut self.callbacks, children);
         self
     }
 }
@@ -629,6 +644,12 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
     }
 
     #[inline]
+    pub fn attr<B>(self, name: B, value: &str) -> Self where B: MultiStr {
+        self.attribute(name, value)
+    }
+
+    /// The same as the [`attr`](#method.attr) method.
+    #[inline]
     pub fn attribute<B>(self, name: B, value: &str) -> Self where B: MultiStr {
         let element = self.element.as_ref();
         // TODO should this intern the value ?
@@ -641,6 +662,12 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         self
     }
 
+    #[inline]
+    pub fn attr_ns<B>(self, namespace: &str, name: B, value: &str) -> Self where B: MultiStr {
+        self.attribute_namespace(namespace, name, value)
+    }
+
+    /// The same as the [`attr_ns`](#method.attr_ns) method.
     #[inline]
     pub fn attribute_namespace<B>(self, namespace: &str, name: B, value: &str) -> Self where B: MultiStr {
         let element = self.element.as_ref();
@@ -690,11 +717,11 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         set_option(self.element.as_ref().clone(), &mut self.callbacks, value, move |element, value| {
             match value {
                 Some(value) => {
-                    let value = value.as_str();
-
-                    name.each(|name| {
-                        // TODO should this intern the value ?
-                        bindings::set_attribute(element, intern(name), &value);
+                    value.with_str(|value| {
+                        name.each(|name| {
+                            // TODO should this intern the value ?
+                            bindings::set_attribute(element, intern(name), &value);
+                        });
                     });
                 },
                 None => {
@@ -706,6 +733,16 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         });
     }
 
+    #[inline]
+    pub fn attr_signal<B, C, D, E>(self, name: B, value: E) -> Self
+        where B: MultiStr + 'static,
+              C: AsStr,
+              D: OptionStr<Output = C>,
+              E: Signal<Item = D> + 'static {
+        self.attribute_signal(name, value)
+    }
+
+    /// The same as the [`attr_signal`](#method.attr_signal) method.
     #[inline]
     pub fn attribute_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
@@ -731,11 +768,11 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         set_option(self.element.as_ref().clone(), &mut self.callbacks, value, move |element, value| {
             match value {
                 Some(value) => {
-                    let value = value.as_str();
-
-                    name.each(|name| {
-                        // TODO should this intern the value ?
-                        bindings::set_attribute_ns(element, &namespace, intern(name), &value);
+                    value.with_str(|value| {
+                        name.each(|name| {
+                            // TODO should this intern the value ?
+                            bindings::set_attribute_ns(element, &namespace, intern(name), &value);
+                        });
                     });
                 },
                 None => {
@@ -747,6 +784,16 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         });
     }
 
+    #[inline]
+    pub fn attr_ns_signal<B, C, D, E>(self, namespace: &str, name: B, value: E) -> Self
+        where B: MultiStr + 'static,
+              C: AsStr,
+              D: OptionStr<Output = C>,
+              E: Signal<Item = D> + 'static {
+        self.attribute_namespace_signal(namespace, name, value)
+    }
+
+    /// The same as the [`attr_ns_signal`](#method.attr_ns_signal) method.
     #[inline]
     pub fn attribute_namespace_signal<B, C, D, E>(mut self, namespace: &str, name: B, value: E) -> Self
         where B: MultiStr + 'static,
@@ -824,6 +871,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         });
     }
 
+    // TODO rename to scroll_x_signal ?
     #[inline]
     pub fn scroll_left_signal<B>(mut self, signal: B) -> Self where B: Signal<Item = Option<i32>> + 'static {
         // TODO bindings function for this ?
@@ -831,6 +879,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         self
     }
 
+    // TODO rename to scroll_y_signal ?
     #[inline]
     pub fn scroll_top_signal<B>(mut self, signal: B) -> Self where B: Signal<Item = Option<i32>> + 'static {
         // TODO bindings function for this ?

@@ -27,13 +27,25 @@ impl<A, F> Mixin<A> for F where F: FnOnce(A) -> A {
 // TODO figure out a way to implement this for all of AsRef / Borrow / etc.
 // TODO implementations for &String and &mut String
 pub trait AsStr {
+    #[deprecated(since = "0.5.18", note = "Use with_str instead")]
     fn as_str(&self) -> &str;
+
+    fn with_str<A, F>(&self, f: F) -> A where F: FnOnce(&str) -> A {
+        #[allow(deprecated)]
+        f(self.as_str())
+    }
 }
 
 impl<'a, A> AsStr for &'a A where A: AsStr {
     #[inline]
     fn as_str(&self) -> &str {
+        #[allow(deprecated)]
         AsStr::as_str(*self)
+    }
+
+    #[inline]
+    fn with_str<B, F>(&self, f: F) -> B where F: FnOnce(&str) -> B {
+        AsStr::with_str(*self, f)
     }
 }
 
@@ -42,12 +54,22 @@ impl AsStr for String {
     fn as_str(&self) -> &str {
         self
     }
+
+    #[inline]
+    fn with_str<A, F>(&self, f: F) -> A where F: FnOnce(&str) -> A {
+        f(&self)
+    }
 }
 
 impl AsStr for str {
     #[inline]
     fn as_str(&self) -> &str {
         self
+    }
+
+    #[inline]
+    fn with_str<A, F>(&self, f: F) -> A where F: FnOnce(&str) -> A {
+        f(self)
     }
 }
 
@@ -56,12 +78,22 @@ impl<'a> AsStr for &'a str {
     fn as_str(&self) -> &str {
         self
     }
+
+    #[inline]
+    fn with_str<A, F>(&self, f: F) -> A where F: FnOnce(&str) -> A {
+        f(self)
+    }
 }
 
 impl<A, C> AsStr for RefFn<A, str, C> where C: Fn(&A) -> &str {
     #[inline]
     fn as_str(&self) -> &str {
         self.call_ref()
+    }
+
+    #[inline]
+    fn with_str<B, F>(&self, f: F) -> B where F: FnOnce(&str) -> B {
+        f(self.call_ref())
     }
 }
 
@@ -80,8 +112,8 @@ pub trait MultiStr {
 
 impl<A> MultiStr for A where A: AsStr {
     #[inline]
-    fn find_map<B, F>(&self, mut f: F) -> Option<B> where F: FnMut(&str) -> Option<B> {
-        f(self.as_str())
+    fn find_map<B, F>(&self, f: F) -> Option<B> where F: FnMut(&str) -> Option<B> {
+        self.with_str(f)
     }
 }
 
@@ -106,7 +138,7 @@ macro_rules! array_multi_str {
         impl<A> MultiStr for [A; $size] where A: AsStr {
             #[inline]
             fn find_map<B, F>(&self, mut f: F) -> Option<B> where F: FnMut(&str) -> Option<B> {
-                self.iter().find_map(|x| f(x.as_str()))
+                self.iter().find_map(|x| x.with_str(|x| f(x)))
             }
         }
     };
