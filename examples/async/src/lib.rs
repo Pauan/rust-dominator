@@ -1,11 +1,11 @@
-use std::rc::Rc;
+use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use gloo_timers::future::TimeoutFuture;
 use serde_derive::{Serialize, Deserialize};
 use futures_signals::signal::{Mutable, not};
 use dominator::{html, class, events, clone, with_node, Dom};
 use web_sys::HtmlInputElement;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use util::*;
 
 mod util;
@@ -61,27 +61,25 @@ struct App {
 }
 
 impl App {
-    fn new(name: &str, user: Option<User>) -> Rc<Self> {
-        Rc::new(Self {
+    fn new(name: &str, user: Option<User>) -> Arc<Self> {
+        Arc::new(Self {
             user: Mutable::new(user),
             input: Mutable::new(name.to_string()),
             loader: AsyncLoader::new(),
         })
     }
 
-    fn render(app: Rc<Self>) -> Dom {
-        lazy_static! {
-            static ref APP: String = class! {
-                .style("white-space", "pre")
-            };
-        }
+    fn render(app: Arc<Self>) -> Dom {
+        static APP: Lazy<String> = Lazy::new(|| class! {
+            .style("white-space", "pre")
+        });
 
         html!("div", {
             .class(&*APP)
 
             .children(&mut [
                 html!("input" => HtmlInputElement, {
-                    .property_signal("value", app.input.signal_cloned())
+                    .prop_signal("value", app.input.signal_cloned())
 
                     .with_node!(element => {
                         .event(clone!(app => move |_: events::Input| {
