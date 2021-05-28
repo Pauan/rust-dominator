@@ -14,21 +14,24 @@ lto = true
 [lib]
 crate-type = ["cdylib"]
 
+[workspace]
+
 [dependencies]
-console_error_panic_hook = "0.1.5"
-dominator = "0.5.0"
-futures-signals = "0.3.0"
-wasm-bindgen = "0.2.48"
-serde_json = "1.0.10"
-serde_derive = "1.0.27"
+console_error_panic_hook = "0.1.6"
+dominator = "0.5.18"
+wasm-bindgen = "0.2.74"
+futures-signals = "0.3.20"
+serde_json = "1.0.64"
+serde_derive = "1.0.126"
 
 [dependencies.serde]
-version = "1.0.27"
+version = "1.0.126"
 features = ["rc"]
 
 [dependencies.web-sys]
-version = "0.3.22"
+version = "0.3.51"
 features = [
+    "HtmlInputElement",
     "Storage",
     "Url",
 ]

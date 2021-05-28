@@ -2,7 +2,6 @@ use wasm_bindgen::prelude::*;
 use crate::app::App;
 
 mod util;
-mod routing;
 mod todo;
 mod app;
 
