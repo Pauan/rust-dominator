@@ -1,15 +1,15 @@
 use wasm_bindgen::prelude::*;
 use std::sync::Arc;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use futures_signals::signal::{Mutable, SignalExt};
 use dominator::{Dom, class, html, clone, events};
 
 
-struct State {
+struct App {
     counter: Mutable<i32>,
 }
 
-impl State {
+impl App {
     fn new() -> Arc<Self> {
         Arc::new(Self {
             counter: Mutable::new(0),
@@ -18,24 +18,22 @@ impl State {
 
     fn render(state: Arc<Self>) -> Dom {
         // Define CSS styles
-        lazy_static! {
-            static ref ROOT_CLASS: String = class! {
-                .style("display", "inline-block")
-                .style("background-color", "black")
-                .style("padding", "10px")
-            };
+        static ROOT_CLASS: Lazy<String> = Lazy::new(|| class! {
+            .style("display", "inline-block")
+            .style("background-color", "black")
+            .style("padding", "10px")
+        });
 
-            static ref TEXT_CLASS: String = class! {
-                .style("color", "white")
-                .style("font-weight", "bold")
-            };
+        static TEXT_CLASS: Lazy<String> = Lazy::new(|| class! {
+            .style("color", "white")
+            .style("font-weight", "bold")
+        });
 
-            static ref BUTTON_CLASS: String = class! {
-                .style("display", "block")
-                .style("width", "100px")
-                .style("margin", "5px")
-            };
-        }
+        static BUTTON_CLASS: Lazy<String> = Lazy::new(|| class! {
+            .style("display", "block")
+            .style("width", "100px")
+            .style("margin", "5px")
+        });
 
         // Create the DOM nodes
         html!("div", {
@@ -84,10 +82,8 @@ pub fn main_js() -> Result<(), JsValue> {
     #[cfg(debug_assertions)]
     console_error_panic_hook::set_once();
 
-
-    let state = State::new();
-
-    dominator::append_dom(&dominator::body(), State::render(state));
+    let app = App::new();
+    dominator::append_dom(&dominator::body(), App::render(app));
 
     Ok(())
 }
