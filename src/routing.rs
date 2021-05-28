@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use web_sys::{EventTarget, HtmlElement};
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use futures_signals::signal::{Mutable, ReadOnlyMutable};
 
 use crate::bindings;
@@ -48,9 +48,7 @@ impl CurrentUrl {
 }
 
 
-lazy_static! {
-    static ref URL: CurrentUrl = CurrentUrl::new();
-}
+static URL: Lazy<CurrentUrl> = Lazy::new(|| CurrentUrl::new());
 
 
 #[inline]

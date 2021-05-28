@@ -4,7 +4,7 @@ use std::convert::AsRef;
 use std::future::Future;
 use std::task::{Context, Poll};
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use futures_signals::signal::{Signal, not};
 use futures_signals::signal_vec::SignalVec;
 use futures_util::FutureExt;
@@ -77,11 +77,9 @@ const SVG_NAMESPACE: &str = "http://www.w3.org/2000/svg";
 pub const HIGHEST_ZINDEX: &str = "2147483647";
 
 
-lazy_static! {
-    static ref HIDDEN_CLASS: String = class! {
-        .style_important("display", "none")
-    };
-}
+static HIDDEN_CLASS: Lazy<String> = Lazy::new(|| class! {
+    .style_important("display", "none")
+});
 
 
 // TODO should return HtmlBodyElement ?
@@ -1211,7 +1209,7 @@ mod tests {
     use super::{DomBuilder, text_signal, RefFn};
     use crate::{html, shadow_root, ShadowRootMode, with_cfg};
     use futures_signals::signal::{always, SignalExt};
-    use lazy_static::lazy_static;
+    use once_cell::sync::Lazy;
     use web_sys::HtmlElement;
 
     #[test]
@@ -1304,9 +1302,7 @@ mod tests {
 
     #[test]
     fn style_signal_types() {
-        lazy_static! {
-            static ref FOO: String = "foo".to_owned();
-        }
+        static FOO: Lazy<String> = Lazy::new(|| "foo".to_owned());
 
         let _a: DomBuilder<HtmlElement> = DomBuilder::new_html("div")
             .style_signal("foo", always("bar"))
