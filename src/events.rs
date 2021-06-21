@@ -91,6 +91,7 @@ macro_rules! make_mouse_event {
             #[inline] pub fn shift_key(&self) -> bool { self.event.shift_key() }
             #[inline] pub fn alt_key(&self) -> bool { self.event.alt_key() }
 
+            // TODO maybe deprecate these ?
             #[inline] pub fn mouse_x(&self) -> i32 { self.event.client_x() }
             #[inline] pub fn mouse_y(&self) -> i32 { self.event.client_y() }
 
@@ -139,6 +140,16 @@ macro_rules! make_drag_event {
     };
 }
 
+macro_rules! make_input_event {
+    ($name:ident, $type:literal) => {
+        make_event!($name, $type => web_sys::InputEvent);
+
+        impl $name {
+            #[inline] pub fn data(&self) -> Option<String> { self.event.data() }
+        }
+    };
+}
+
 
 make_mouse_event!(Click, "click");
 make_mouse_event!(MouseDown, "mousedown");
@@ -163,14 +174,17 @@ make_drag_event!(DragEnter, "dragenter");
 make_drag_event!(DragLeave, "dragleave");
 make_drag_event!(Drop, "drop");
 
+make_input_event!(Input, "input");
+make_input_event!(BeforeInput, "beforeinput");
 
 make_event!(Load, "load" => web_sys::Event);
 make_event!(Scroll, "scroll" => web_sys::Event);
 make_event!(Resize, "resize" => web_sys::UiEvent);
-make_event!(Input, "input" => web_sys::InputEvent);
+
 
 impl Input {
     // TODO should this work on other types as well ?
+    #[deprecated(since = "0.5.19", note = "Use with_node instead")]
     pub fn value(&self) -> Option<String> {
         let target = self.target()?;
 
