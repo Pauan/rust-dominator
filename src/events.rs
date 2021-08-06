@@ -120,6 +120,7 @@ macro_rules! make_keyboard_event {
             #[inline] pub fn ctrl_key(&self) -> bool { self.event.ctrl_key() || self.event.meta_key() }
             #[inline] pub fn shift_key(&self) -> bool { self.event.shift_key() }
             #[inline] pub fn alt_key(&self) -> bool { self.event.alt_key() }
+            #[inline] pub fn repeat(&self) -> bool { self.event.repeat() }
         }
     };
 }
