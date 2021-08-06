@@ -67,7 +67,7 @@ macro_rules! make_event {
     };
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum MouseButton {
     Left,
     Middle,
