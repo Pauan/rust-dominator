@@ -353,13 +353,16 @@ macro_rules! class {
     }};
 }
 
-/// Used to generate [pseudo classes](https://developer.mozilla.org/en-US/docs/Web/CSS/Pseudo-classes). Typically
-/// called from within the [`class!`](crate::class!) macro:
+/// Used to generate [pseudo classes and elements](https://developer.mozilla.org/en-US/docs/Learn/CSS/Building_blocks/Selectors/Pseudo-classes_and_pseudo-elements).
+/// Usually called from within the [`class!`](crate::class!) macro:
 /// ```
 /// class!(
 ///     .style("background-color", "black")
 ///     .pseudo!(":nth-child(1)", {
 ///         .style("background-color", "blue")
+///     })
+///     .pseudo!("::after", {
+///         .style("background-color", "red")
 ///     })
 /// );
 /// ```
