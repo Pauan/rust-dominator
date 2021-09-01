@@ -1,4 +1,4 @@
-[![crates.io](http://meritbadge.herokuapp.com/dominator)](https://crates.io/crates/dominator)
+[![crates.io](https://img.shields.io/crates/v/dominator.svg)](https://crates.io/crates/dominator)
 [![docs.rs](https://docs.rs/dominator/badge.svg)](https://docs.rs/dominator)
 
 Zero-cost ultra-high-performance declarative DOM library using FRP signals for Rust!
