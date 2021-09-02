@@ -345,10 +345,9 @@ fn set_style<A, B>(style: &CssStyleDeclaration, name: &A, value: B, important: b
 }
 
 // TODO should this inline ?
-fn set_style_signal<A, B, C, D>(style: CssStyleDeclaration, callbacks: &mut Callbacks, name: A, value: D, important: bool)
+fn set_style_signal<A, C, D>(style: CssStyleDeclaration, callbacks: &mut Callbacks, name: A, value: D, important: bool)
     where A: MultiStr + 'static,
-          B: MultiStr,
-          C: OptionStr<Output = B>,
+          C: OptionStr,
           D: Signal<Item = C> + 'static {
 
     set_option(style, callbacks, value, move |style, value| {
@@ -911,10 +910,9 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
 
 impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
     #[inline]
-    pub fn style_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+    pub fn style_signal<B, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
-              C: MultiStr,
-              D: OptionStr<Output = C>,
+              D: OptionStr,
               E: Signal<Item = D> + 'static {
 
         set_style_signal(self.element.as_ref().style(), &mut self.callbacks, name, value, false);
@@ -922,10 +920,9 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
     }
 
     #[inline]
-    pub fn style_important_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+    pub fn style_important_signal<B, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
-              C: MultiStr,
-              D: OptionStr<Output = C>,
+              D: OptionStr,
               E: Signal<Item = D> + 'static {
 
         set_style_signal(self.element.as_ref().style(), &mut self.callbacks, name, value, true);
@@ -1052,10 +1049,9 @@ impl StylesheetBuilder {
     }
 
     #[inline]
-    pub fn style_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+    pub fn style_signal<B, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
-              C: MultiStr,
-              D: OptionStr<Output = C>,
+              D: OptionStr,
               E: Signal<Item = D> + 'static {
 
         set_style_signal(self.element.clone(), &mut self.callbacks, name, value, false);
@@ -1063,10 +1059,9 @@ impl StylesheetBuilder {
     }
 
     #[inline]
-    pub fn style_important_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+    pub fn style_important_signal<B, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
-              C: MultiStr,
-              D: OptionStr<Output = C>,
+              D: OptionStr,
               E: Signal<Item = D> + 'static {
 
         set_style_signal(self.element.clone(), &mut self.callbacks, name, value, true);
@@ -1125,10 +1120,9 @@ impl ClassBuilder {
     }
 
     #[inline]
-    pub fn style_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+    pub fn style_signal<B, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
-              C: MultiStr,
-              D: OptionStr<Output = C>,
+              D: OptionStr,
               E: Signal<Item = D> + 'static {
 
         self.stylesheet = self.stylesheet.style_signal(name, value);
@@ -1136,10 +1130,9 @@ impl ClassBuilder {
     }
 
     #[inline]
-    pub fn style_important_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+    pub fn style_important_signal<B, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
-              C: MultiStr,
-              D: OptionStr<Output = C>,
+              D: OptionStr,
               E: Signal<Item = D> + 'static {
 
         self.stylesheet = self.stylesheet.style_important_signal(name, value);
