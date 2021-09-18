@@ -368,6 +368,33 @@ fn set_style_signal<A, B, C, D>(style: CssStyleDeclaration, callbacks: &mut Call
     });
 }
 
+// TODO should this inline ?
+fn set_style_unchecked_signal<A, B, C, D>(style: CssStyleDeclaration, callbacks: &mut Callbacks, name: A, value: D, important: bool)
+    where A: AsStr + 'static,
+          B: AsStr,
+          C: OptionStr<Output = B>,
+          D: Signal<Item = C> + 'static {
+
+    set_option(style, callbacks, value, move |style, value| {
+        match value {
+            Some(value) => {
+                name.with_str(|name| {
+                    let name: &str = intern(name);
+
+                    value.with_str(|value| {
+                        bindings::set_style(style, name, value, important);
+                    });
+                });
+            },
+            None => {
+                name.with_str(|name| {
+                    bindings::remove_style(style, intern(name));
+                });
+            },
+        }
+    });
+}
+
 // TODO check that the property *actually* was changed ?
 // TODO maybe use AsRef<Object> ?
 // TODO should this inline ?
@@ -906,6 +933,18 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
         set_style(&self.element.as_ref().style(), &name, value, true);
         self
     }
+
+    #[inline]
+    pub fn style_unchecked<B, C>(self, name: B, value: C) -> Self
+        where B: AsStr,
+              C: AsStr {
+        name.with_str(|name| {
+            value.with_str(|value| {
+                bindings::set_style(&self.element.as_ref().style(), intern(name), value, false);
+            });
+        });
+        self
+    }
 }
 
 impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
@@ -928,6 +967,17 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
               E: Signal<Item = D> + 'static {
 
         set_style_signal(self.element.as_ref().style(), &mut self.callbacks, name, value, true);
+        self
+    }
+
+    #[inline]
+    pub fn style_unchecked_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+        where B: AsStr + 'static,
+              C: AsStr,
+              D: OptionStr<Output = C>,
+              E: Signal<Item = D> + 'static {
+
+        set_style_unchecked_signal(self.element.as_ref().style(), &mut self.callbacks, name, value, false);
         self
     }
 
@@ -1052,6 +1102,18 @@ impl StylesheetBuilder {
     }
 
     #[inline]
+    pub fn style_unchecked<B, C>(self, name: B, value: C) -> Self
+        where B: AsStr,
+              C: AsStr {
+        name.with_str(|name| {
+            value.with_str(|value| {
+                bindings::set_style(&self.element, intern(name), value, false);
+            });
+        });
+        self
+    }
+
+    #[inline]
     pub fn style_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
               C: MultiStr,
@@ -1070,6 +1132,17 @@ impl StylesheetBuilder {
               E: Signal<Item = D> + 'static {
 
         set_style_signal(self.element.clone(), &mut self.callbacks, name, value, true);
+        self
+    }
+
+    #[inline]
+    pub fn style_unchecked_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+        where B: AsStr + 'static,
+              C: AsStr,
+              D: OptionStr<Output = C>,
+              E: Signal<Item = D> + 'static {
+
+        set_style_unchecked_signal(self.element.clone(), &mut self.callbacks, name, value, false);
         self
     }
 
@@ -1128,6 +1201,14 @@ impl ClassBuilder {
     }
 
     #[inline]
+    pub fn style_unchecked<B, C>(mut self, name: B, value: C) -> Self
+        where B: AsStr,
+              C: AsStr {
+        self.stylesheet = self.stylesheet.style_unchecked(name, value);
+        self
+    }
+
+    #[inline]
     pub fn style_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
               C: MultiStr,
@@ -1146,6 +1227,17 @@ impl ClassBuilder {
               E: Signal<Item = D> + 'static {
 
         self.stylesheet = self.stylesheet.style_important_signal(name, value);
+        self
+    }
+
+    #[inline]
+    pub fn style_unchecked_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+        where B: AsStr + 'static,
+              C: AsStr,
+              D: OptionStr<Output = C>,
+              E: Signal<Item = D> + 'static {
+
+        self.stylesheet = self.stylesheet.style_unchecked_signal(name, value);
         self
     }
 
