@@ -316,7 +316,6 @@ fn set_style<A, B>(style: &CssStyleDeclaration, name: &A, value: B, important: b
 
         bindings::set_style(style, name, value, important);
 
-        // TODO maybe use cfg(debug_assertions) ?
         let is_changed = bindings::get_style(style, name) != "";
 
         if is_changed {
@@ -339,8 +338,10 @@ fn set_style<A, B>(style: &CssStyleDeclaration, name: &A, value: B, important: b
     });
 
     if let None = okay {
-        // TODO maybe make this configurable
-        panic!("style is incorrect:\n  names: {}\n  values: {}", names.join(", "), values.join(", "));
+        if cfg!(debug_assertions) {
+            // TODO maybe make this configurable
+            panic!("style is incorrect:\n  names: {}\n  values: {}", names.join(", "), values.join(", "));
+        }
     }
 }
 
