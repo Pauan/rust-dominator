@@ -76,7 +76,7 @@ pub fn on_click_go_to_url<A, B>(new_url: A) -> impl FnOnce(DomBuilder<B>) -> Dom
 
     #[inline]
     move |dom| {
-        dom.event_preventable(move |e: events::Click| {
+        dom.event_with_options(&EventOptions::preventable(), move |e: events::Click| {
             e.prevent_default();
             go_to_url(&new_url);
         })
@@ -108,7 +108,7 @@ macro_rules! on_click_go_to_url {
     ($this:ident, $url:expr) => {{
         let url = $url;
 
-        $this.event_preventable(move |e: $crate::events::Click| {
+        $this.event_with_options(&$crate::EventOptions::preventable(), move |e: $crate::events::Click| {
             e.prevent_default();
             $crate::routing::go_to_url(&url);
         })

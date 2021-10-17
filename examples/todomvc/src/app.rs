@@ -5,7 +5,7 @@ use web_sys::{Url, HtmlInputElement};
 use serde_derive::{Serialize, Deserialize};
 use futures_signals::signal::{Signal, SignalExt, Mutable};
 use futures_signals::signal_vec::{SignalVec, SignalVecExt, MutableVec};
-use dominator::{Dom, text_signal, html, clone, events, link, with_node, routing};
+use dominator::{Dom, EventOptions, text_signal, html, clone, events, link, with_node, routing};
 
 use crate::todo::Todo;
 use crate::util::{trim, local_storage};
@@ -167,7 +167,7 @@ impl App {
                         }))
                     })
 
-                    .event_preventable(clone!(app => move |event: events::KeyDown| {
+                    .event_with_options(&EventOptions::preventable(), clone!(app => move |event: events::KeyDown| {
                         if event.key() == "Enter" {
                             event.prevent_default();
                             app.create_new_todo();

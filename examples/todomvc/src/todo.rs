@@ -113,7 +113,7 @@ impl Todo {
                     ])
                 }),
 
-                html!("input", {
+                html!("input" => HtmlInputElement, {
                     .class("edit")
 
                     .prop_signal("value", todo.editing.signal_cloned()
@@ -136,9 +136,11 @@ impl Todo {
                         }))
                     })
 
-                    .event(clone!(todo => move |event: events::Input| {
-                        todo.editing.set_neq(Some(event.value().unwrap_throw()));
-                    }))
+                    .with_node!(element => {
+                        .event(clone!(todo => move |_: events::Input| {
+                            todo.editing.set_neq(Some(element.value()));
+                        }))
+                    })
 
                     .event(clone!(todo, app => move |_: events::Blur| {
                         todo.done_editing(&app);

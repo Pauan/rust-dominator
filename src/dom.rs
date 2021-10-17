@@ -494,7 +494,7 @@ impl<A> DomBuilder<A> {
 
     // TODO add this to the StylesheetBuilder and ClassBuilder too
     #[inline]
-    pub fn global_event<T, F>(mut self, listener: F) -> Self
+    pub fn global_event<T, F>(self, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
         self.global_event_with_options(&EventOptions::default(), listener)
@@ -503,7 +503,7 @@ impl<A> DomBuilder<A> {
     // TODO add this to the StylesheetBuilder and ClassBuilder too
     #[deprecated(since = "0.5.21", note = "Use global_event_with_options instead")]
     #[inline]
-    pub fn global_event_preventable<T, F>(mut self, listener: F) -> Self
+    pub fn global_event_preventable<T, F>(self, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
         self.global_event_with_options(&EventOptions::preventable(), listener)
