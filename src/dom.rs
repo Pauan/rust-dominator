@@ -18,7 +18,7 @@ use crate::callbacks::Callbacks;
 use crate::traits::*;
 use crate::operations;
 use crate::operations::{for_each, spawn_future};
-use crate::utils::{EventListener, on, on_preventable, ValueDiscard, FnDiscard};
+use crate::utils::{EventListener, on, ValueDiscard, FnDiscard};
 
 
 pub struct RefFn<A, B, C> where B: ?Sized, C: Fn(&A) -> &B {
@@ -408,6 +408,38 @@ fn set_property<A, B, C>(element: &A, name: &B, value: C) where A: AsRef<JsValue
 }
 
 
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub struct EventOptions {
+    pub bubbles: bool,
+    pub preventable: bool,
+}
+
+impl EventOptions {
+    pub fn bubbles() -> Self {
+        Self {
+            bubbles: true,
+            preventable: false,
+        }
+    }
+
+    pub fn preventable() -> Self {
+        Self {
+            bubbles: false,
+            preventable: true,
+        }
+    }
+}
+
+impl Default for EventOptions {
+    fn default() -> Self {
+        Self {
+            bubbles: false,
+            preventable: false,
+        }
+    }
+}
+
+
 // TODO better warning message for must_use
 #[must_use]
 pub struct DomBuilder<A> {
@@ -445,17 +477,19 @@ impl<A> DomBuilder<A> {
     }
 
     #[inline]
-    fn _event<T, F>(&mut self, element: EventTarget, listener: F)
+    fn _event<T, F>(&mut self, element: EventTarget, options: &EventOptions, listener: F)
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        self.callbacks.after_remove(on(element, listener));
+        self.callbacks.after_remove(on(element, options, listener));
     }
 
+    // TODO add this to the StylesheetBuilder and ClassBuilder too
     #[inline]
-    fn _event_preventable<T, F>(&mut self, element: EventTarget, listener: F)
+    pub fn global_event_with_options<T, F>(mut self, options: &EventOptions, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        self.callbacks.after_remove(on_preventable(element, listener));
+        self._event(bindings::window_event_target(), options, listener);
+        self
     }
 
     // TODO add this to the StylesheetBuilder and ClassBuilder too
@@ -463,17 +497,16 @@ impl<A> DomBuilder<A> {
     pub fn global_event<T, F>(mut self, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        self._event(bindings::window_event_target(), listener);
-        self
+        self.global_event_with_options(&EventOptions::default(), listener)
     }
 
     // TODO add this to the StylesheetBuilder and ClassBuilder too
+    #[deprecated(since = "0.5.21", note = "Use global_event_with_options instead")]
     #[inline]
     pub fn global_event_preventable<T, F>(mut self, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        self._event_preventable(bindings::window_event_target(), listener);
-        self
+        self.global_event_with_options(&EventOptions::preventable(), listener)
     }
 
     #[inline]
@@ -598,21 +631,27 @@ impl<A> DomBuilder<A> where A: AsRef<JsValue> {
 
 impl<A> DomBuilder<A> where A: AsRef<EventTarget> {
     #[inline]
-    pub fn event<T, F>(mut self, listener: F) -> Self
+    pub fn event_with_options<T, F>(mut self, options: &EventOptions, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
         // TODO can this clone be avoided ?
-        self._event(self.element.as_ref().clone(), listener);
+        self._event(self.element.as_ref().clone(), options, listener);
         self
     }
 
     #[inline]
-    pub fn event_preventable<T, F>(mut self, listener: F) -> Self
+    pub fn event<T, F>(self, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        // TODO can this clone be avoided ?
-        self._event_preventable(self.element.as_ref().clone(), listener);
-        self
+        self.event_with_options(&EventOptions::default(), listener)
+    }
+
+    #[deprecated(since = "0.5.21", note = "Use event_with_options instead")]
+    #[inline]
+    pub fn event_preventable<T, F>(self, listener: F) -> Self
+        where T: StaticEvent,
+              F: FnMut(T) + 'static {
+        self.event_with_options(&EventOptions::preventable(), listener)
     }
 }
 

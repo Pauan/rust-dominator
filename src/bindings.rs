@@ -7,32 +7,24 @@ use web_sys::{HtmlElement, Element, Node, Window, History, Document, Text, Comme
 #[wasm_bindgen(inline_js = "
     export function set_property(obj, name, value) { obj[name] = value; }
 
-    export function add_event(elem, name, f) {
+    export function add_event(elem, name, capture, passive, f) {
         elem.addEventListener(name, f, {
-            capture: true,
+            capture,
+            passive,
             once: false,
-            passive: true
         });
     }
 
     export function add_event_once(elem, name, f) {
         elem.addEventListener(name, f, {
             capture: true,
-            once: true,
             passive: true,
+            once: true,
         });
     }
 
-    export function add_event_preventable(elem, name, f) {
-        elem.addEventListener(name, f, {
-            capture: true,
-            once: false,
-            passive: false
-        });
-    }
-
-    export function remove_event(elem, name, f) {
-        elem.removeEventListener(name, f, true);
+    export function remove_event(elem, name, capture, f) {
+        elem.removeEventListener(name, f, capture);
     }
 ")]
 extern "C" {
@@ -41,10 +33,9 @@ extern "C" {
     pub(crate) fn set_property(obj: &JsValue, name: &str, value: &JsValue);
 
     // TODO replace with gloo-events
-    pub(crate) fn add_event(elem: &EventTarget, name: &str, f: &Function);
+    pub(crate) fn add_event(elem: &EventTarget, name: &str, capture: bool, passive: bool, f: &Function);
     pub(crate) fn add_event_once(elem: &EventTarget, name: &str, f: &Function);
-    pub(crate) fn add_event_preventable(elem: &EventTarget, name: &str, f: &Function);
-    pub(crate) fn remove_event(elem: &EventTarget, name: &str, f: &Function);
+    pub(crate) fn remove_event(elem: &EventTarget, name: &str, capture: bool, f: &Function);
 }
 
 

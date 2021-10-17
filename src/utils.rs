@@ -6,6 +6,7 @@ use discard::Discard;
 use web_sys::{EventTarget, Event};
 
 use crate::bindings;
+use crate::dom::EventOptions;
 use crate::traits::StaticEvent;
 
 
@@ -13,29 +14,22 @@ use crate::traits::StaticEvent;
 pub(crate) struct EventListener {
     elem: EventTarget,
     name: &'static str,
+    capture: bool,
     closure: Option<Closure<dyn FnMut(&Event)>>,
 }
 
 // TODO should these inline ?
 impl EventListener {
     #[inline]
-    pub(crate) fn new<F>(elem: EventTarget, name: &'static str, callback: F) -> Self where F: FnMut(&Event) + 'static {
+    pub(crate) fn new<F>(elem: EventTarget, name: &'static str, options: &EventOptions, callback: F) -> Self where F: FnMut(&Event) + 'static {
         let closure = Closure::wrap(Box::new(callback) as Box<dyn FnMut(&Event)>);
         let name: &'static str = intern(name);
 
-        bindings::add_event(&elem, name, closure.as_ref().unchecked_ref());
+        let capture = !options.bubbles;
 
-        Self { elem, name, closure: Some(closure) }
-    }
+        bindings::add_event(&elem, name, capture, !options.preventable, closure.as_ref().unchecked_ref());
 
-    #[inline]
-    pub(crate) fn new_preventable<F>(elem: EventTarget, name: &'static str, callback: F) -> Self where F: FnMut(&Event) + 'static {
-        let closure = Closure::wrap(Box::new(callback) as Box<dyn FnMut(&Event)>);
-        let name: &'static str = intern(name);
-
-        bindings::add_event_preventable(&elem, name, closure.as_ref().unchecked_ref());
-
-        Self { elem, name, closure: Some(closure) }
+        Self { elem, name, capture, closure: Some(closure) }
     }
 
     #[inline]
@@ -45,7 +39,7 @@ impl EventListener {
 
         bindings::add_event_once(&elem, name, closure.as_ref().unchecked_ref());
 
-        Self { elem, name, closure: Some(closure) }
+        Self { elem, name, capture: true, closure: Some(closure) }
     }
 }
 
@@ -63,25 +57,16 @@ impl Discard for EventListener {
     #[inline]
     fn discard(mut self) {
         let closure = self.closure.take().unwrap_throw();
-        bindings::remove_event(&self.elem, &self.name, closure.as_ref().unchecked_ref());
+        bindings::remove_event(&self.elem, &self.name, self.capture, closure.as_ref().unchecked_ref());
     }
 }
 
 
 #[inline]
-pub(crate) fn on<E, F>(element: EventTarget, mut callback: F) -> EventListener
+pub(crate) fn on<E, F>(element: EventTarget, options: &EventOptions, mut callback: F) -> EventListener
     where E: StaticEvent,
           F: FnMut(E) + 'static {
-    EventListener::new(element, E::EVENT_TYPE, move |e| {
-        callback(E::unchecked_from_event(e.clone()));
-    })
-}
-
-#[inline]
-pub(crate) fn on_preventable<E, F>(element: EventTarget, mut callback: F) -> EventListener
-    where E: StaticEvent,
-          F: FnMut(E) + 'static {
-    EventListener::new_preventable(element, E::EVENT_TYPE, move |e| {
+    EventListener::new(element, E::EVENT_TYPE, options, move |e| {
         callback(E::unchecked_from_event(e.clone()));
     })
 }

@@ -5,7 +5,7 @@ use once_cell::sync::Lazy;
 use futures_signals::signal::{Mutable, ReadOnlyMutable};
 
 use crate::bindings;
-use crate::dom::{Dom, DomBuilder};
+use crate::dom::{Dom, DomBuilder, EventOptions};
 use crate::utils::EventListener;
 use crate::events;
 
@@ -34,7 +34,7 @@ impl CurrentUrl {
         let value = Mutable::new(String::from(bindings::current_url()));
 
         // TODO clean this up somehow ?
-        let _ = EventListener::new(bindings::window_event_target(), "popstate", {
+        let _ = EventListener::new(bindings::window_event_target(), "popstate", &EventOptions::default(), {
             let value = value.clone();
             move |_| {
                 change_url(&value);
