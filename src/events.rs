@@ -88,6 +88,15 @@ macro_rules! make_mouse_event {
             #[inline] pub fn x(&self) -> i32 { self.event.client_x() }
             #[inline] pub fn y(&self) -> i32 { self.event.client_y() }
 
+            #[inline] pub fn movement_x(&self) -> i32 { self.event.movement_x() }
+            #[inline] pub fn movement_y(&self) -> i32 { self.event.movement_y() }
+
+            #[inline] pub fn offset_x(&self) -> i32 { self.event.offset_x() }
+            #[inline] pub fn offset_y(&self) -> i32 { self.event.offset_y() }
+
+            #[inline] pub fn page_x(&self) -> i32 { self.event.page_x() }
+            #[inline] pub fn page_y(&self) -> i32 { self.event.page_y() }
+
             #[inline] pub fn screen_x(&self) -> i32 { self.event.screen_x() }
             #[inline] pub fn screen_y(&self) -> i32 { self.event.screen_y() }
 
