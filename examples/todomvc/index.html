@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>rust-dominator • TodoMVC</title>
-    <link rel="stylesheet" href="lib/todomvc-common/base.css">
-    <link rel="stylesheet" href="lib/todomvc-app-css/index.css">
+    <link data-trunk rel="css" href="lib/todomvc-common/base.css">
+    <link data-trunk rel="css" href="lib/todomvc-app-css/index.css">
   </head>
   <body>
     <div id="app"></div>
@@ -14,7 +14,7 @@
       <p>Created by <a href="https://github.com/Pauan">Pauan</a></p>
       <p>Part of <a href="http://todomvc.com">TodoMVC</a></p>
     </footer>
-    <script src="lib/todomvc-common/base.js"></script>
-    <script src="js/index.js"></script>
+    <link data-trunk rel="inline" type="js" href="lib/todomvc-common/base.js"/>
+    <link data-trunk rel="rust" href="Cargo.toml" data-wasm-opt="z"/>
   </body>
 </html>
