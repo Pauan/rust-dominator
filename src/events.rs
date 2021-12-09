@@ -81,8 +81,8 @@ pub enum MouseButton {
 }
 
 macro_rules! make_mouse_event {
-    ($name:ident, $type:literal) => {
-        make_event!($name, $type => web_sys::MouseEvent);
+    ($name:ident, $type:literal => $event:path) => {
+        make_event!($name, $type => $event);
 
         impl $name {
             #[inline] pub fn x(&self) -> i32 { self.event.client_x() }
@@ -146,7 +146,7 @@ macro_rules! make_focus_event {
 
 macro_rules! make_drag_event {
     ($name:ident, $type:literal) => {
-        make_event!($name, $type => web_sys::DragEvent);
+        make_mouse_event!($name, $type => web_sys::DragEvent);
 
         impl $name {
             #[inline] pub fn data_transfer(&self) -> Option<web_sys::DataTransfer> { self.event.data_transfer() }
@@ -165,14 +165,14 @@ macro_rules! make_input_event {
 }
 
 
-make_mouse_event!(Click, "click");
-make_mouse_event!(MouseDown, "mousedown");
-make_mouse_event!(MouseUp, "mouseup");
-make_mouse_event!(MouseMove, "mousemove");
-make_mouse_event!(MouseEnter, "mouseenter");
-make_mouse_event!(MouseLeave, "mouseleave");
-make_mouse_event!(DoubleClick, "dblclick");
-make_mouse_event!(ContextMenu, "contextmenu");
+make_mouse_event!(Click, "click" => web_sys::MouseEvent);
+make_mouse_event!(MouseDown, "mousedown" => web_sys::MouseEvent);
+make_mouse_event!(MouseUp, "mouseup" => web_sys::MouseEvent);
+make_mouse_event!(MouseMove, "mousemove" => web_sys::MouseEvent);
+make_mouse_event!(MouseEnter, "mouseenter" => web_sys::MouseEvent);
+make_mouse_event!(MouseLeave, "mouseleave" => web_sys::MouseEvent);
+make_mouse_event!(DoubleClick, "dblclick" => web_sys::MouseEvent);
+make_mouse_event!(ContextMenu, "contextmenu" => web_sys::MouseEvent);
 
 make_keyboard_event!(KeyDown, "keydown");
 make_keyboard_event!(KeyUp, "keyup");
