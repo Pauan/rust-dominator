@@ -2,19 +2,6 @@ use std;
 use discard::Discard;
 
 
-// TODO replace this with FnOnce later
-trait IInsertCallback {
-    fn call(self: Box<Self>, callbacks: &mut Callbacks);
-}
-
-impl<F: FnOnce(&mut Callbacks)> IInsertCallback for F {
-    #[inline]
-    fn call(self: Box<Self>, callbacks: &mut Callbacks) {
-        self(callbacks);
-    }
-}
-
-
 // TODO a bit gross
 trait IRemove {
     fn remove(self: Box<Self>);
@@ -28,9 +15,11 @@ impl<A: Discard> IRemove for A {
 }
 
 
-pub(crate) struct InsertCallback(Box<dyn IInsertCallback>);
+#[repr(transparent)]
+pub(crate) struct InsertCallback(Box<dyn FnOnce(&mut Callbacks)>);
 
 // TODO is there a more efficient way of doing this ?
+#[repr(transparent)]
 pub(crate) struct RemoveCallback(Box<dyn IRemove>);
 
 impl std::fmt::Debug for InsertCallback {
@@ -84,7 +73,7 @@ impl Callbacks {
             std::mem::swap(&mut callbacks.after_remove, &mut self.after_remove);
 
             for f in self.after_insert.drain(..) {
-                f.0.call(&mut callbacks);
+                f.0(&mut callbacks);
             }
 
             // TODO verify that this is correct
