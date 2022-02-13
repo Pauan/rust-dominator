@@ -1,6 +1,5 @@
-use std;
 use discard::Discard;
-
+use std;
 
 // TODO replace this with FnOnce later
 trait IInsertCallback {
@@ -14,7 +13,6 @@ impl<F: FnOnce(&mut Callbacks)> IInsertCallback for F {
     }
 }
 
-
 // TODO a bit gross
 trait IRemove {
     fn remove(self: Box<Self>);
@@ -26,7 +24,6 @@ impl<A: Discard> IRemove for A {
         self.discard();
     }
 }
-
 
 pub(crate) struct InsertCallback(Box<dyn IInsertCallback>);
 
@@ -44,7 +41,6 @@ impl std::fmt::Debug for RemoveCallback {
         write!(formatter, "RemoveCallback")
     }
 }
-
 
 #[derive(Debug)]
 pub(crate) struct Callbacks {
@@ -111,7 +107,6 @@ impl Callbacks {
         self.trigger_remove = false;
     }
 }
-
 
 // TODO use DiscardOnDrop instead
 impl Drop for Callbacks {

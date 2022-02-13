@@ -9,7 +9,7 @@ readme = "README.md"
 license = "MIT"
 keywords = ["javascript", "dom", "reactive", "signal", "frp"]
 categories = ["gui", "web-programming", "wasm"]
-edition = "2018"
+edition = "2021"
 
 [features]
 # TODO should this enable interning ?
@@ -71,3 +71,6 @@ debug-assertions = true
 
 [profile.bench]
 debug-assertions = true
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.29"
