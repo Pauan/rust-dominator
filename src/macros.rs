@@ -1,3 +1,20 @@
+/// Add by-value methods or macros to a value.
+///
+/// In addition, allows you to call macros like you would call a function. This macro is used
+/// throughout `dominator`.
+///
+/// # Examples
+///
+/// ```
+/// # use dominator::apply_methods;
+/// let x = apply_methods!(10i8, {
+///     .checked_add(10)
+///     .unwrap()
+///     .checked_add(20)
+/// });
+///
+/// assert_eq!(x, Some(40))
+/// ```
 #[macro_export]
 macro_rules! apply_methods {
     ($this:expr, {}) => {
@@ -13,7 +30,6 @@ macro_rules! apply_methods {
         $crate::apply_methods!(this, { $($rest)* })
     }};
 }
-
 
 #[doc(hidden)]
 #[macro_export]
@@ -34,7 +50,22 @@ macro_rules! __internal_builder {
     }};
 }
 
-
+/// Lifts a sequence of funtions over the node we are currently constructing.
+///
+/// # Examples
+///
+/// ```no_run
+/// use dominator::{html, with_node, events};
+/// use web_sys::HtmlInputElement;
+///
+/// let dom = html!("input" => HtmlInputElement, {
+///     .with_node!(el => {
+///         .event(move |_: events::Change| {
+///             // respond to input change here
+///         })
+///     })
+/// });
+/// ```
 #[macro_export]
 macro_rules! with_node {
     ($this:ident, $name:ident => { $($methods:tt)* }) => {{
@@ -43,7 +74,23 @@ macro_rules! with_node {
     }};
 }
 
-
+/// Like `apply_methods!`, but only runs methods if `#[cfg($cfg)]`.
+///
+/// # Examples
+///
+/// ```
+/// # use dominator::with_cfg;
+/// let raw = 10i8;
+/// let x = with_cfg!(raw, unix, {
+///     .checked_add(10)
+///     .unwrap()
+/// });
+///
+/// #[cfg(unix)]
+/// assert_eq!(x, 20);
+/// #[cfg(not(unix))]
+/// assert_eq!(x, 10);
+/// ```
 #[macro_export]
 macro_rules! with_cfg {
     ($this:ident, $cfg:meta, { $($methods:tt)* }) => {{
@@ -57,7 +104,7 @@ macro_rules! with_cfg {
     }};
 }
 
-
+/// Allows you to use `dominator` to create web components.
 #[macro_export]
 macro_rules! shadow_root {
     ($this:ident, $mode:expr => { $($methods:tt)* }) => {{
@@ -67,7 +114,29 @@ macro_rules! shadow_root {
     }};
 }
 
-
+/// Create a new [`Dom`][crate::Dom] from a description of the html you want.
+///
+/// This is the main way to construct reactive views of your data.
+///
+/// # Examples
+///
+/// ```no_run
+/// use dominator::html;
+///
+/// let dom = html!("div", {
+///     .children(&mut [
+///         html!("h1", {
+///             .text("Title")
+///         }),
+///         html!("p", {
+///             .text("para 1")
+///         }),
+///         html!("p", {
+///             .text("para 2")
+///         })
+///     ])
+/// });
+/// ```
 #[macro_export]
 macro_rules! html {
     ($($args:tt)+) => {
@@ -75,7 +144,9 @@ macro_rules! html {
     };
 }
 
-
+/// Create a new [`Dom`][crate::Dom] from a description of your svg.
+///
+/// Works similarly to [`html`][crate::html].
 #[macro_export]
 macro_rules! svg {
     ($($args:tt)+) => {
@@ -83,7 +154,13 @@ macro_rules! svg {
     };
 }
 
-
+/// Applies the given methods to the given node.
+///
+/// Which methods are allowed will depend on the type of the node, but it will generally be a
+/// subtype of `web_sys::Node`.
+///
+/// [`html`][crate::html] and [`svg`][crate::svg] use the [`DomBuilder`][crate::DomBuilder]
+/// internally.
 #[macro_export]
 macro_rules! dom_builder {
     ($node:expr, { $($methods:tt)* }) => {{
@@ -93,7 +170,28 @@ macro_rules! dom_builder {
     }};
 }
 
-
+/// Adds an entry with the given selector and rules to a stylesheet in the document `<head>`.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use dominator::{stylesheet, class};
+/// stylesheet!("li .test", {
+///     .style("color", "black")
+///     .style("padding", "10px 0")
+/// })
+/// ```
+///
+/// will result in
+///
+/// ```css
+/// li .test {
+///     color: black;
+///     padding: 10px 0;
+/// }
+/// ```
+///
+/// being in a head style element.
 #[macro_export]
 macro_rules! stylesheet {
     ($rule:expr) => {
@@ -104,7 +202,28 @@ macro_rules! stylesheet {
     };
 }
 
-
+/// Create a class with the given styles and appends it to a `<style>` in the document `<head>`.
+///
+/// The name of the class is randomly generated and returned from the macro, meaning it can then be
+/// used in html construction. The class is never removed from the document head, so be careful to
+/// re-use existing classes rather than making new ones where possible.
+///
+/// # Examples
+///
+/// ```no_run
+/// // It's often convenient to store the class name in a static variable, which ensures the class
+/// // is only created once.
+/// use once_cell::sync::Lazy;
+/// # use dominator::{html, class};
+/// static CLASS: Lazy<String> = Lazy::new(|| class! {
+///     .style("display", "inline-block")
+///     .style("padding", "10px")
+/// });
+///
+/// html!("div", {
+///     .class(&*CLASS)
+/// });
+/// ```
 #[macro_export]
 macro_rules! class {
     ($($methods:tt)*) => {{
@@ -112,7 +231,24 @@ macro_rules! class {
     }};
 }
 
-
+/// Used within [`class!`][crate::class] to add rules to a pseudo-selector.
+///
+/// # Examples
+///
+/// ```no_run
+/// use once_cell::sync::Lazy;
+/// # use dominator::{html, class, pseudo};
+/// static CLASS: Lazy<String> = Lazy::new(|| class! {
+///     .style("display", "inline-block")
+///     .style("padding", "10px")
+///     .pseudo!(":hover", {
+///         .style("background-color", "yellow")
+///     })
+/// });
+///
+/// html!("div", {
+///     .class(&*CLASS)
+/// });
 #[macro_export]
 macro_rules! pseudo {
     ($this:ident, $rules:expr) => {
@@ -123,7 +259,6 @@ macro_rules! pseudo {
         $this
     }};
 }
-
 
 // TODO this is pretty inefficient, it iterates over the token tree one token at a time
 // TODO this should only work for ::std::clone::Clone::clone
@@ -140,6 +275,20 @@ macro_rules! __internal_clone_split {
     };
 }
 
+/// A helper to clone values that are then moved into a closure
+///
+/// # Examples
+///
+/// ```
+/// use std::{thread, sync::{Arc, atomic::{AtomicUsize, Ordering}}};
+/// # use dominator::clone;
+/// let x = Arc::new(AtomicUsize::new(2));
+/// let handle = thread::spawn(clone!(x => move || {
+///     x.fetch_add(1, Ordering::Relaxed);
+/// }));
+/// handle.join().unwrap();
+/// assert_eq!(x.load(Ordering::Relaxed), 3);
+/// ```
 // TODO move into gloo ?
 #[macro_export]
 macro_rules! clone {
