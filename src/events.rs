@@ -122,6 +122,29 @@ macro_rules! make_mouse_event {
     };
 }
 
+macro_rules! make_pointer_event {
+    ($name:ident, $type:literal) => {
+        make_mouse_event!($name, $type => web_sys::PointerEvent);
+
+        impl $name {
+            #[inline] pub fn pointer_id(&self) -> i32 { self.event.pointer_id() }
+
+            #[inline] pub fn pointer_width(&self) -> i32 { self.event.width() }
+            #[inline] pub fn pointer_height(&self) -> i32 { self.event.height() }
+
+            #[inline] pub fn pressure(&self) -> f32 { self.event.pressure() }
+            #[inline] pub fn tangential_pressure(&self) -> f32 { self.event.tangential_pressure() }
+
+            #[inline] pub fn tilt_x(&self) -> i32 { self.event.tilt_x() }
+            #[inline] pub fn tilt_y(&self) -> i32 { self.event.tilt_y() }
+
+            #[inline] pub fn twist(&self) -> i32 { self.event.twist() }
+
+            #[inline] pub fn is_primary(&self) -> bool { self.event.is_primary() }
+        }
+    };
+}
+
 macro_rules! make_keyboard_event {
     ($name:ident, $type:literal) => {
         make_event!($name, $type => web_sys::KeyboardEvent);
@@ -141,6 +164,10 @@ macro_rules! make_keyboard_event {
 macro_rules! make_focus_event {
     ($name:ident, $type:literal) => {
         make_event!($name, $type => web_sys::FocusEvent);
+
+        impl $name {
+            #[inline] pub fn related_target(&self) -> Option<EventTarget> { self.event.related_target() }
+        }
     };
 }
 
@@ -174,11 +201,24 @@ make_mouse_event!(MouseLeave, "mouseleave" => web_sys::MouseEvent);
 make_mouse_event!(DoubleClick, "dblclick" => web_sys::MouseEvent);
 make_mouse_event!(ContextMenu, "contextmenu" => web_sys::MouseEvent);
 
+make_pointer_event!(PointerOver, "pointerover");
+make_pointer_event!(PointerEnter, "pointerenter");
+make_pointer_event!(PointerDown, "pointerdown");
+make_pointer_event!(PointerMove, "pointermove");
+make_pointer_event!(PointerUp, "pointerup");
+make_pointer_event!(PointerCancel, "pointercancel");
+make_pointer_event!(PointerOut, "pointerout");
+make_pointer_event!(PointerLeave, "pointerleave");
+make_pointer_event!(GotPointerCapture, "gotpointercapture");
+make_pointer_event!(LostPointerCapture, "lostpointercapture");
+
 make_keyboard_event!(KeyDown, "keydown");
 make_keyboard_event!(KeyUp, "keyup");
 
 make_focus_event!(Focus, "focus");
 make_focus_event!(Blur, "blur");
+make_focus_event!(FocusIn, "focusin");
+make_focus_event!(FocusOut, "focusout");
 
 make_drag_event!(DragStart, "dragstart");
 make_drag_event!(Drag, "drag");
