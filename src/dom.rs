@@ -1224,6 +1224,12 @@ impl ClassBuilder {
     }
 
     #[inline]
+    pub fn class_name(mut self, name: String) -> Self {
+        self.class_name = name;
+        self
+    }
+
+    #[inline]
     pub fn style<B, C>(mut self, name: B, value: C) -> Self
         where B: MultiStr,
               C: MultiStr {
