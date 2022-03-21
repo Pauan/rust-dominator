@@ -191,6 +191,32 @@ macro_rules! make_input_event {
     };
 }
 
+macro_rules! make_animation_event {
+    ($name:ident, $type:literal) => {
+        make_event!($name, $type => web_sys::AnimationEvent);
+
+        impl $name {
+            #[inline] pub fn animation_name(&self) -> String { self.event.animation_name() }
+            #[inline] pub fn elapsed_time(&self) -> f32 { self.event.elapsed_time() }
+            #[inline] pub fn pseudo_element(&self) -> String { self.event.pseudo_element() }
+        }
+    };
+}
+
+macro_rules! make_wheel_event {
+    ($name:ident, $type:literal) => {
+        make_mouse_event!($name, $type => web_sys::WheelEvent);
+
+        impl $name {
+            #[inline] pub fn delta_x(&self) -> f64 { self.event.delta_x() }
+            #[inline] pub fn delta_y(&self) -> f64 { self.event.delta_y() }
+            #[inline] pub fn delta_z(&self) -> f64 { self.event.delta_z() }
+            // TODO return enum
+            #[inline] pub fn delta_mode(&self) -> u32 { self.event.delta_mode() }
+        }
+    };
+}
+
 
 make_mouse_event!(Click, "click" => web_sys::MouseEvent);
 make_mouse_event!(MouseDown, "mousedown" => web_sys::MouseEvent);
@@ -230,6 +256,13 @@ make_drag_event!(Drop, "drop");
 
 make_input_event!(Input, "input");
 make_input_event!(BeforeInput, "beforeinput");
+
+make_animation_event!(AnimationStart, "animationstart");
+make_animation_event!(AnimationIteration, "animationiteration");
+make_animation_event!(AnimationCancel, "animationcancel");
+make_animation_event!(AnimationEnd, "animationend");
+
+make_wheel_event!(Wheel, "wheel");
 
 make_event!(Load, "load" => web_sys::Event);
 make_event!(Scroll, "scroll" => web_sys::Event);
