@@ -211,7 +211,6 @@ macro_rules! make_wheel_event {
             #[inline] pub fn delta_x(&self) -> f64 { self.event.delta_x() }
             #[inline] pub fn delta_y(&self) -> f64 { self.event.delta_y() }
             #[inline] pub fn delta_z(&self) -> f64 { self.event.delta_z() }
-            #[inline] pub fn delta_mode(&self) -> u32 { self.event.delta_mode() }
         }
     };
 }
