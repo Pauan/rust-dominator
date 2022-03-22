@@ -55,6 +55,8 @@ features = [
     "KeyboardEvent",
     "Location",
     "MouseEvent",
+    "AnimationEvent",
+    "WheelEvent",
     "Node",
     "PointerEvent",
     "ShadowRoot",
