@@ -500,7 +500,6 @@ impl<A> DomBuilder<A> {
         self.global_event_with_options(&EventOptions::default(), listener)
     }
 
-    // TODO add this to the StylesheetBuilder and ClassBuilder too
     #[deprecated(since = "0.5.21", note = "Use global_event_with_options instead")]
     #[inline]
     pub fn global_event_preventable<T, F>(self, listener: F) -> Self
@@ -584,14 +583,14 @@ impl<A> DomBuilder<A> where A: Into<Node> {
 impl<A> DomBuilder<A> where A: AsRef<JsValue> {
     #[inline]
     pub fn prop<B, C>(self, name: B, value: C) -> Self where B: MultiStr, C: Into<JsValue> {
-        self.property(name, value)
-    }
-
-    /// The same as the [`prop`](#method.prop) method.
-    #[inline]
-    pub fn property<B, C>(self, name: B, value: C) -> Self where B: MultiStr, C: Into<JsValue> {
         set_property(&self.element, &name, value);
         self
+    }
+
+    #[deprecated(since = "0.5.24", note = "Use the `prop` method instead")]
+    #[inline]
+    pub fn property<B, C>(self, name: B, value: C) -> Self where B: MultiStr, C: Into<JsValue> {
+        self.prop(name, value)
     }
 }
 
@@ -610,22 +609,23 @@ impl<A> DomBuilder<A> where A: AsRef<JsValue> {
     }
 
     #[inline]
-    pub fn prop_signal<B, C, D>(self, name: B, value: D) -> Self
-        where B: MultiStr + 'static,
-              C: Into<JsValue>,
-              D: Signal<Item = C> + 'static {
-        self.property_signal(name, value)
-    }
-
-    /// The same as the [`prop_signal`](#method.prop_signal) method.
-    #[inline]
-    pub fn property_signal<B, C, D>(mut self, name: B, value: D) -> Self
+    pub fn prop_signal<B, C, D>(mut self, name: B, value: D) -> Self
         where B: MultiStr + 'static,
               C: Into<JsValue>,
               D: Signal<Item = C> + 'static {
 
         self.set_property_signal(name, value);
         self
+    }
+
+    #[deprecated(since = "0.5.24", note = "Use the `prop_signal` method instead")]
+    #[inline]
+    pub fn property_signal<B, C, D>(self, name: B, value: D) -> Self
+        where B: MultiStr + 'static,
+              C: Into<JsValue>,
+              D: Signal<Item = C> + 'static {
+
+        self.prop_signal(name, value)
     }
 }
 
@@ -713,12 +713,6 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
     #[inline]
     pub fn attr<B>(self, name: B, value: &str) -> Self where B: MultiStr {
-        self.attribute(name, value)
-    }
-
-    /// The same as the [`attr`](#method.attr) method.
-    #[inline]
-    pub fn attribute<B>(self, name: B, value: &str) -> Self where B: MultiStr {
         let element = self.element.as_ref();
         // TODO should this intern the value ?
         let value: &str = intern(value);
@@ -730,14 +724,14 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         self
     }
 
+    #[deprecated(since = "0.5.24", note = "Use the `attr` method instead")]
     #[inline]
-    pub fn attr_ns<B>(self, namespace: &str, name: B, value: &str) -> Self where B: MultiStr {
-        self.attribute_namespace(namespace, name, value)
+    pub fn attribute<B>(self, name: B, value: &str) -> Self where B: MultiStr {
+        self.attr(name, value)
     }
 
-    /// The same as the [`attr_ns`](#method.attr_ns) method.
     #[inline]
-    pub fn attribute_namespace<B>(self, namespace: &str, name: B, value: &str) -> Self where B: MultiStr {
+    pub fn attr_ns<B>(self, namespace: &str, name: B, value: &str) -> Self where B: MultiStr {
         let element = self.element.as_ref();
         let namespace: &str = intern(namespace);
         // TODO should this intern the value ?
@@ -748,6 +742,12 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         });
 
         self
+    }
+
+    #[deprecated(since = "0.5.24", note = "Use the `attr_ns` method instead")]
+    #[inline]
+    pub fn attribute_namespace<B>(self, namespace: &str, name: B, value: &str) -> Self where B: MultiStr {
+        self.attr_ns(namespace, name, value)
     }
 
     #[inline]
@@ -802,17 +802,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
     }
 
     #[inline]
-    pub fn attr_signal<B, C, D, E>(self, name: B, value: E) -> Self
-        where B: MultiStr + 'static,
-              C: AsStr,
-              D: OptionStr<Output = C>,
-              E: Signal<Item = D> + 'static {
-        self.attribute_signal(name, value)
-    }
-
-    /// The same as the [`attr_signal`](#method.attr_signal) method.
-    #[inline]
-    pub fn attribute_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+    pub fn attr_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
               C: AsStr,
               D: OptionStr<Output = C>,
@@ -820,6 +810,17 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
         self.set_attribute_signal(name, value);
         self
+    }
+
+    #[deprecated(since = "0.5.24", note = "Use the `attr_signal` method instead")]
+    #[inline]
+    pub fn attribute_signal<B, C, D, E>(self, name: B, value: E) -> Self
+        where B: MultiStr + 'static,
+              C: AsStr,
+              D: OptionStr<Output = C>,
+              E: Signal<Item = D> + 'static {
+
+        self.attr_signal(name, value)
     }
 
 
@@ -853,17 +854,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
     }
 
     #[inline]
-    pub fn attr_ns_signal<B, C, D, E>(self, namespace: &str, name: B, value: E) -> Self
-        where B: MultiStr + 'static,
-              C: AsStr,
-              D: OptionStr<Output = C>,
-              E: Signal<Item = D> + 'static {
-        self.attribute_namespace_signal(namespace, name, value)
-    }
-
-    /// The same as the [`attr_ns_signal`](#method.attr_ns_signal) method.
-    #[inline]
-    pub fn attribute_namespace_signal<B, C, D, E>(mut self, namespace: &str, name: B, value: E) -> Self
+    pub fn attr_ns_signal<B, C, D, E>(mut self, namespace: &str, name: B, value: E) -> Self
         where B: MultiStr + 'static,
               C: AsStr,
               D: OptionStr<Output = C>,
@@ -871,6 +862,17 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
         self.set_attribute_namespace_signal(namespace, name, value);
         self
+    }
+
+    #[deprecated(since = "0.5.24", note = "Use the `attr_ns_signal` method instead")]
+    #[inline]
+    pub fn attribute_namespace_signal<B, C, D, E>(self, namespace: &str, name: B, value: E) -> Self
+        where B: MultiStr + 'static,
+              C: AsStr,
+              D: OptionStr<Output = C>,
+              E: Signal<Item = D> + 'static {
+
+        self.attr_ns_signal(namespace, name, value)
     }
 
 
@@ -1394,31 +1396,31 @@ mod tests {
     #[test]
     fn property_signal_types() {
         let _a: DomBuilder<HtmlElement> = DomBuilder::new_html("div")
-            .property("foo", "hi")
-            .property("foo", 5)
-            .property(["foo", "-webkit-foo", "-ms-foo"], "hi")
+            .prop("foo", "hi")
+            .prop("foo", 5)
+            .prop(["foo", "-webkit-foo", "-ms-foo"], "hi")
 
-            .property_signal("foo", always("hi"))
-            .property_signal("foo", always(5))
-            .property_signal("foo", always(Some("hi")))
+            .prop_signal("foo", always("hi"))
+            .prop_signal("foo", always(5))
+            .prop_signal("foo", always(Some("hi")))
 
-            .property_signal(["foo", "-webkit-foo", "-ms-foo"], always("hi"))
-            .property_signal(["foo", "-webkit-foo", "-ms-foo"], always(5))
-            .property_signal(["foo", "-webkit-foo", "-ms-foo"], always(Some("hi")))
+            .prop_signal(["foo", "-webkit-foo", "-ms-foo"], always("hi"))
+            .prop_signal(["foo", "-webkit-foo", "-ms-foo"], always(5))
+            .prop_signal(["foo", "-webkit-foo", "-ms-foo"], always(Some("hi")))
             ;
     }
 
     #[test]
     fn attribute_signal_types() {
         let _a: DomBuilder<HtmlElement> = DomBuilder::new_html("div")
-            .attribute("foo", "hi")
-            .attribute(["foo", "-webkit-foo", "-ms-foo"], "hi")
+            .attr("foo", "hi")
+            .attr(["foo", "-webkit-foo", "-ms-foo"], "hi")
 
-            .attribute_signal("foo", always("hi"))
-            .attribute_signal("foo", always(Some("hi")))
+            .attr_signal("foo", always("hi"))
+            .attr_signal("foo", always(Some("hi")))
 
-            .attribute_signal(["foo", "-webkit-foo", "-ms-foo"], always("hi"))
-            .attribute_signal(["foo", "-webkit-foo", "-ms-foo"], always(Some("hi")))
+            .attr_signal(["foo", "-webkit-foo", "-ms-foo"], always("hi"))
+            .attr_signal(["foo", "-webkit-foo", "-ms-foo"], always(Some("hi")))
             ;
     }
 
@@ -1489,11 +1491,11 @@ mod tests {
     fn with_cfg() {
         let _a = html!("div", {
             .with_cfg!(target_arch = "wasm32", {
-                .attribute("foo", "bar")
+                .attr("foo", "bar")
             })
 
             .with_cfg!(all(not(foo), bar = "test", feature = "hi"), {
-                .attribute("foo", "bar")
+                .attr("foo", "bar")
             })
         });
     }
