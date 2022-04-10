@@ -500,7 +500,6 @@ impl<A> DomBuilder<A> {
         self.global_event_with_options(&EventOptions::default(), listener)
     }
 
-    // TODO add this to the StylesheetBuilder and ClassBuilder too
     #[deprecated(since = "0.5.21", note = "Use global_event_with_options instead")]
     #[inline]
     pub fn global_event_preventable<T, F>(self, listener: F) -> Self
