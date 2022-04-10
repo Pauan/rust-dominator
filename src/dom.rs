@@ -713,12 +713,6 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
     #[inline]
     pub fn attr<B>(self, name: B, value: &str) -> Self where B: MultiStr {
-        self.attribute(name, value)
-    }
-
-    /// The same as the [`attr`](#method.attr) method.
-    #[inline]
-    pub fn attribute<B>(self, name: B, value: &str) -> Self where B: MultiStr {
         let element = self.element.as_ref();
         // TODO should this intern the value ?
         let value: &str = intern(value);
@@ -730,14 +724,14 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         self
     }
 
+    #[deprecated(since = "0.5.24", note = "Use the `attr` method instead")]
     #[inline]
-    pub fn attr_ns<B>(self, namespace: &str, name: B, value: &str) -> Self where B: MultiStr {
-        self.attribute_namespace(namespace, name, value)
+    pub fn attribute<B>(self, name: B, value: &str) -> Self where B: MultiStr {
+        self.attr(name, value)
     }
 
-    /// The same as the [`attr_ns`](#method.attr_ns) method.
     #[inline]
-    pub fn attribute_namespace<B>(self, namespace: &str, name: B, value: &str) -> Self where B: MultiStr {
+    pub fn attr_ns<B>(self, namespace: &str, name: B, value: &str) -> Self where B: MultiStr {
         let element = self.element.as_ref();
         let namespace: &str = intern(namespace);
         // TODO should this intern the value ?
@@ -748,6 +742,12 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         });
 
         self
+    }
+
+    #[deprecated(since = "0.5.24", note = "Use the `attr_ns` method instead")]
+    #[inline]
+    pub fn attribute_namespace<B>(self, namespace: &str, name: B, value: &str) -> Self where B: MultiStr {
+        self.attr_ns(namespace, name, value)
     }
 
     #[inline]
@@ -802,17 +802,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
     }
 
     #[inline]
-    pub fn attr_signal<B, C, D, E>(self, name: B, value: E) -> Self
-        where B: MultiStr + 'static,
-              C: AsStr,
-              D: OptionStr<Output = C>,
-              E: Signal<Item = D> + 'static {
-        self.attribute_signal(name, value)
-    }
-
-    /// The same as the [`attr_signal`](#method.attr_signal) method.
-    #[inline]
-    pub fn attribute_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
+    pub fn attr_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
               C: AsStr,
               D: OptionStr<Output = C>,
@@ -820,6 +810,17 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
         self.set_attribute_signal(name, value);
         self
+    }
+
+    #[deprecated(since = "0.5.24", note = "Use the `attr_signal` method instead")]
+    #[inline]
+    pub fn attribute_signal<B, C, D, E>(self, name: B, value: E) -> Self
+        where B: MultiStr + 'static,
+              C: AsStr,
+              D: OptionStr<Output = C>,
+              E: Signal<Item = D> + 'static {
+
+        self.attr_signal(name, value)
     }
 
 
@@ -853,17 +854,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
     }
 
     #[inline]
-    pub fn attr_ns_signal<B, C, D, E>(self, namespace: &str, name: B, value: E) -> Self
-        where B: MultiStr + 'static,
-              C: AsStr,
-              D: OptionStr<Output = C>,
-              E: Signal<Item = D> + 'static {
-        self.attribute_namespace_signal(namespace, name, value)
-    }
-
-    /// The same as the [`attr_ns_signal`](#method.attr_ns_signal) method.
-    #[inline]
-    pub fn attribute_namespace_signal<B, C, D, E>(mut self, namespace: &str, name: B, value: E) -> Self
+    pub fn attr_ns_signal<B, C, D, E>(mut self, namespace: &str, name: B, value: E) -> Self
         where B: MultiStr + 'static,
               C: AsStr,
               D: OptionStr<Output = C>,
@@ -871,6 +862,17 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
         self.set_attribute_namespace_signal(namespace, name, value);
         self
+    }
+
+    #[deprecated(since = "0.5.24", note = "Use the `attr_ns_signal` method instead")]
+    #[inline]
+    pub fn attribute_namespace_signal<B, C, D, E>(self, namespace: &str, name: B, value: E) -> Self
+        where B: MultiStr + 'static,
+              C: AsStr,
+              D: OptionStr<Output = C>,
+              E: Signal<Item = D> + 'static {
+
+        self.attr_ns_signal(namespace, name, value)
     }
 
 
