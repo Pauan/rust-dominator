@@ -95,7 +95,7 @@ pub fn link<A, F>(url: A, f: F) -> Dom
     let url = url.into();
 
     html!("a", {
-        .attribute("href", &url)
+        .attr("href", &url)
         .apply(on_click_go_to_url(url))
         .apply(f)
     })
@@ -122,7 +122,7 @@ macro_rules! link {
         let url = $url;
 
         $crate::html!("a", {
-            .attribute("href", &url)
+            .attr("href", &url)
             .apply(move |dom| $crate::on_click_go_to_url!(dom, url))
             $($methods)*
         })

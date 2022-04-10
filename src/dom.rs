@@ -1396,31 +1396,31 @@ mod tests {
     #[test]
     fn property_signal_types() {
         let _a: DomBuilder<HtmlElement> = DomBuilder::new_html("div")
-            .property("foo", "hi")
-            .property("foo", 5)
-            .property(["foo", "-webkit-foo", "-ms-foo"], "hi")
+            .prop("foo", "hi")
+            .prop("foo", 5)
+            .prop(["foo", "-webkit-foo", "-ms-foo"], "hi")
 
-            .property_signal("foo", always("hi"))
-            .property_signal("foo", always(5))
-            .property_signal("foo", always(Some("hi")))
+            .prop_signal("foo", always("hi"))
+            .prop_signal("foo", always(5))
+            .prop_signal("foo", always(Some("hi")))
 
-            .property_signal(["foo", "-webkit-foo", "-ms-foo"], always("hi"))
-            .property_signal(["foo", "-webkit-foo", "-ms-foo"], always(5))
-            .property_signal(["foo", "-webkit-foo", "-ms-foo"], always(Some("hi")))
+            .prop_signal(["foo", "-webkit-foo", "-ms-foo"], always("hi"))
+            .prop_signal(["foo", "-webkit-foo", "-ms-foo"], always(5))
+            .prop_signal(["foo", "-webkit-foo", "-ms-foo"], always(Some("hi")))
             ;
     }
 
     #[test]
     fn attribute_signal_types() {
         let _a: DomBuilder<HtmlElement> = DomBuilder::new_html("div")
-            .attribute("foo", "hi")
-            .attribute(["foo", "-webkit-foo", "-ms-foo"], "hi")
+            .attr("foo", "hi")
+            .attr(["foo", "-webkit-foo", "-ms-foo"], "hi")
 
-            .attribute_signal("foo", always("hi"))
-            .attribute_signal("foo", always(Some("hi")))
+            .attr_signal("foo", always("hi"))
+            .attr_signal("foo", always(Some("hi")))
 
-            .attribute_signal(["foo", "-webkit-foo", "-ms-foo"], always("hi"))
-            .attribute_signal(["foo", "-webkit-foo", "-ms-foo"], always(Some("hi")))
+            .attr_signal(["foo", "-webkit-foo", "-ms-foo"], always("hi"))
+            .attr_signal(["foo", "-webkit-foo", "-ms-foo"], always(Some("hi")))
             ;
     }
 
@@ -1491,11 +1491,11 @@ mod tests {
     fn with_cfg() {
         let _a = html!("div", {
             .with_cfg!(target_arch = "wasm32", {
-                .attribute("foo", "bar")
+                .attr("foo", "bar")
             })
 
             .with_cfg!(all(not(foo), bar = "test", feature = "hi"), {
-                .attribute("foo", "bar")
+                .attr("foo", "bar")
             })
         });
     }
