@@ -1,3 +1,7 @@
+## Unreleased
+* Deprecating the `attribute`, `attribute_namespace`, `attribute_signal` and `attribute_namespace_signal` methods of `DomBuilder`.
+* Deprecating the `property` and `property_signal` methods of `DomBuilder`.
+
 ## 0.5.23 - (2021-12-09)
 * Adding in MouseEvent methods to the DragEvents.
 
