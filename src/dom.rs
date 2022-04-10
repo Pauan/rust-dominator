@@ -584,14 +584,14 @@ impl<A> DomBuilder<A> where A: Into<Node> {
 impl<A> DomBuilder<A> where A: AsRef<JsValue> {
     #[inline]
     pub fn prop<B, C>(self, name: B, value: C) -> Self where B: MultiStr, C: Into<JsValue> {
-        self.property(name, value)
-    }
-
-    /// The same as the [`prop`](#method.prop) method.
-    #[inline]
-    pub fn property<B, C>(self, name: B, value: C) -> Self where B: MultiStr, C: Into<JsValue> {
         set_property(&self.element, &name, value);
         self
+    }
+
+    #[deprecated(since = "0.5.24", note = "Use the `prop` method instead")]
+    #[inline]
+    pub fn property<B, C>(self, name: B, value: C) -> Self where B: MultiStr, C: Into<JsValue> {
+        self.prop(name, value)
     }
 }
 
@@ -610,22 +610,23 @@ impl<A> DomBuilder<A> where A: AsRef<JsValue> {
     }
 
     #[inline]
-    pub fn prop_signal<B, C, D>(self, name: B, value: D) -> Self
-        where B: MultiStr + 'static,
-              C: Into<JsValue>,
-              D: Signal<Item = C> + 'static {
-        self.property_signal(name, value)
-    }
-
-    /// The same as the [`prop_signal`](#method.prop_signal) method.
-    #[inline]
-    pub fn property_signal<B, C, D>(mut self, name: B, value: D) -> Self
+    pub fn prop_signal<B, C, D>(mut self, name: B, value: D) -> Self
         where B: MultiStr + 'static,
               C: Into<JsValue>,
               D: Signal<Item = C> + 'static {
 
         self.set_property_signal(name, value);
         self
+    }
+
+    #[deprecated(since = "0.5.24", note = "Use the `prop_signal` method instead")]
+    #[inline]
+    pub fn property_signal<B, C, D>(self, name: B, value: D) -> Self
+        where B: MultiStr + 'static,
+              C: Into<JsValue>,
+              D: Signal<Item = C> + 'static {
+
+        self.prop_signal(name, value)
     }
 }
 
