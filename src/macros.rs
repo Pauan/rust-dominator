@@ -16,6 +16,10 @@ macro_rules! apply_methods {
         let this = $this.$name::<$($types),*>($($args),*);
         $crate::apply_methods!(this, { $($rest)* })
     }};
+    ($this:expr, { |$this_ident:ident| $args:expr; $($rest:tt)* }) => {{
+        let $this_ident = $this;
+        $crate::apply_methods!($args, { $($rest)* })
+    }};
 }
 
 
