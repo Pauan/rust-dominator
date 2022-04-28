@@ -1,6 +1,6 @@
 use crate::traits::StaticEvent;
 use wasm_bindgen::JsCast;
-use web_sys::{EventTarget, HtmlInputElement, HtmlTextAreaElement};
+use web_sys::{EventTarget, HtmlInputElement, HtmlTextAreaElement, TouchList};
 
 
 #[cfg(feature = "nightly")]
@@ -55,6 +55,8 @@ macro_rules! make_event {
         }
 
         impl $name {
+            #[inline] pub fn current_target(&self) -> Option<EventTarget> { self.event.current_target() }
+
             #[inline] pub fn prevent_default(&self) { self.event.prevent_default(); }
 
             #[inline] pub fn stop_propagation(&self) { self.event.stop_propagation(); }
@@ -141,6 +143,22 @@ macro_rules! make_pointer_event {
             #[inline] pub fn twist(&self) -> i32 { self.event.twist() }
 
             #[inline] pub fn is_primary(&self) -> bool { self.event.is_primary() }
+        }
+    };
+}
+
+macro_rules! make_touch_event {
+    ($name:ident, $type:literal) => {
+        make_event!($name, $type => web_sys::TouchEvent);
+
+        impl $name {
+            #[inline] pub fn ctrl_key(&self) -> bool { self.event.ctrl_key() || self.event.meta_key() }
+            #[inline] pub fn shift_key(&self) -> bool { self.event.shift_key() }
+            #[inline] pub fn alt_key(&self) -> bool { self.event.alt_key() }
+    
+            #[inline] pub fn changed_touches(&self) -> TouchList { self.event.changed_touches() }
+            #[inline] pub fn target_touches(&self) -> TouchList { self.event.target_touches() }
+            #[inline] pub fn touches(&self) -> TouchList { self.event.touches() }
         }
     };
 }
@@ -236,6 +254,11 @@ make_pointer_event!(PointerLeave, "pointerleave");
 make_pointer_event!(GotPointerCapture, "gotpointercapture");
 make_pointer_event!(LostPointerCapture, "lostpointercapture");
 
+make_touch_event!(TouchCancel, "touchcancel");
+make_touch_event!(TouchEnd, "touchend");
+make_touch_event!(TouchMove, "touchmove");
+make_touch_event!(TouchStart, "touchstart");
+
 make_keyboard_event!(KeyDown, "keydown");
 make_keyboard_event!(KeyUp, "keyup");
 
@@ -264,6 +287,7 @@ make_wheel_event!(Wheel, "wheel");
 
 make_event!(Load, "load" => web_sys::Event);
 make_event!(Scroll, "scroll" => web_sys::Event);
+make_event!(Submit, "submit" => web_sys::Event);
 make_event!(Resize, "resize" => web_sys::UiEvent);
 
 
