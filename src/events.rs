@@ -1,6 +1,6 @@
 use crate::traits::StaticEvent;
 use wasm_bindgen::JsCast;
-use web_sys::{EventTarget, HtmlInputElement, HtmlTextAreaElement, TouchList};
+use web_sys::{EventTarget, HtmlInputElement, HtmlTextAreaElement, TouchList, Touch};
 
 
 #[cfg(feature = "nightly")]
@@ -55,8 +55,6 @@ macro_rules! make_event {
         }
 
         impl $name {
-            #[inline] pub fn current_target(&self) -> Option<EventTarget> { self.event.current_target() }
-
             #[inline] pub fn prevent_default(&self) { self.event.prevent_default(); }
 
             #[inline] pub fn stop_propagation(&self) { self.event.stop_propagation(); }
@@ -156,9 +154,20 @@ macro_rules! make_touch_event {
             #[inline] pub fn shift_key(&self) -> bool { self.event.shift_key() }
             #[inline] pub fn alt_key(&self) -> bool { self.event.alt_key() }
     
-            #[inline] pub fn changed_touches(&self) -> TouchList { self.event.changed_touches() }
-            #[inline] pub fn target_touches(&self) -> TouchList { self.event.target_touches() }
-            #[inline] pub fn touches(&self) -> TouchList { self.event.touches() }
+            #[inline]
+            pub fn changed_touches(&self) -> impl Iterator<Item = Touch> {
+                TouchListIter::new(self.event.changed_touches())
+            }
+            
+            #[inline]
+            pub fn target_touches(&self) -> impl Iterator<Item = Touch> {
+                TouchListIter::new(self.event.target_touches())
+            }
+            
+            #[inline]
+            pub fn touches(&self) -> impl Iterator<Item = Touch> {
+                TouchListIter::new(self.event.touches())
+            }
         }
     };
 }
@@ -254,11 +263,6 @@ make_pointer_event!(PointerLeave, "pointerleave");
 make_pointer_event!(GotPointerCapture, "gotpointercapture");
 make_pointer_event!(LostPointerCapture, "lostpointercapture");
 
-make_touch_event!(TouchCancel, "touchcancel");
-make_touch_event!(TouchEnd, "touchend");
-make_touch_event!(TouchMove, "touchmove");
-make_touch_event!(TouchStart, "touchstart");
-
 make_keyboard_event!(KeyDown, "keydown");
 make_keyboard_event!(KeyUp, "keyup");
 
@@ -322,6 +326,44 @@ impl Change {
         match target.type_().as_str() {
             "checkbox" | "radio" => Some(target.checked()),
             _ => None,
+        }
+    }
+}
+
+
+make_touch_event!(TouchCancel, "touchcancel");
+make_touch_event!(TouchEnd, "touchend");
+make_touch_event!(TouchMove, "touchmove");
+make_touch_event!(TouchStart, "touchstart");
+
+#[derive(Debug)]
+struct TouchListIter {
+    list: TouchList,
+    index: u32,
+    length: u32,
+}
+
+impl TouchListIter {
+    fn new(list: TouchList) -> Self {
+        Self {
+            index: 0,
+            length: list.length(),
+            list,
+        }
+    }
+}
+
+impl Iterator for TouchListIter {
+    type Item = Touch;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let index = self.index;
+
+        if index < self.length {
+            self.index += 1;
+            self.list.get(index)
+        } else {
+            None
         }
     }
 }
