@@ -1,3 +1,7 @@
+## UNRELEASED
+* Adding in `submit` event.
+* Adding in `touchstart`, `touchmove`, `touchend`, and `touchcancel` events.
+
 ## 0.5.24 - (2022-04-12)
 * Adding in `AnimationStart`, `AnimationIteration`, `AnimationCancel`, `AnimationEnd`, `FocusIn`, `FocusOut`, and `Wheel` events.
 * Adding in numerous `Pointer*` events.
