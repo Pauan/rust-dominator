@@ -1,6 +1,6 @@
 use crate::traits::StaticEvent;
 use wasm_bindgen::JsCast;
-use web_sys::{EventTarget, HtmlInputElement, HtmlTextAreaElement};
+use web_sys::{EventTarget, HtmlInputElement, HtmlTextAreaElement, TouchList, Touch};
 
 
 #[cfg(feature = "nightly")]
@@ -145,6 +145,33 @@ macro_rules! make_pointer_event {
     };
 }
 
+macro_rules! make_touch_event {
+    ($name:ident, $type:literal) => {
+        make_event!($name, $type => web_sys::TouchEvent);
+
+        impl $name {
+            #[inline] pub fn ctrl_key(&self) -> bool { self.event.ctrl_key() || self.event.meta_key() }
+            #[inline] pub fn shift_key(&self) -> bool { self.event.shift_key() }
+            #[inline] pub fn alt_key(&self) -> bool { self.event.alt_key() }
+    
+            #[inline]
+            pub fn changed_touches(&self) -> impl Iterator<Item = Touch> {
+                TouchListIter::new(self.event.changed_touches())
+            }
+            
+            #[inline]
+            pub fn target_touches(&self) -> impl Iterator<Item = Touch> {
+                TouchListIter::new(self.event.target_touches())
+            }
+            
+            #[inline]
+            pub fn touches(&self) -> impl Iterator<Item = Touch> {
+                TouchListIter::new(self.event.touches())
+            }
+        }
+    };
+}
+
 macro_rules! make_keyboard_event {
     ($name:ident, $type:literal) => {
         make_event!($name, $type => web_sys::KeyboardEvent);
@@ -264,6 +291,7 @@ make_wheel_event!(Wheel, "wheel");
 
 make_event!(Load, "load" => web_sys::Event);
 make_event!(Scroll, "scroll" => web_sys::Event);
+make_event!(Submit, "submit" => web_sys::Event);
 make_event!(Resize, "resize" => web_sys::UiEvent);
 
 
@@ -298,6 +326,44 @@ impl Change {
         match target.type_().as_str() {
             "checkbox" | "radio" => Some(target.checked()),
             _ => None,
+        }
+    }
+}
+
+
+make_touch_event!(TouchCancel, "touchcancel");
+make_touch_event!(TouchEnd, "touchend");
+make_touch_event!(TouchMove, "touchmove");
+make_touch_event!(TouchStart, "touchstart");
+
+#[derive(Debug)]
+struct TouchListIter {
+    list: TouchList,
+    index: u32,
+    length: u32,
+}
+
+impl TouchListIter {
+    fn new(list: TouchList) -> Self {
+        Self {
+            index: 0,
+            length: list.length(),
+            list,
+        }
+    }
+}
+
+impl Iterator for TouchListIter {
+    type Item = Touch;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let index = self.index;
+
+        if index < self.length {
+            self.index += 1;
+            self.list.get(index)
+        } else {
+            None
         }
     }
 }

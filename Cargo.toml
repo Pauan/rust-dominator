@@ -65,6 +65,9 @@ features = [
     "StyleSheet",
     "SvgElement",
     "Text",
+    "Touch",
+    "TouchEvent",
+    "TouchList",
     "UiEvent",
     "Window",
 ]
