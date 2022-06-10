@@ -1,6 +1,7 @@
-## UNRELEASED
+## 0.5.25 - (2022-06-10)
 * Adding in `submit` event.
 * Adding in `touchstart`, `touchmove`, `touchend`, and `touchcancel` events.
+* Fixing compile errors with `nightly` feature.
 
 ## 0.5.24 - (2022-04-12)
 * Adding in `AnimationStart`, `AnimationIteration`, `AnimationCancel`, `AnimationEnd`, `FocusIn`, `FocusOut`, and `Wheel` events.
