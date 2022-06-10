@@ -2,7 +2,7 @@
 #![deny(warnings)]
 
 #![cfg_attr(feature = "nightly", allow(incomplete_features))]
-#![cfg_attr(feature = "nightly", feature(const_generics))]
+#![cfg_attr(feature = "nightly", feature(adt_const_params, generic_const_exprs))]
 
 
 #[macro_use]
