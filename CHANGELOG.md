@@ -1,3 +1,6 @@
+## 0.5.26 - (2022-06-13)
+* Removing string interning from `attr` values, it was causing major performance issues.
+
 ## 0.5.25 - (2022-06-10)
 * Adding in `submit` event.
 * Adding in `touchstart`, `touchmove`, `touchend`, and `touchcancel` events.
