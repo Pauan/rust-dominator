@@ -714,8 +714,6 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
     #[inline]
     pub fn attr<B>(self, name: B, value: &str) -> Self where B: MultiStr {
         let element = self.element.as_ref();
-        // TODO should this intern the value ?
-        let value: &str = intern(value);
 
         name.each(|name| {
             bindings::set_attribute(element, intern(name), &value);
@@ -734,8 +732,6 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
     pub fn attr_ns<B>(self, namespace: &str, name: B, value: &str) -> Self where B: MultiStr {
         let element = self.element.as_ref();
         let namespace: &str = intern(namespace);
-        // TODO should this intern the value ?
-        let value: &str = intern(value);
 
         name.each(|name| {
             bindings::set_attribute_ns(element, &namespace, intern(name), &value);
@@ -787,7 +783,6 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
                 Some(value) => {
                     value.with_str(|value| {
                         name.each(|name| {
-                            // TODO should this intern the value ?
                             bindings::set_attribute(element, intern(name), &value);
                         });
                     });
