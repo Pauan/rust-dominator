@@ -3,9 +3,8 @@ use std::mem::ManuallyDrop;
 use wasm_bindgen::{JsCast, UnwrapThrowExt, intern};
 use wasm_bindgen::closure::Closure;
 use discard::Discard;
-use web_sys::{EventTarget, Event};
+use web_sys::{EventTarget, Event, AddEventListenerOptions};
 
-use crate::bindings;
 use crate::dom::EventOptions;
 use crate::traits::StaticEvent;
 
@@ -27,7 +26,13 @@ impl EventListener {
 
         let capture = !options.bubbles;
 
-        bindings::add_event(&elem, name, capture, !options.preventable, closure.as_ref().unchecked_ref());
+        elem.add_event_listener_with_callback_and_add_event_listener_options(
+            name,
+            closure.as_ref().unchecked_ref(),
+            AddEventListenerOptions::new()
+                .capture(capture)
+                .passive(!options.preventable),
+        ).unwrap_throw();
 
         Self { elem, name, capture, closure: Some(closure) }
     }
@@ -37,7 +42,14 @@ impl EventListener {
         let closure = Closure::once(callback);
         let name: &'static str = intern(name);
 
-        bindings::add_event_once(&elem, name, closure.as_ref().unchecked_ref());
+        elem.add_event_listener_with_callback_and_add_event_listener_options(
+            name,
+            closure.as_ref().unchecked_ref(),
+            AddEventListenerOptions::new()
+                .capture(true)
+                .passive(true)
+                .once(true),
+        ).unwrap_throw();
 
         Self { elem, name, capture: true, closure: Some(closure) }
     }
@@ -57,7 +69,12 @@ impl Discard for EventListener {
     #[inline]
     fn discard(mut self) {
         let closure = self.closure.take().unwrap_throw();
-        bindings::remove_event(&self.elem, &self.name, self.capture, closure.as_ref().unchecked_ref());
+
+        self.elem.remove_event_listener_with_callback_and_bool(
+            &self.name,
+            closure.as_ref().unchecked_ref(),
+            self.capture,
+        ).unwrap_throw();
     }
 }
 

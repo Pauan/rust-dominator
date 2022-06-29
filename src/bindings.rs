@@ -1,41 +1,15 @@
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::{JsCast, intern};
-use js_sys::Function;
 use web_sys::{HtmlElement, Element, Node, Window, History, Document, Text, Comment, DomTokenList, CssStyleSheet, CssStyleDeclaration, HtmlStyleElement, CssStyleRule, EventTarget};
 
 
 #[wasm_bindgen(inline_js = "
     export function set_property(obj, name, value) { obj[name] = value; }
-
-    export function add_event(elem, name, capture, passive, f) {
-        elem.addEventListener(name, f, {
-            capture,
-            passive,
-            once: false,
-        });
-    }
-
-    export function add_event_once(elem, name, f) {
-        elem.addEventListener(name, f, {
-            capture: true,
-            passive: true,
-            once: true,
-        });
-    }
-
-    export function remove_event(elem, name, capture, f) {
-        elem.removeEventListener(name, f, capture);
-    }
 ")]
 extern "C" {
     // TODO move this into wasm-bindgen or gloo or something
     // TODO maybe use Object for obj ?
     pub(crate) fn set_property(obj: &JsValue, name: &str, value: &JsValue);
-
-    // TODO replace with gloo-events
-    pub(crate) fn add_event(elem: &EventTarget, name: &str, capture: bool, passive: bool, f: &Function);
-    pub(crate) fn add_event_once(elem: &EventTarget, name: &str, f: &Function);
-    pub(crate) fn remove_event(elem: &EventTarget, name: &str, capture: bool, f: &Function);
 }
 
 
