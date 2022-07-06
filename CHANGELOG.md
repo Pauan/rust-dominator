@@ -1,3 +1,6 @@
+## 0.5.27 - (2022-07-05)
+* Replacing inline_js with js-sys and gloo_events.
+
 ## 0.5.26 - (2022-06-13)
 * Removing string interning from `attr` values, it was causing major performance issues.
 
