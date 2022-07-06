@@ -1,54 +1,70 @@
+use std::borrow::Cow;
 use std::mem::ManuallyDrop;
 
-use wasm_bindgen::{JsCast, UnwrapThrowExt, intern};
-use wasm_bindgen::closure::Closure;
+use wasm_bindgen::{UnwrapThrowExt, intern};
 use discard::Discard;
 use web_sys::{EventTarget, Event};
 
-use crate::bindings;
 use crate::dom::EventOptions;
 use crate::traits::StaticEvent;
 
 
-// TODO should use gloo::events, but it doesn't support interning or Discard
-pub(crate) struct EventListener {
-    elem: EventTarget,
-    name: &'static str,
-    capture: bool,
-    closure: Option<Closure<dyn FnMut(&Event)>>,
-}
+pub(crate) struct EventListener(Option<gloo_events::EventListener>);
 
 // TODO should these inline ?
 impl EventListener {
     #[inline]
-    pub(crate) fn new<F>(elem: EventTarget, name: &'static str, options: &EventOptions, callback: F) -> Self where F: FnMut(&Event) + 'static {
-        let closure = Closure::wrap(Box::new(callback) as Box<dyn FnMut(&Event)>);
-        let name: &'static str = intern(name);
+    pub(crate) fn new<N, F>(elem: &EventTarget, name: N, options: &EventOptions, callback: F) -> Self
+        where N: Into<Cow<'static, str>>,
+              F: FnMut(&Event) + 'static {
 
-        let capture = !options.bubbles;
+        // TODO get rid of this by fixing web-sys code generation
+        intern("capture");
+        intern("once");
+        intern("passive");
 
-        bindings::add_event(&elem, name, capture, !options.preventable, closure.as_ref().unchecked_ref());
+        let name = name.into();
+        intern(&name);
 
-        Self { elem, name, capture, closure: Some(closure) }
+        Self(Some(gloo_events::EventListener::new_with_options(
+            elem,
+            name,
+            options.into_gloo(),
+            callback,
+        )))
     }
 
     #[inline]
-    pub(crate) fn once<F>(elem: EventTarget, name: &'static str, callback: F) -> Self where F: FnOnce(&Event) + 'static {
-        let closure = Closure::once(callback);
-        let name: &'static str = intern(name);
+    pub(crate) fn once<N, F>(elem: &EventTarget, name: N, callback: F) -> Self
+        where N: Into<Cow<'static, str>>,
+              F: FnOnce(&Event) + 'static {
 
-        bindings::add_event_once(&elem, name, closure.as_ref().unchecked_ref());
+        // TODO get rid of this by fixing web-sys code generation
+        intern("capture");
+        intern("once");
+        intern("passive");
 
-        Self { elem, name, capture: true, closure: Some(closure) }
+        let name = name.into();
+        intern(&name);
+
+        Self(Some(gloo_events::EventListener::once_with_options(
+            elem,
+            name,
+            EventOptions {
+                bubbles: false,
+                preventable: false,
+            }.into_gloo(),
+            callback,
+        )))
     }
 }
 
 impl Drop for EventListener {
     #[inline]
     fn drop(&mut self) {
-        if let Some(closure) = self.closure.take() {
+        if let Some(listener) = self.0.take() {
             // TODO can this be made more optimal ?
-            closure.forget();
+            listener.forget();
         }
     }
 }
@@ -56,14 +72,14 @@ impl Drop for EventListener {
 impl Discard for EventListener {
     #[inline]
     fn discard(mut self) {
-        let closure = self.closure.take().unwrap_throw();
-        bindings::remove_event(&self.elem, &self.name, self.capture, closure.as_ref().unchecked_ref());
+        // Drops the listener which cleans it up
+        let _ = self.0.take().unwrap_throw();
     }
 }
 
 
 #[inline]
-pub(crate) fn on<E, F>(element: EventTarget, options: &EventOptions, mut callback: F) -> EventListener
+pub(crate) fn on<E, F>(element: &EventTarget, options: &EventOptions, mut callback: F) -> EventListener
     where E: StaticEvent,
           F: FnMut(E) + 'static {
     EventListener::new(element, E::EVENT_TYPE, options, move |e| {

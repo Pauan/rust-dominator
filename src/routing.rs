@@ -34,7 +34,7 @@ impl CurrentUrl {
         let value = Mutable::new(String::from(bindings::current_url()));
 
         // TODO clean this up somehow ?
-        let _ = EventListener::new(bindings::window_event_target(), "popstate", &EventOptions::default(), {
+        let _ = EventListener::new(&bindings::window_event_target(), "popstate", &EventOptions::default(), {
             let value = value.clone();
             move |_| {
                 change_url(&value);

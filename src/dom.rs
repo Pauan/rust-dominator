@@ -149,7 +149,7 @@ impl Signal for IsWindowLoaded {
 
                     *self = IsWindowLoaded::Pending {
                         receiver,
-                        _event: EventListener::once(bindings::window_event_target(), "load", move |_| {
+                        _event: EventListener::once(&bindings::window_event_target(), "load", move |_| {
                             // TODO test this
                             sender.send(Some(true)).unwrap_throw();
                         }),
@@ -428,6 +428,17 @@ impl EventOptions {
             preventable: true,
         }
     }
+
+    pub(crate) fn into_gloo(self) -> gloo_events::EventListenerOptions {
+        gloo_events::EventListenerOptions {
+            phase: if self.bubbles {
+                gloo_events::EventListenerPhase::Bubble
+            } else {
+                gloo_events::EventListenerPhase::Capture
+            },
+            passive: !self.preventable,
+        }
+    }
 }
 
 impl Default for EventOptions {
@@ -477,10 +488,10 @@ impl<A> DomBuilder<A> {
     }
 
     #[inline]
-    fn _event<T, F>(&mut self, element: EventTarget, options: &EventOptions, listener: F)
+    fn _event<T, F>(callbacks: &mut Callbacks, element: &EventTarget, options: &EventOptions, listener: F)
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        self.callbacks.after_remove(on(element, options, listener));
+        callbacks.after_remove(on(element, options, listener));
     }
 
     // TODO add this to the StylesheetBuilder and ClassBuilder too
@@ -488,7 +499,7 @@ impl<A> DomBuilder<A> {
     pub fn global_event_with_options<T, F>(mut self, options: &EventOptions, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        self._event(bindings::window_event_target(), options, listener);
+        Self::_event(&mut self.callbacks, &bindings::window_event_target(), options, listener);
         self
     }
 
@@ -634,8 +645,7 @@ impl<A> DomBuilder<A> where A: AsRef<EventTarget> {
     pub fn event_with_options<T, F>(mut self, options: &EventOptions, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        // TODO can this clone be avoided ?
-        self._event(self.element.as_ref().clone(), options, listener);
+        Self::_event(&mut self.callbacks, &self.element.as_ref(), options, listener);
         self
     }
 

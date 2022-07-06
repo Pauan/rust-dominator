@@ -26,6 +26,7 @@ futures-signals = "0.3.5"
 wasm-bindgen = "0.2.48"
 js-sys = "0.3.22"
 wasm-bindgen-futures = "0.4.9"
+gloo-events = "0.1.2"
 
 [dependencies.web-sys]
 version = "0.3.22"
