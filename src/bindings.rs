@@ -7,7 +7,7 @@ use web_sys::{HtmlElement, Element, Node, Window, History, Document, Text, Comme
 // TODO move this into wasm-bindgen or gloo or something
 // TODO maybe use Object for obj ?
 pub(crate) fn set_property(obj: &JsValue, name: &str, value: &JsValue) {
-    Reflect::set(obj, &JsValue::from(name), value).unwrap();
+    Reflect::set(obj, &JsValue::from(name), value).unwrap_throw();
 }
 
 
