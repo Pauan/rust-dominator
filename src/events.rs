@@ -1,4 +1,5 @@
 use crate::traits::StaticEvent;
+use crate::EventOptions;
 use wasm_bindgen::JsCast;
 use web_sys::{EventTarget, HtmlInputElement, HtmlTextAreaElement, TouchList, Touch};
 
@@ -36,13 +37,8 @@ impl<T, const NAME: &'static str> Event<NAME, T> where T: AsRef<web_sys::Event> 
 }
 
 
-macro_rules! make_event {
-    ($name:ident, $type:literal => $event:path) => {
-        #[derive(Debug)]
-        pub struct $name {
-            event: $event,
-        }
-
+macro_rules! static_event_impl {
+    ($name:ident => $type:literal) => {
         impl StaticEvent for $name {
             const EVENT_TYPE: &'static str = $type;
 
@@ -52,6 +48,15 @@ macro_rules! make_event {
                     event: event.unchecked_into(),
                 }
             }
+        }
+    };
+}
+
+macro_rules! make_event {
+    ($name:ident => $event:path) => {
+        #[derive(Debug)]
+        pub struct $name {
+            event: $event,
         }
 
         impl $name {
@@ -81,8 +86,8 @@ pub enum MouseButton {
 }
 
 macro_rules! make_mouse_event {
-    ($name:ident, $type:literal => $event:path) => {
-        make_event!($name, $type => $event);
+    ($name:ident => $event:path) => {
+        make_event!($name => $event);
 
         impl $name {
             #[inline] pub fn x(&self) -> i32 { self.event.client_x() }
@@ -123,8 +128,8 @@ macro_rules! make_mouse_event {
 }
 
 macro_rules! make_pointer_event {
-    ($name:ident, $type:literal) => {
-        make_mouse_event!($name, $type => web_sys::PointerEvent);
+    ($name:ident) => {
+        make_mouse_event!($name => web_sys::PointerEvent);
 
         impl $name {
             #[inline] pub fn pointer_id(&self) -> i32 { self.event.pointer_id() }
@@ -146,24 +151,24 @@ macro_rules! make_pointer_event {
 }
 
 macro_rules! make_touch_event {
-    ($name:ident, $type:literal) => {
-        make_event!($name, $type => web_sys::TouchEvent);
+    ($name:ident) => {
+        make_event!($name => web_sys::TouchEvent);
 
         impl $name {
             #[inline] pub fn ctrl_key(&self) -> bool { self.event.ctrl_key() || self.event.meta_key() }
             #[inline] pub fn shift_key(&self) -> bool { self.event.shift_key() }
             #[inline] pub fn alt_key(&self) -> bool { self.event.alt_key() }
-    
+
             #[inline]
             pub fn changed_touches(&self) -> impl Iterator<Item = Touch> {
                 TouchListIter::new(self.event.changed_touches())
             }
-            
+
             #[inline]
             pub fn target_touches(&self) -> impl Iterator<Item = Touch> {
                 TouchListIter::new(self.event.target_touches())
             }
-            
+
             #[inline]
             pub fn touches(&self) -> impl Iterator<Item = Touch> {
                 TouchListIter::new(self.event.touches())
@@ -173,8 +178,8 @@ macro_rules! make_touch_event {
 }
 
 macro_rules! make_keyboard_event {
-    ($name:ident, $type:literal) => {
-        make_event!($name, $type => web_sys::KeyboardEvent);
+    ($name:ident) => {
+        make_event!($name => web_sys::KeyboardEvent);
 
         impl $name {
             // TODO return enum or something
@@ -189,8 +194,8 @@ macro_rules! make_keyboard_event {
 }
 
 macro_rules! make_focus_event {
-    ($name:ident, $type:literal) => {
-        make_event!($name, $type => web_sys::FocusEvent);
+    ($name:ident) => {
+        make_event!($name => web_sys::FocusEvent);
 
         impl $name {
             #[inline] pub fn related_target(&self) -> Option<EventTarget> { self.event.related_target() }
@@ -199,8 +204,8 @@ macro_rules! make_focus_event {
 }
 
 macro_rules! make_drag_event {
-    ($name:ident, $type:literal) => {
-        make_mouse_event!($name, $type => web_sys::DragEvent);
+    ($name:ident) => {
+        make_mouse_event!($name => web_sys::DragEvent);
 
         impl $name {
             #[inline] pub fn data_transfer(&self) -> Option<web_sys::DataTransfer> { self.event.data_transfer() }
@@ -209,8 +214,8 @@ macro_rules! make_drag_event {
 }
 
 macro_rules! make_input_event {
-    ($name:ident, $type:literal) => {
-        make_event!($name, $type => web_sys::InputEvent);
+    ($name:ident) => {
+        make_event!($name => web_sys::InputEvent);
 
         impl $name {
             #[inline] pub fn data(&self) -> Option<String> { self.event.data() }
@@ -219,8 +224,8 @@ macro_rules! make_input_event {
 }
 
 macro_rules! make_animation_event {
-    ($name:ident, $type:literal) => {
-        make_event!($name, $type => web_sys::AnimationEvent);
+    ($name:ident) => {
+        make_event!($name => web_sys::AnimationEvent);
 
         impl $name {
             #[inline] pub fn animation_name(&self) -> String { self.event.animation_name() }
@@ -231,8 +236,8 @@ macro_rules! make_animation_event {
 }
 
 macro_rules! make_wheel_event {
-    ($name:ident, $type:literal) => {
-        make_mouse_event!($name, $type => web_sys::WheelEvent);
+    ($name:ident) => {
+        make_mouse_event!($name => web_sys::WheelEvent);
 
         impl $name {
             #[inline] pub fn delta_x(&self) -> f64 { self.event.delta_x() }
@@ -243,56 +248,175 @@ macro_rules! make_wheel_event {
 }
 
 
-make_mouse_event!(Click, "click" => web_sys::MouseEvent);
-make_mouse_event!(MouseDown, "mousedown" => web_sys::MouseEvent);
-make_mouse_event!(MouseUp, "mouseup" => web_sys::MouseEvent);
-make_mouse_event!(MouseMove, "mousemove" => web_sys::MouseEvent);
-make_mouse_event!(MouseEnter, "mouseenter" => web_sys::MouseEvent);
-make_mouse_event!(MouseLeave, "mouseleave" => web_sys::MouseEvent);
-make_mouse_event!(DoubleClick, "dblclick" => web_sys::MouseEvent);
-make_mouse_event!(ContextMenu, "contextmenu" => web_sys::MouseEvent);
+make_mouse_event!(Click => web_sys::MouseEvent);
+static_event_impl!(Click => "click");
 
-make_pointer_event!(PointerOver, "pointerover");
-make_pointer_event!(PointerEnter, "pointerenter");
-make_pointer_event!(PointerDown, "pointerdown");
-make_pointer_event!(PointerMove, "pointermove");
-make_pointer_event!(PointerUp, "pointerup");
-make_pointer_event!(PointerCancel, "pointercancel");
-make_pointer_event!(PointerOut, "pointerout");
-make_pointer_event!(PointerLeave, "pointerleave");
-make_pointer_event!(GotPointerCapture, "gotpointercapture");
-make_pointer_event!(LostPointerCapture, "lostpointercapture");
+make_mouse_event!(MouseDown => web_sys::MouseEvent);
+static_event_impl!(MouseDown => "mousedown");
 
-make_keyboard_event!(KeyDown, "keydown");
-make_keyboard_event!(KeyUp, "keyup");
+make_mouse_event!(MouseUp => web_sys::MouseEvent);
+static_event_impl!(MouseUp => "mouseup");
 
-make_focus_event!(Focus, "focus");
-make_focus_event!(Blur, "blur");
-make_focus_event!(FocusIn, "focusin");
-make_focus_event!(FocusOut, "focusout");
+make_mouse_event!(MouseMove => web_sys::MouseEvent);
+static_event_impl!(MouseMove => "mousemove");
 
-make_drag_event!(DragStart, "dragstart");
-make_drag_event!(Drag, "drag");
-make_drag_event!(DragEnd, "dragend");
-make_drag_event!(DragOver, "dragover");
-make_drag_event!(DragEnter, "dragenter");
-make_drag_event!(DragLeave, "dragleave");
-make_drag_event!(Drop, "drop");
 
-make_input_event!(Input, "input");
-make_input_event!(BeforeInput, "beforeinput");
+make_mouse_event!(MouseEnter => web_sys::MouseEvent);
+make_mouse_event!(MouseLeave => web_sys::MouseEvent);
 
-make_animation_event!(AnimationStart, "animationstart");
-make_animation_event!(AnimationIteration, "animationiteration");
-make_animation_event!(AnimationCancel, "animationcancel");
-make_animation_event!(AnimationEnd, "animationend");
+impl StaticEvent for MouseEnter {
+    const EVENT_TYPE: &'static str = "mouseenter";
 
-make_wheel_event!(Wheel, "wheel");
+    #[inline]
+    fn unchecked_from_event(event: web_sys::Event) -> Self {
+        Self {
+            event: event.unchecked_into(),
+        }
+    }
 
-make_event!(Load, "load" => web_sys::Event);
-make_event!(Scroll, "scroll" => web_sys::Event);
-make_event!(Submit, "submit" => web_sys::Event);
-make_event!(Resize, "resize" => web_sys::UiEvent);
+    #[inline]
+    fn default_options(preventable: bool) -> EventOptions {
+        EventOptions {
+            bubbles: true,
+            preventable,
+        }
+    }
+}
+
+impl StaticEvent for MouseLeave {
+    const EVENT_TYPE: &'static str = "mouseleave";
+
+    #[inline]
+    fn unchecked_from_event(event: web_sys::Event) -> Self {
+        Self {
+            event: event.unchecked_into(),
+        }
+    }
+
+    #[inline]
+    fn default_options(preventable: bool) -> EventOptions {
+        EventOptions {
+            bubbles: true,
+            preventable,
+        }
+    }
+}
+
+
+make_mouse_event!(DoubleClick => web_sys::MouseEvent);
+static_event_impl!(DoubleClick => "dblclick");
+
+make_mouse_event!(ContextMenu => web_sys::MouseEvent);
+static_event_impl!(ContextMenu => "contextmenu");
+
+make_pointer_event!(PointerOver);
+static_event_impl!(PointerOver => "pointerover");
+
+make_pointer_event!(PointerEnter);
+static_event_impl!(PointerEnter => "pointerenter");
+
+make_pointer_event!(PointerDown);
+static_event_impl!(PointerDown => "pointerdown");
+
+make_pointer_event!(PointerMove);
+static_event_impl!(PointerMove => "pointermove");
+
+make_pointer_event!(PointerUp);
+static_event_impl!(PointerUp => "pointerup");
+
+make_pointer_event!(PointerCancel);
+static_event_impl!(PointerCancel => "pointercancel");
+
+make_pointer_event!(PointerOut);
+static_event_impl!(PointerOut => "pointerout");
+
+make_pointer_event!(PointerLeave);
+static_event_impl!(PointerLeave => "pointerleave");
+
+make_pointer_event!(GotPointerCapture);
+static_event_impl!(GotPointerCapture => "gotpointercapture");
+
+make_pointer_event!(LostPointerCapture);
+static_event_impl!(LostPointerCapture => "lostpointercapture");
+
+make_keyboard_event!(KeyDown);
+static_event_impl!(KeyDown => "keydown");
+
+make_keyboard_event!(KeyUp);
+static_event_impl!(KeyUp => "keyup");
+
+
+make_focus_event!(Focus);
+static_event_impl!(Focus => "focus");
+
+make_focus_event!(Blur);
+static_event_impl!(Blur => "blur");
+
+make_focus_event!(FocusIn);
+static_event_impl!(FocusIn => "focusin");
+
+make_focus_event!(FocusOut);
+static_event_impl!(FocusOut => "focusout");
+
+
+make_drag_event!(DragStart);
+static_event_impl!(DragStart => "dragstart");
+
+make_drag_event!(Drag);
+static_event_impl!(Drag => "drag");
+
+make_drag_event!(DragEnd);
+static_event_impl!(DragEnd => "dragend");
+
+make_drag_event!(DragOver);
+static_event_impl!(DragOver => "dragover");
+
+make_drag_event!(DragEnter);
+static_event_impl!(DragEnter => "dragenter");
+
+make_drag_event!(DragLeave);
+static_event_impl!(DragLeave => "dragleave");
+
+make_drag_event!(Drop);
+static_event_impl!(Drop => "drop");
+
+
+make_input_event!(Input);
+static_event_impl!(Input => "input");
+
+make_input_event!(BeforeInput);
+static_event_impl!(BeforeInput => "beforeinput");
+
+
+make_animation_event!(AnimationStart);
+static_event_impl!(AnimationStart => "animationstart");
+
+make_animation_event!(AnimationIteration);
+static_event_impl!(AnimationIteration => "animationiteration");
+
+make_animation_event!(AnimationCancel);
+static_event_impl!(AnimationCancel => "animationcancel");
+
+make_animation_event!(AnimationEnd);
+static_event_impl!(AnimationEnd => "animationend");
+
+
+make_wheel_event!(Wheel);
+static_event_impl!(Wheel => "wheel");
+
+
+make_event!(Load => web_sys::Event);
+static_event_impl!(Load => "load");
+
+make_event!(Scroll => web_sys::Event);
+static_event_impl!(Scroll => "scroll");
+
+make_event!(Submit => web_sys::Event);
+static_event_impl!(Submit => "submit");
+
+make_event!(Resize => web_sys::UiEvent);
+static_event_impl!(Resize => "resize");
+
 
 
 impl Input {
@@ -315,7 +439,8 @@ impl Input {
 }
 
 
-make_event!(Change, "change" => web_sys::Event);
+make_event!(Change => web_sys::Event);
+static_event_impl!(Change => "change");
 
 // TODO add in a value method as well, the same as Input::value
 impl Change {
@@ -331,10 +456,18 @@ impl Change {
 }
 
 
-make_touch_event!(TouchCancel, "touchcancel");
-make_touch_event!(TouchEnd, "touchend");
-make_touch_event!(TouchMove, "touchmove");
-make_touch_event!(TouchStart, "touchstart");
+make_touch_event!(TouchCancel);
+static_event_impl!(TouchCancel => "touchcancel");
+
+make_touch_event!(TouchEnd);
+static_event_impl!(TouchEnd => "touchend");
+
+make_touch_event!(TouchMove);
+static_event_impl!(TouchMove => "touchmove");
+
+make_touch_event!(TouchStart);
+static_event_impl!(TouchStart => "touchstart");
+
 
 #[derive(Debug)]
 struct TouchListIter {

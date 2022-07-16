@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use crate::dom::RefFn;
+use crate::EventOptions;
 
 pub use crate::animation::AnimatedSignalVec;
 
@@ -8,6 +9,15 @@ pub trait StaticEvent {
     const EVENT_TYPE: &'static str;
 
     fn unchecked_from_event(event: web_sys::Event) -> Self;
+
+    #[inline]
+    fn default_options(preventable: bool) -> EventOptions {
+        if preventable {
+            EventOptions::preventable()
+        } else {
+            EventOptions::default()
+        }
+    }
 }
 
 

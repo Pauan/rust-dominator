@@ -508,7 +508,7 @@ impl<A> DomBuilder<A> {
     pub fn global_event<T, F>(self, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        self.global_event_with_options(&EventOptions::default(), listener)
+        self.global_event_with_options(&T::default_options(false), listener)
     }
 
     #[deprecated(since = "0.5.21", note = "Use global_event_with_options instead")]
@@ -516,7 +516,7 @@ impl<A> DomBuilder<A> {
     pub fn global_event_preventable<T, F>(self, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        self.global_event_with_options(&EventOptions::preventable(), listener)
+        self.global_event_with_options(&T::default_options(true), listener)
     }
 
     #[inline]
@@ -653,7 +653,7 @@ impl<A> DomBuilder<A> where A: AsRef<EventTarget> {
     pub fn event<T, F>(self, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        self.event_with_options(&EventOptions::default(), listener)
+        self.event_with_options(&T::default_options(false), listener)
     }
 
     #[deprecated(since = "0.5.21", note = "Use event_with_options instead")]
@@ -661,7 +661,7 @@ impl<A> DomBuilder<A> where A: AsRef<EventTarget> {
     pub fn event_preventable<T, F>(self, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        self.event_with_options(&EventOptions::preventable(), listener)
+        self.event_with_options(&T::default_options(true), listener)
     }
 }
 
