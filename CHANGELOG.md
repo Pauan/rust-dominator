@@ -1,3 +1,6 @@
+## 0.5.28 - (2022-07-16)
+* Fixing the incorrect behavior of MouseEnter and MouseLeave events.
+
 ## 0.5.27 - (2022-07-05)
 * Replacing inline_js with js-sys and gloo_events.
 
