@@ -544,8 +544,7 @@ impl<A> DomBuilder<A> {
 
 impl<A> DomBuilder<A> where A: Clone {
     #[inline]
-    #[doc(hidden)]
-    pub fn __internal_element(&self) -> A {
+    pub fn element(&self) -> A {
         self.element.clone()
     }
 
@@ -588,6 +587,10 @@ impl<A> DomBuilder<A> where A: Into<Node> {
             element: self.element.into(),
             callbacks: self.callbacks,
         }
+    }
+    #[inline]
+    pub fn finish(self) -> Dom {
+        self.into_dom()
     }
 }
 
@@ -1089,9 +1092,8 @@ pub struct StylesheetBuilder {
 // TODO remove the CssStyleRule when this is discarded
 impl StylesheetBuilder {
     // TODO should this inline ?
-    #[doc(hidden)]
     #[inline]
-    pub fn __internal_new<A>(selector: A) -> Self where A: MultiStr {
+    pub fn new<A>(selector: A) -> Self where A: MultiStr {
         // TODO can this be made faster ?
         // TODO somehow share this safely between threads ?
         thread_local! {
@@ -1194,8 +1196,7 @@ impl StylesheetBuilder {
 
     // TODO return a Handle
     #[inline]
-    #[doc(hidden)]
-    pub fn __internal_done(mut self) {
+    pub fn finish(mut self) {
         self.callbacks.trigger_after_insert();
 
         // This prevents it from triggering after_remove
@@ -1212,21 +1213,19 @@ pub struct ClassBuilder {
 }
 
 impl ClassBuilder {
-    #[doc(hidden)]
     #[inline]
-    pub fn __internal_new() -> Self {
+    pub fn new() -> Self {
         let class_name = __internal::make_class_id();
 
         Self {
             // TODO make this more efficient ?
-            stylesheet: StylesheetBuilder::__internal_new(&format!(".{}", class_name)),
+            stylesheet: StylesheetBuilder::new(&format!(".{}", class_name)),
             class_name,
         }
     }
 
-    #[doc(hidden)]
     #[inline]
-    pub fn __internal_class_name(&self) -> &str {
+    pub fn class_name(&self) -> &str {
         &self.class_name
     }
 
@@ -1288,10 +1287,9 @@ impl ClassBuilder {
     }
 
     // TODO return a Handle ?
-    #[doc(hidden)]
     #[inline]
-    pub fn __internal_done(self) -> String {
-        self.stylesheet.__internal_done();
+    pub fn finish(self) -> String {
+        self.stylesheet.finish();
         self.class_name
     }
 }

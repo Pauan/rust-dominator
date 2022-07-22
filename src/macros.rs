@@ -42,7 +42,7 @@ macro_rules! __internal_builder {
 #[macro_export]
 macro_rules! with_node {
     ($this:ident, $name:ident => { $($methods:tt)* }) => {{
-        let $name = $crate::DomBuilder::__internal_element(&$this);
+        let $name = $crate::DomBuilder::element(&$this);
         $crate::apply_methods!($this, { $($methods)* })
     }};
 }
@@ -104,7 +104,7 @@ macro_rules! stylesheet {
         $crate::stylesheet!($rule, {})
     };
     ($rule:expr, { $($methods:tt)* }) => {
-        $crate::StylesheetBuilder::__internal_done($crate::apply_methods!($crate::StylesheetBuilder::__internal_new($rule), { $($methods)* }))
+        $crate::StylesheetBuilder::finish($crate::apply_methods!($crate::StylesheetBuilder::new($rule), { $($methods)* }))
     };
 }
 
@@ -112,7 +112,7 @@ macro_rules! stylesheet {
 #[macro_export]
 macro_rules! class {
     ($($methods:tt)*) => {{
-        $crate::ClassBuilder::__internal_done($crate::apply_methods!($crate::ClassBuilder::__internal_new(), { $($methods)* }))
+        $crate::ClassBuilder::finish($crate::apply_methods!($crate::ClassBuilder::new(), { $($methods)* }))
     }};
 }
 
@@ -123,7 +123,7 @@ macro_rules! pseudo {
         $crate::pseudo!($this, $rules, {})
     };
     ($this:ident, $rules:expr, { $($methods:tt)* }) => {{
-        $crate::stylesheet!($crate::__internal::Pseudo::new($crate::ClassBuilder::__internal_class_name(&$this), $rules), { $($methods)* });
+        $crate::stylesheet!($crate::__internal::Pseudo::new($crate::ClassBuilder::class_name(&$this), $rules), { $($methods)* });
         $this
     }};
 }
