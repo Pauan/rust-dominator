@@ -49,7 +49,7 @@ struct User {
 impl User {
     async fn fetch(user: &str) -> Result<Self, JsValue> {
         let user = fetch_github(&format!("https://api.github.com/users/{}", user)).await?;
-        Ok(serde_json::from_str::<Self>(&user).unwrap_throw())
+        Ok(serde_json::from_str::<Self>(&user).unwrap())
     }
 }
 

@@ -112,7 +112,7 @@ pub async fn fetch_github(url: &str) -> Result<String, JsValue> {
     headers.set("Accept", "application/vnd.github.v3+json")?;
 
     let future = window()
-        .unwrap_throw()
+        .unwrap()
         .fetch_with_str_and_init(
             url,
             RequestInit::new()
@@ -131,7 +131,7 @@ pub async fn fetch_github(url: &str) -> Result<String, JsValue> {
     let value = JsFuture::from(response.text()?)
         .await?
         .as_string()
-        .unwrap_throw();
+        .unwrap();
 
     Ok(value)
 }

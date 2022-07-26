@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use wasm_bindgen::prelude::*;
 use serde_derive::{Serialize, Deserialize};
 use futures_signals::map_ref;
 use futures_signals::signal::{Signal, SignalExt, Mutable};
@@ -126,7 +125,7 @@ impl Todo {
                         .event(clone!(todo => move |event: events::KeyDown| {
                             match event.key().as_str() {
                                 "Enter" => {
-                                    element.blur().unwrap_throw();
+                                    element.blur().unwrap();
                                 },
                                 "Escape" => {
                                     todo.cancel_editing();

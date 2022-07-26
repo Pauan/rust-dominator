@@ -18,7 +18,7 @@ use crate::callbacks::Callbacks;
 use crate::traits::*;
 use crate::operations;
 use crate::operations::{for_each, spawn_future};
-use crate::utils::{EventListener, on, ValueDiscard, FnDiscard};
+use crate::utils::{EventListener, on, UnwrapJsExt, ValueDiscard, FnDiscard};
 
 
 pub struct RefFn<A, B, C> where B: ?Sized, C: Fn(&A) -> &B {
@@ -101,6 +101,7 @@ pub struct DomHandle {
 
 impl Discard for DomHandle {
     #[inline]
+    #[track_caller]
     fn discard(self) {
         bindings::remove_child(&self.parent, &self.dom.element);
         self.dom.callbacks.discard();
@@ -108,6 +109,7 @@ impl Discard for DomHandle {
 }
 
 #[inline]
+#[track_caller]
 pub fn append_dom(parent: &Node, mut dom: Dom) -> DomHandle {
     bindings::append_child(&parent, &dom.element);
 
@@ -242,6 +244,7 @@ impl Dom {
     }
 
     #[inline]
+    #[track_caller]
     pub fn empty() -> Self {
         Self::new(bindings::create_empty_node())
     }
@@ -262,15 +265,23 @@ impl Dom {
 
 
 #[inline]
+#[track_caller]
 fn create_element<A>(name: &str) -> A where A: JsCast {
     // TODO use unchecked_into in release mode ?
-    bindings::create_element(intern(name)).dyn_into().unwrap_throw()
+    crate::__unwrap!(
+        bindings::create_element(intern(name)).dyn_into(),
+        e => panic!("Invalid DOM type: \"{}\" => {:?}", name, JsValue::as_ref(&e)),
+    )
 }
 
 #[inline]
+#[track_caller]
 fn create_element_ns<A>(name: &str, namespace: &str) -> A where A: JsCast {
     // TODO use unchecked_into in release mode ?
-    bindings::create_element_ns(intern(namespace), intern(name)).dyn_into().unwrap_throw()
+    crate::__unwrap!(
+        bindings::create_element_ns(intern(namespace), intern(name)).dyn_into(),
+        e => panic!("Invalid DOM type: \"{}\" => {:?}", name, JsValue::as_ref(&e)),
+    )
 }
 
 
@@ -301,6 +312,7 @@ fn set_option<A, B, C, D, F>(element: A, callbacks: &mut Callbacks, value: D, mu
 }
 
 // TODO should this inline ?
+// TODO track_caller
 fn set_style<A, B>(style: &CssStyleDeclaration, name: &A, value: B, important: bool)
     where A: MultiStr,
           B: MultiStr {
@@ -308,6 +320,7 @@ fn set_style<A, B>(style: &CssStyleDeclaration, name: &A, value: B, important: b
     let mut names = vec![];
     let mut values = vec![];
 
+    // TODO track_caller
     fn try_set_style(style: &CssStyleDeclaration, names: &mut Vec<String>, values: &mut Vec<String>, name: &str, value: &str, important: bool) -> Option<()> {
         assert!(value != "");
 
@@ -346,6 +359,7 @@ fn set_style<A, B>(style: &CssStyleDeclaration, name: &A, value: B, important: b
 }
 
 // TODO should this inline ?
+// TODO track_caller
 fn set_style_signal<A, B, C, D>(style: CssStyleDeclaration, callbacks: &mut Callbacks, name: A, value: D, important: bool)
     where A: MultiStr + 'static,
           B: MultiStr,
@@ -369,6 +383,7 @@ fn set_style_signal<A, B, C, D>(style: CssStyleDeclaration, callbacks: &mut Call
 }
 
 // TODO should this inline ?
+// TODO track_caller
 fn set_style_unchecked_signal<A, B, C, D>(style: CssStyleDeclaration, callbacks: &mut Callbacks, name: A, value: D, important: bool)
     where A: AsStr + 'static,
           B: AsStr,
@@ -398,6 +413,7 @@ fn set_style_unchecked_signal<A, B, C, D>(style: CssStyleDeclaration, callbacks:
 // TODO check that the property *actually* was changed ?
 // TODO maybe use AsRef<Object> ?
 // TODO should this inline ?
+#[track_caller]
 fn set_property<A, B, C>(element: &A, name: &B, value: C) where A: AsRef<JsValue>, B: MultiStr, C: Into<JsValue> {
     let element = element.as_ref();
     let value = value.into();
@@ -459,11 +475,13 @@ pub struct DomBuilder<A> {
 }
 
 impl<A> DomBuilder<A> where A: JsCast {
+    #[track_caller]
     #[inline]
     pub fn new_html(name: &str) -> Self {
         Self::new(create_element(name))
     }
 
+    #[track_caller]
     #[inline]
     pub fn new_svg(name: &str) -> Self {
         Self::new(create_element_ns(name, SVG_NAMESPACE))
@@ -488,6 +506,7 @@ impl<A> DomBuilder<A> {
     }
 
     #[inline]
+    #[track_caller]
     fn _event<T, F>(callbacks: &mut Callbacks, element: &EventTarget, options: &EventOptions, listener: F)
         where T: StaticEvent,
               F: FnMut(T) + 'static {
@@ -496,6 +515,7 @@ impl<A> DomBuilder<A> {
 
     // TODO add this to the StylesheetBuilder and ClassBuilder too
     #[inline]
+    #[track_caller]
     pub fn global_event_with_options<T, F>(mut self, options: &EventOptions, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
@@ -505,6 +525,7 @@ impl<A> DomBuilder<A> {
 
     // TODO add this to the StylesheetBuilder and ClassBuilder too
     #[inline]
+    #[track_caller]
     pub fn global_event<T, F>(self, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
@@ -513,6 +534,7 @@ impl<A> DomBuilder<A> {
 
     #[deprecated(since = "0.5.21", note = "Use global_event_with_options instead")]
     #[inline]
+    #[track_caller]
     pub fn global_event_preventable<T, F>(self, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
@@ -593,6 +615,7 @@ impl<A> DomBuilder<A> where A: Into<Node> {
 
 impl<A> DomBuilder<A> where A: AsRef<JsValue> {
     #[inline]
+    #[track_caller]
     pub fn prop<B, C>(self, name: B, value: C) -> Self where B: MultiStr, C: Into<JsValue> {
         set_property(&self.element, &name, value);
         self
@@ -600,6 +623,7 @@ impl<A> DomBuilder<A> where A: AsRef<JsValue> {
 
     #[deprecated(since = "0.5.24", note = "Use the `prop` method instead")]
     #[inline]
+    #[track_caller]
     pub fn property<B, C>(self, name: B, value: C) -> Self where B: MultiStr, C: Into<JsValue> {
         self.prop(name, value)
     }
@@ -607,6 +631,7 @@ impl<A> DomBuilder<A> where A: AsRef<JsValue> {
 
 impl<A> DomBuilder<A> where A: AsRef<JsValue> {
     // TODO should this inline ?
+    // TODO track_caller
     fn set_property_signal<B, C, D>(&mut self, name: B, value: D)
         where B: MultiStr + 'static,
               C: Into<JsValue>,
@@ -620,6 +645,7 @@ impl<A> DomBuilder<A> where A: AsRef<JsValue> {
     }
 
     #[inline]
+    #[track_caller]
     pub fn prop_signal<B, C, D>(mut self, name: B, value: D) -> Self
         where B: MultiStr + 'static,
               C: Into<JsValue>,
@@ -631,6 +657,7 @@ impl<A> DomBuilder<A> where A: AsRef<JsValue> {
 
     #[deprecated(since = "0.5.24", note = "Use the `prop_signal` method instead")]
     #[inline]
+    #[track_caller]
     pub fn property_signal<B, C, D>(self, name: B, value: D) -> Self
         where B: MultiStr + 'static,
               C: Into<JsValue>,
@@ -642,6 +669,7 @@ impl<A> DomBuilder<A> where A: AsRef<JsValue> {
 
 impl<A> DomBuilder<A> where A: AsRef<EventTarget> {
     #[inline]
+    #[track_caller]
     pub fn event_with_options<T, F>(mut self, options: &EventOptions, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
@@ -650,6 +678,7 @@ impl<A> DomBuilder<A> where A: AsRef<EventTarget> {
     }
 
     #[inline]
+    #[track_caller]
     pub fn event<T, F>(self, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
@@ -658,6 +687,7 @@ impl<A> DomBuilder<A> where A: AsRef<EventTarget> {
 
     #[deprecated(since = "0.5.21", note = "Use event_with_options instead")]
     #[inline]
+    #[track_caller]
     pub fn event_preventable<T, F>(self, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
@@ -667,6 +697,7 @@ impl<A> DomBuilder<A> where A: AsRef<EventTarget> {
 
 impl<A> DomBuilder<A> where A: AsRef<Node> {
     #[inline]
+    #[track_caller]
     pub fn text(self, value: &str) -> Self {
         // TODO should this intern ?
         bindings::append_child(self.element.as_ref(), &bindings::create_text_node(value));
@@ -674,6 +705,7 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
     }
 
     #[inline]
+    #[track_caller]
     pub fn text_signal<B, C>(mut self, value: C) -> Self
         where B: AsStr,
               C: Signal<Item = B> + 'static {
@@ -684,12 +716,14 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
     }
 
     #[inline]
+    #[track_caller]
     pub fn child<B: BorrowMut<Dom>>(mut self, mut child: B) -> Self {
         operations::insert_children_one(self.element.as_ref(), &mut self.callbacks, child.borrow_mut());
         self
     }
 
     #[inline]
+    #[track_caller]
     pub fn child_signal<B>(mut self, child: B) -> Self
         where B: Signal<Item = Option<Dom>> + 'static {
 
@@ -699,12 +733,14 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
 
     // TODO figure out how to make this owned rather than &mut
     #[inline]
+    #[track_caller]
     pub fn children<B: BorrowMut<Dom>, C: IntoIterator<Item = B>>(mut self, children: C) -> Self {
         operations::insert_children_iter(self.element.as_ref(), &mut self.callbacks, children);
         self
     }
 
     #[inline]
+    #[track_caller]
     pub fn children_signal_vec<B>(mut self, children: B) -> Self
         where B: SignalVec<Item = Dom> + 'static {
 
@@ -716,12 +752,14 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
 impl<A> DomBuilder<A> where A: AsRef<Element> {
     #[inline]
     #[doc(hidden)]
+    #[track_caller]
     pub fn __internal_shadow_root(&self, mode: ShadowRootMode) -> DomBuilder<ShadowRoot> {
-        let shadow = self.element.as_ref().attach_shadow(&ShadowRootInit::new(mode)).unwrap_throw();
+        let shadow = self.element.as_ref().attach_shadow(&ShadowRootInit::new(mode)).unwrap_js();
         DomBuilder::new(shadow)
     }
 
     #[inline]
+    #[track_caller]
     pub fn attr<B>(self, name: B, value: &str) -> Self where B: MultiStr {
         let element = self.element.as_ref();
 
@@ -734,11 +772,13 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
     #[deprecated(since = "0.5.24", note = "Use the `attr` method instead")]
     #[inline]
+    #[track_caller]
     pub fn attribute<B>(self, name: B, value: &str) -> Self where B: MultiStr {
         self.attr(name, value)
     }
 
     #[inline]
+    #[track_caller]
     pub fn attr_ns<B>(self, namespace: &str, name: B, value: &str) -> Self where B: MultiStr {
         let element = self.element.as_ref();
         let namespace: &str = intern(namespace);
@@ -752,11 +792,13 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
     #[deprecated(since = "0.5.24", note = "Use the `attr_ns` method instead")]
     #[inline]
+    #[track_caller]
     pub fn attribute_namespace<B>(self, namespace: &str, name: B, value: &str) -> Self where B: MultiStr {
         self.attr_ns(namespace, name, value)
     }
 
     #[inline]
+    #[track_caller]
     pub fn class<B>(self, name: B) -> Self where B: MultiStr {
         let classes = self.element.as_ref().class_list();
 
@@ -769,6 +811,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
     // TODO make this more efficient ?
     #[inline]
+    #[track_caller]
     pub fn visible(self, value: bool) -> Self {
         if value {
             // TODO remove the class somehow ?
@@ -782,6 +825,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
 impl<A> DomBuilder<A> where A: AsRef<Element> {
     // TODO should this inline ?
+    // TODO track_caller
     fn set_attribute_signal<B, C, D, E>(&mut self, name: B, value: E)
         where B: MultiStr + 'static,
               C: AsStr,
@@ -807,6 +851,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
     }
 
     #[inline]
+    #[track_caller]
     pub fn attr_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
               C: AsStr,
@@ -819,6 +864,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
     #[deprecated(since = "0.5.24", note = "Use the `attr_signal` method instead")]
     #[inline]
+    #[track_caller]
     pub fn attribute_signal<B, C, D, E>(self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
               C: AsStr,
@@ -830,6 +876,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
 
     // TODO should this inline ?
+    // TODO track_caller
     fn set_attribute_namespace_signal<B, C, D, E>(&mut self, namespace: &str, name: B, value: E)
         where B: MultiStr + 'static,
               C: AsStr,
@@ -859,6 +906,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
     }
 
     #[inline]
+    #[track_caller]
     pub fn attr_ns_signal<B, C, D, E>(mut self, namespace: &str, name: B, value: E) -> Self
         where B: MultiStr + 'static,
               C: AsStr,
@@ -871,6 +919,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
     #[deprecated(since = "0.5.24", note = "Use the `attr_ns_signal` method instead")]
     #[inline]
+    #[track_caller]
     pub fn attribute_namespace_signal<B, C, D, E>(self, namespace: &str, name: B, value: E) -> Self
         where B: MultiStr + 'static,
               C: AsStr,
@@ -882,6 +931,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
 
     // TODO should this inline ?
+    // TODO track_caller
     fn set_class_signal<B, C>(&mut self, name: B, value: C)
         where B: MultiStr + 'static,
               C: Signal<Item = bool> + 'static {
@@ -913,6 +963,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
     }
 
     #[inline]
+    #[track_caller]
     pub fn class_signal<B, C>(mut self, name: B, value: C) -> Self
         where B: MultiStr + 'static,
               C: Signal<Item = bool> + 'static {
@@ -923,6 +974,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
     // TODO make this more efficient ?
     #[inline]
+    #[track_caller]
     pub fn visible_signal<B>(self, value: B) -> Self where B: Signal<Item = bool> + 'static {
         self.class_signal(&*HIDDEN_CLASS, not(value))
     }
@@ -930,6 +982,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
     // TODO use OptionStr ?
     // TODO should this inline ?
+    // TODO track_caller
     fn set_scroll_signal<B, F>(&mut self, signal: B, mut f: F)
         where B: Signal<Item = Option<i32>> + 'static,
               F: FnMut(&Element, i32) + 'static {
@@ -948,6 +1001,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
     // TODO rename to scroll_x_signal ?
     #[inline]
+    #[track_caller]
     pub fn scroll_left_signal<B>(mut self, signal: B) -> Self where B: Signal<Item = Option<i32>> + 'static {
         // TODO bindings function for this ?
         self.set_scroll_signal(signal, Element::set_scroll_left);
@@ -956,6 +1010,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
     // TODO rename to scroll_y_signal ?
     #[inline]
+    #[track_caller]
     pub fn scroll_top_signal<B>(mut self, signal: B) -> Self where B: Signal<Item = Option<i32>> + 'static {
         // TODO bindings function for this ?
         self.set_scroll_signal(signal, Element::set_scroll_top);
@@ -965,6 +1020,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
 
 impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
     #[inline]
+    #[track_caller]
     pub fn style<B, C>(self, name: B, value: C) -> Self
         where B: MultiStr,
               C: MultiStr {
@@ -973,6 +1029,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
     }
 
     #[inline]
+    #[track_caller]
     pub fn style_important<B, C>(self, name: B, value: C) -> Self
         where B: MultiStr,
               C: MultiStr {
@@ -981,6 +1038,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
     }
 
     #[inline]
+    #[track_caller]
     pub fn style_unchecked<B, C>(self, name: B, value: C) -> Self
         where B: AsStr,
               C: AsStr {
@@ -995,6 +1053,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
 
 impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
     #[inline]
+    #[track_caller]
     pub fn style_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
               C: MultiStr,
@@ -1006,6 +1065,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
     }
 
     #[inline]
+    #[track_caller]
     pub fn style_important_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
               C: MultiStr,
@@ -1017,6 +1077,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
     }
 
     #[inline]
+    #[track_caller]
     pub fn style_unchecked_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
         where B: AsStr + 'static,
               C: AsStr,
@@ -1030,6 +1091,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
 
     // TODO remove the `value` argument ?
     #[inline]
+    #[track_caller]
     pub fn focused(mut self, value: bool) -> Self {
         let element = self.element.as_ref().clone();
 
@@ -1049,6 +1111,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
 
 
     // TODO should this inline ?
+    // TODO track_caller
     fn set_focused_signal<B>(&mut self, value: B)
         where B: Signal<Item = bool> + 'static {
 
@@ -1070,6 +1133,7 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
     }
 
     #[inline]
+    #[track_caller]
     pub fn focused_signal<B>(mut self, value: B) -> Self
         where B: Signal<Item = bool> + 'static {
 
@@ -1132,6 +1196,7 @@ impl StylesheetBuilder {
     }
 
     #[inline]
+    #[track_caller]
     pub fn style<B, C>(self, name: B, value: C) -> Self
         where B: MultiStr,
               C: MultiStr {
@@ -1140,6 +1205,7 @@ impl StylesheetBuilder {
     }
 
     #[inline]
+    #[track_caller]
     pub fn style_important<B, C>(self, name: B, value: C) -> Self
         where B: MultiStr,
               C: MultiStr {
@@ -1148,6 +1214,7 @@ impl StylesheetBuilder {
     }
 
     #[inline]
+    #[track_caller]
     pub fn style_unchecked<B, C>(self, name: B, value: C) -> Self
         where B: AsStr,
               C: AsStr {
@@ -1160,6 +1227,7 @@ impl StylesheetBuilder {
     }
 
     #[inline]
+    #[track_caller]
     pub fn style_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
               C: MultiStr,
@@ -1171,6 +1239,7 @@ impl StylesheetBuilder {
     }
 
     #[inline]
+    #[track_caller]
     pub fn style_important_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
               C: MultiStr,
@@ -1182,6 +1251,7 @@ impl StylesheetBuilder {
     }
 
     #[inline]
+    #[track_caller]
     pub fn style_unchecked_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
         where B: AsStr + 'static,
               C: AsStr,
@@ -1194,6 +1264,7 @@ impl StylesheetBuilder {
 
     // TODO return a Handle
     #[inline]
+    #[track_caller]
     #[doc(hidden)]
     pub fn __internal_done(mut self) {
         self.callbacks.trigger_after_insert();
@@ -1214,6 +1285,7 @@ pub struct ClassBuilder {
 impl ClassBuilder {
     #[doc(hidden)]
     #[inline]
+    #[track_caller]
     pub fn __internal_new() -> Self {
         let class_name = __internal::make_class_id();
 
@@ -1226,11 +1298,13 @@ impl ClassBuilder {
 
     #[doc(hidden)]
     #[inline]
+    #[track_caller]
     pub fn __internal_class_name(&self) -> &str {
         &self.class_name
     }
 
     #[inline]
+    #[track_caller]
     pub fn style<B, C>(mut self, name: B, value: C) -> Self
         where B: MultiStr,
               C: MultiStr {
@@ -1239,6 +1313,7 @@ impl ClassBuilder {
     }
 
     #[inline]
+    #[track_caller]
     pub fn style_important<B, C>(mut self, name: B, value: C) -> Self
         where B: MultiStr,
               C: MultiStr {
@@ -1247,6 +1322,7 @@ impl ClassBuilder {
     }
 
     #[inline]
+    #[track_caller]
     pub fn style_unchecked<B, C>(mut self, name: B, value: C) -> Self
         where B: AsStr,
               C: AsStr {
@@ -1255,6 +1331,7 @@ impl ClassBuilder {
     }
 
     #[inline]
+    #[track_caller]
     pub fn style_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
               C: MultiStr,
@@ -1266,6 +1343,7 @@ impl ClassBuilder {
     }
 
     #[inline]
+    #[track_caller]
     pub fn style_important_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
         where B: MultiStr + 'static,
               C: MultiStr,
@@ -1277,6 +1355,7 @@ impl ClassBuilder {
     }
 
     #[inline]
+    #[track_caller]
     pub fn style_unchecked_signal<B, C, D, E>(mut self, name: B, value: E) -> Self
         where B: AsStr + 'static,
               C: AsStr,
@@ -1290,6 +1369,7 @@ impl ClassBuilder {
     // TODO return a Handle ?
     #[doc(hidden)]
     #[inline]
+    #[track_caller]
     pub fn __internal_done(self) -> String {
         self.stylesheet.__internal_done();
         self.class_name

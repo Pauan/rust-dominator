@@ -17,7 +17,10 @@ impl<T, const NAME: &'static str> StaticEvent for Event<NAME, T> where T: JsCast
     fn unchecked_from_event(event: web_sys::Event) -> Self {
         Self {
             // TODO use unchecked_into in release mode ?
-            event: event.dyn_into().unwrap(),
+            event: crate::__unwrap!(
+                event.dyn_into(),
+                e => panic!("Invalid event type: {:?}", wasm_bindgen::JsValue::as_ref(&e)),
+            ),
         }
     }
 }

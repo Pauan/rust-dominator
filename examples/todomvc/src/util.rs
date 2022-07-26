@@ -1,9 +1,8 @@
-use wasm_bindgen::prelude::*;
 use web_sys::{window, Storage};
 
 
 pub fn local_storage() -> Storage {
-    window().unwrap_throw().local_storage().unwrap_throw().unwrap_throw()
+    window().unwrap().local_storage().unwrap().unwrap()
 }
 
 #[inline]

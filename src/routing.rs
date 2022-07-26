@@ -59,6 +59,7 @@ pub fn url() -> ReadOnlyMutable<String> {
 
 // TODO if URL hasn't been created yet, don't create it
 #[inline]
+#[track_caller]
 pub fn go_to_url(new_url: &str) {
     // TODO intern ?
     bindings::go_to_url(new_url);

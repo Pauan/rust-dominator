@@ -16,6 +16,7 @@ use wasm_bindgen::closure::Closure;
 use web_sys::window;
 
 use crate::operations::spawn_future;
+use crate::utils::UnwrapJsExt;
 
 
 struct RafState {
@@ -37,7 +38,7 @@ impl Raf {
             window()
                 .unwrap_throw()
                 .request_animation_frame(callback.as_ref().unchecked_ref())
-                .unwrap_throw()
+                .unwrap_js()
         }
 
         let closure = {
@@ -71,7 +72,7 @@ impl Drop for Raf {
         window()
             .unwrap_throw()
             .cancel_animation_frame(state.id)
-            .unwrap_throw();
+            .unwrap_js();
     }
 }
 

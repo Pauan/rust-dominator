@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::mem::ManuallyDrop;
 
-use wasm_bindgen::{UnwrapThrowExt, intern};
+use wasm_bindgen::{JsValue, UnwrapThrowExt, intern};
 use discard::Discard;
 use web_sys::{EventTarget, Event};
 
@@ -124,4 +124,56 @@ impl<A> Discard for FnDiscard<A> where A: FnOnce() {
     fn discard(self) {
         self.0();
     }
+}
+
+
+pub(crate) trait UnwrapJsExt<T> {
+    fn unwrap_js(self) -> T;
+}
+
+#[cfg(debug_assertions)]
+impl<T> UnwrapJsExt<T> for Result<T, JsValue> {
+    #[inline]
+    #[track_caller]
+    fn unwrap_js(self) -> T {
+        match self {
+            Ok(value) => value,
+            Err(e) => {
+                use wasm_bindgen::JsCast;
+
+                match e.dyn_ref::<js_sys::Error>() {
+                    Some(e) => {
+                        panic!("{}", e.message());
+                    },
+                    None => {
+                        panic!("{:?}", e);
+                    },
+                }
+            },
+        }
+    }
+}
+
+#[cfg(not(debug_assertions))]
+impl<T> UnwrapJsExt<T> for Result<T, JsValue> {
+    #[inline]
+    fn unwrap_js(self) -> T {
+        self.unwrap_or_else(|e| wasm_bindgen::throw_val(e))
+    }
+}
+
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __unwrap {
+    ($value:expr, $var:ident => $error:expr,) => {{
+        #[cfg(debug_assertions)]
+        match $value {
+            Ok(value) => value,
+            Err($var) => $error,
+        }
+
+        #[cfg(not(debug_assertions))]
+        $value.unwrap_throw()
+    }};
 }
