@@ -21,7 +21,7 @@ pub enum Route {
 impl Route {
     // This could use more advanced URL parsing, but it isn't needed
     pub fn from_url(url: &str) -> Self {
-        let url = Url::new(&url).unwrap_throw();
+        let url = Url::new(&url).unwrap();
         match url.hash().as_str() {
             "#/active" => Route::Active,
             "#/completed" => Route::Completed,
@@ -72,7 +72,7 @@ impl App {
     pub fn deserialize() -> Arc<Self> {
         local_storage()
             .get_item("todos-rust-dominator")
-            .unwrap_throw()
+            .unwrap()
             .and_then(|state_json| {
                 serde_json::from_str(state_json.as_str()).ok()
             })
@@ -80,11 +80,11 @@ impl App {
     }
 
     pub fn serialize(&self) {
-        let state_json = serde_json::to_string(self).unwrap_throw();
+        let state_json = serde_json::to_string(self).unwrap();
 
         local_storage()
             .set_item("todos-rust-dominator", state_json.as_str())
-            .unwrap_throw();
+            .unwrap();
     }
 
     pub fn route(&self) -> impl Signal<Item = Route> {

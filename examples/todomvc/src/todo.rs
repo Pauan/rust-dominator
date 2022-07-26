@@ -126,7 +126,7 @@ impl Todo {
                         .event(clone!(todo => move |event: events::KeyDown| {
                             match event.key().as_str() {
                                 "Enter" => {
-                                    element.blur().unwrap_throw();
+                                    element.blur().unwrap();
                                 },
                                 "Escape" => {
                                     todo.cancel_editing();

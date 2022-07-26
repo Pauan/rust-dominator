@@ -9,7 +9,6 @@ use futures_signals::{cancelable_future, CancelableFutureHandle};
 use futures_signals::signal::{Signal, SignalExt};
 use futures_signals::signal_vec::{VecDiff, SignalVec, SignalVecExt};
 use web_sys::Node;
-use wasm_bindgen::UnwrapThrowExt;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::bindings;
@@ -290,7 +289,7 @@ pub(crate) fn insert_children_signal_vec<A>(element: Node, callbacks: &mut Callb
                 },
 
                 VecDiff::Pop {} => {
-                    let dom = self.children.pop().unwrap_throw();
+                    let dom = self.children.pop().unwrap();
 
                     bindings::remove_child(&self.element, &dom.element);
 

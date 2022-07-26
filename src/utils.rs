@@ -1,23 +1,28 @@
 use std::borrow::Cow;
 use std::mem::ManuallyDrop;
 
-use wasm_bindgen::{UnwrapThrowExt, intern};
 use discard::Discard;
-use web_sys::{EventTarget, Event};
+use wasm_bindgen::intern;
+use web_sys::{Event, EventTarget};
 
 use crate::dom::EventOptions;
 use crate::traits::StaticEvent;
-
 
 pub(crate) struct EventListener(Option<gloo_events::EventListener>);
 
 // TODO should these inline ?
 impl EventListener {
     #[inline]
-    pub(crate) fn new<N, F>(elem: &EventTarget, name: N, options: &EventOptions, callback: F) -> Self
-        where N: Into<Cow<'static, str>>,
-              F: FnMut(&Event) + 'static {
-
+    pub(crate) fn new<N, F>(
+        elem: &EventTarget,
+        name: N,
+        options: &EventOptions,
+        callback: F,
+    ) -> Self
+    where
+        N: Into<Cow<'static, str>>,
+        F: FnMut(&Event) + 'static,
+    {
         // TODO get rid of this by fixing web-sys code generation
         intern("capture");
         intern("once");
@@ -36,9 +41,10 @@ impl EventListener {
 
     #[inline]
     pub(crate) fn once<N, F>(elem: &EventTarget, name: N, callback: F) -> Self
-        where N: Into<Cow<'static, str>>,
-              F: FnOnce(&Event) + 'static {
-
+    where
+        N: Into<Cow<'static, str>>,
+        F: FnOnce(&Event) + 'static,
+    {
         // TODO get rid of this by fixing web-sys code generation
         intern("capture");
         intern("once");
@@ -53,7 +59,8 @@ impl EventListener {
             EventOptions {
                 bubbles: false,
                 preventable: false,
-            }.into_gloo(),
+            }
+            .into_gloo(),
             callback,
         )))
     }
@@ -73,20 +80,24 @@ impl Discard for EventListener {
     #[inline]
     fn discard(mut self) {
         // Drops the listener which cleans it up
-        let _ = self.0.take().unwrap_throw();
+        let _ = self.0.take().unwrap();
     }
 }
 
-
 #[inline]
-pub(crate) fn on<E, F>(element: &EventTarget, options: &EventOptions, mut callback: F) -> EventListener
-    where E: StaticEvent,
-          F: FnMut(E) + 'static {
+pub(crate) fn on<E, F>(
+    element: &EventTarget,
+    options: &EventOptions,
+    mut callback: F,
+) -> EventListener
+where
+    E: StaticEvent,
+    F: FnMut(E) + 'static,
+{
     EventListener::new(element, E::EVENT_TYPE, options, move |e| {
         callback(E::unchecked_from_event(e.clone()));
     })
 }
-
 
 // TODO move this into the discard crate
 // TODO verify that this is correct and doesn't leak memory or cause memory safety
@@ -107,19 +118,24 @@ impl<A> Discard for ValueDiscard<A> {
     }
 }
 
-
 // TODO move this into the discard crate
 // TODO replace this with an impl for FnOnce() ?
 pub(crate) struct FnDiscard<A>(A);
 
-impl<A> FnDiscard<A> where A: FnOnce() {
+impl<A> FnDiscard<A>
+where
+    A: FnOnce(),
+{
     #[inline]
     pub(crate) fn new(f: A) -> Self {
         FnDiscard(f)
     }
 }
 
-impl<A> Discard for FnDiscard<A> where A: FnOnce() {
+impl<A> Discard for FnDiscard<A>
+where
+    A: FnOnce(),
+{
     #[inline]
     fn discard(self) {
         self.0();

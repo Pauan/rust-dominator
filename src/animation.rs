@@ -1,22 +1,21 @@
-use std::fmt;
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::fmt;
 use std::pin::Pin;
-use std::sync::{Arc, Weak, Mutex};
-use std::task::{Poll, Waker, Context};
+use std::rc::Rc;
+use std::sync::{Arc, Mutex, Weak};
+use std::task::{Context, Poll, Waker};
 
-use futures_util::future::{ready, FutureExt};
-use futures_signals::CancelableFutureHandle;
-use futures_signals::signal::{Signal, SignalExt, WaitFor, MutableSignal, Mutable};
-use futures_signals::signal_vec::{SignalVec, VecDiff};
 use discard::DiscardOnDrop;
+use futures_signals::signal::{Mutable, MutableSignal, Signal, SignalExt, WaitFor};
+use futures_signals::signal_vec::{SignalVec, VecDiff};
+use futures_signals::CancelableFutureHandle;
+use futures_util::future::{ready, FutureExt};
 use pin_project::pin_project;
-use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsCast;
 use web_sys::window;
 
 use crate::operations::spawn_future;
-
 
 struct RafState {
     id: i32,
@@ -30,14 +29,17 @@ struct Raf {
 }
 
 impl Raf {
-    fn new<F>(mut callback: F) -> Self where F: FnMut(f64) + 'static {
+    fn new<F>(mut callback: F) -> Self
+    where
+        F: FnMut(f64) + 'static,
+    {
         let state: Rc<RefCell<Option<RafState>>> = Rc::new(RefCell::new(None));
 
         fn schedule(callback: &Closure<dyn FnMut(f64)>) -> i32 {
             window()
-                .unwrap_throw()
+                .unwrap()
                 .request_animation_frame(callback.as_ref().unchecked_ref())
-                .unwrap_throw()
+                .unwrap()
         }
 
         let closure = {
@@ -46,7 +48,7 @@ impl Raf {
             Closure::wrap(Box::new(move |time| {
                 {
                     let mut state = state.borrow_mut();
-                    let state = state.as_mut().unwrap_throw();
+                    let state = state.as_mut().unwrap();
                     state.id = schedule(&state.closure);
                 }
 
@@ -56,7 +58,7 @@ impl Raf {
 
         *state.borrow_mut() = Some(RafState {
             id: schedule(&closure),
-            closure
+            closure,
         });
 
         Self { state }
@@ -66,15 +68,11 @@ impl Raf {
 impl Drop for Raf {
     fn drop(&mut self) {
         // The take is necessary in order to prevent an Rc leak
-        let state = self.state.borrow_mut().take().unwrap_throw();
+        let state = self.state.borrow_mut().take().unwrap();
 
-        window()
-            .unwrap_throw()
-            .cancel_animation_frame(state.id)
-            .unwrap_throw();
+        window().unwrap().cancel_animation_frame(state.id).unwrap();
     }
 }
-
 
 struct TimestampsManager {
     raf: Option<Raf>,
@@ -90,7 +88,6 @@ impl TimestampsManager {
         }
     }
 }
-
 
 #[derive(Debug)]
 struct TimestampsState {
@@ -128,19 +125,17 @@ impl Signal for Timestamps {
 
     // TODO implement Poll::Ready(None)
     fn poll_change(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        let mut lock = self.state.lock().unwrap_throw();
+        let mut lock = self.state.lock().unwrap();
 
         if lock.changed {
             lock.changed = false;
             Poll::Ready(Some(lock.value))
-
         } else {
             lock.waker = Some(cx.waker().clone());
             Poll::Pending
         }
     }
 }
-
 
 // TODO somehow share this safely between threads ?
 thread_local! {
@@ -164,7 +159,7 @@ pub fn timestamps() -> Timestamps {
 
                     lock.states.retain(|state| {
                         if let Some(state) = state.upgrade() {
-                            let mut lock = state.lock().unwrap_throw();
+                            let mut lock = state.lock().unwrap();
 
                             lock.changed = true;
                             lock.value = Some(time);
@@ -175,7 +170,6 @@ pub fn timestamps() -> Timestamps {
                             }
 
                             true
-
                         } else {
                             false
                         }
@@ -194,13 +188,13 @@ pub fn timestamps() -> Timestamps {
     })
 }
 
-
 pub trait AnimatedSignalVec: SignalVec {
     type Animation;
 
     fn animated_map<A, F>(self, duration: f64, f: F) -> AnimatedMap<Self, F>
-        where F: FnMut(Self::Item, Self::Animation) -> A,
-              Self: Sized;
+    where
+        F: FnMut(Self::Item, Self::Animation) -> A,
+        Self: Sized;
 }
 
 impl<S: SignalVec> AnimatedSignalVec for S {
@@ -208,7 +202,9 @@ impl<S: SignalVec> AnimatedSignalVec for S {
 
     #[inline]
     fn animated_map<A, F>(self, duration: f64, f: F) -> AnimatedMap<Self, F>
-        where F: FnMut(Self::Item, Self::Animation) -> A {
+    where
+        F: FnMut(Self::Item, Self::Animation) -> A,
+    {
         AnimatedMap {
             duration: duration,
             animations: vec![],
@@ -217,7 +213,6 @@ impl<S: SignalVec> AnimatedSignalVec for S {
         }
     }
 }
-
 
 #[derive(Debug)]
 pub struct AnimatedMapBroadcaster(MutableAnimation);
@@ -229,7 +224,6 @@ impl AnimatedMapBroadcaster {
         self.0.signal()
     }
 }
-
 
 #[derive(Debug)]
 struct AnimatedMapState {
@@ -249,9 +243,10 @@ pub struct AnimatedMap<A, B> {
 }
 
 impl<A, F, S> AnimatedMap<S, F>
-    where S: SignalVec,
-          F: FnMut(S::Item, AnimatedMapBroadcaster) -> A {
-
+where
+    S: SignalVec,
+    F: FnMut(S::Item, AnimatedMapBroadcaster) -> A,
+{
     fn animated_state(duration: f64) -> AnimatedMapState {
         let state = AnimatedMapState {
             animation: MutableAnimation::new(duration),
@@ -263,27 +258,35 @@ impl<A, F, S> AnimatedMap<S, F>
         state
     }
 
-    fn remove_index(animations: &mut Vec<AnimatedMapState>, index: usize) -> Poll<Option<VecDiff<A>>> {
+    fn remove_index(
+        animations: &mut Vec<AnimatedMapState>,
+        index: usize,
+    ) -> Poll<Option<VecDiff<A>>> {
         if index == (animations.len() - 1) {
             animations.pop();
             Poll::Ready(Some(VecDiff::Pop {}))
-
         } else {
             animations.remove(index);
             Poll::Ready(Some(VecDiff::RemoveAt { index }))
         }
     }
 
-    fn should_remove(animations: &mut Vec<AnimatedMapState>, cx: &mut Context, index: usize) -> bool {
+    fn should_remove(
+        animations: &mut Vec<AnimatedMapState>,
+        cx: &mut Context,
+        index: usize,
+    ) -> bool {
         let state = &mut animations[index];
 
         state.animation.animate_to(Percentage::new_unchecked(0.0));
 
-        let mut future = state.animation.signal().wait_for(Percentage::new_unchecked(0.0));
+        let mut future = state
+            .animation
+            .signal()
+            .wait_for(Percentage::new_unchecked(0.0));
 
         if future.poll_unpin(cx).is_ready() {
             true
-
         } else {
             state.removing = Some(future);
             false
@@ -298,12 +301,10 @@ impl<A, F, S> AnimatedMap<S, F>
             if state.removing.is_none() {
                 if seen == parent_index {
                     true
-
                 } else {
                     seen += 1;
                     false
                 }
-
             } else {
                 false
             }
@@ -312,120 +313,160 @@ impl<A, F, S> AnimatedMap<S, F>
 
     #[inline]
     fn find_last_index(animations: &Vec<AnimatedMapState>) -> Option<usize> {
-        animations.iter().rposition(|state| state.removing.is_none())
+        animations
+            .iter()
+            .rposition(|state| state.removing.is_none())
     }
 }
 
 impl<A, F, S> SignalVec for AnimatedMap<S, F>
-    where S: SignalVec,
-          F: FnMut(S::Item, AnimatedMapBroadcaster) -> A {
+where
+    S: SignalVec,
+    F: FnMut(S::Item, AnimatedMapBroadcaster) -> A,
+{
     type Item = A;
 
     // TODO this can probably be implemented more efficiently
-    fn poll_vec_change(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<VecDiff<Self::Item>>> {
+    fn poll_vec_change(
+        self: Pin<&mut Self>,
+        cx: &mut Context,
+    ) -> Poll<Option<VecDiff<Self::Item>>> {
         let mut is_done = true;
 
-        let AnimatedMapProj { mut animations, mut signal, callback, duration, .. } = self.project();
+        let AnimatedMapProj {
+            mut animations,
+            mut signal,
+            callback,
+            duration,
+            ..
+        } = self.project();
 
         // TODO is this loop correct ?
-        while let Some(result) = signal.as_mut().as_pin_mut().map(|signal| signal.poll_vec_change(cx)) {
+        while let Some(result) = signal
+            .as_mut()
+            .as_pin_mut()
+            .map(|signal| signal.poll_vec_change(cx))
+        {
             match result {
-                Poll::Ready(Some(change)) => return match change {
-                    // TODO maybe it should play remove / insert animations for this ?
-                    VecDiff::Replace { values } => {
-                        *animations = Vec::with_capacity(values.len());
+                Poll::Ready(Some(change)) => {
+                    return match change {
+                        // TODO maybe it should play remove / insert animations for this ?
+                        VecDiff::Replace { values } => {
+                            *animations = Vec::with_capacity(values.len());
 
-                        Poll::Ready(Some(VecDiff::Replace {
-                            values: values.into_iter().map(|value| {
-                                let state = AnimatedMapState {
-                                    animation: MutableAnimation::new_with_initial(*duration, Percentage::new_unchecked(1.0)),
-                                    removing: None,
-                                };
+                            Poll::Ready(Some(VecDiff::Replace {
+                                values: values
+                                    .into_iter()
+                                    .map(|value| {
+                                        let state = AnimatedMapState {
+                                            animation: MutableAnimation::new_with_initial(
+                                                *duration,
+                                                Percentage::new_unchecked(1.0),
+                                            ),
+                                            removing: None,
+                                        };
 
-                                let value = callback(value, AnimatedMapBroadcaster(state.animation.raw_clone()));
+                                        let value = callback(
+                                            value,
+                                            AnimatedMapBroadcaster(state.animation.raw_clone()),
+                                        );
 
-                                animations.push(state);
+                                        animations.push(state);
 
-                                value
-                            }).collect()
-                        }))
-                    },
-
-                    VecDiff::InsertAt { index, value } => {
-                        let index = Self::find_index(&animations, index).unwrap_or_else(|| animations.len());
-                        let state = Self::animated_state(*duration);
-                        let value = callback(value, AnimatedMapBroadcaster(state.animation.raw_clone()));
-                        animations.insert(index, state);
-                        Poll::Ready(Some(VecDiff::InsertAt { index, value }))
-                    },
-
-                    VecDiff::Push { value } => {
-                        let state = Self::animated_state(*duration);
-                        let value = callback(value, AnimatedMapBroadcaster(state.animation.raw_clone()));
-                        animations.push(state);
-                        Poll::Ready(Some(VecDiff::Push { value }))
-                    },
-
-                    VecDiff::UpdateAt { index, value } => {
-                        let index = Self::find_index(&animations, index).unwrap_throw();
-                        let state = {
-                            let state = &animations[index];
-                            AnimatedMapBroadcaster(state.animation.raw_clone())
-                        };
-                        let value = callback(value, state);
-                        Poll::Ready(Some(VecDiff::UpdateAt { index, value }))
-                    },
-
-                    // TODO test this
-                    // TODO should this be treated as a removal + insertion ?
-                    VecDiff::Move { old_index, new_index } => {
-                        let old_index = Self::find_index(&animations, old_index).unwrap_throw();
-
-                        let state = animations.remove(old_index);
-
-                        let new_index = Self::find_index(&animations, new_index).unwrap_or_else(|| animations.len());
-
-                        animations.insert(new_index, state);
-
-                        Poll::Ready(Some(VecDiff::Move { old_index, new_index }))
-                    },
-
-                    VecDiff::RemoveAt { index } => {
-                        let index = Self::find_index(&animations, index).unwrap_throw();
-
-                        if Self::should_remove(&mut animations, cx, index) {
-                            Self::remove_index(&mut animations, index)
-
-                        } else {
-                            continue;
+                                        value
+                                    })
+                                    .collect(),
+                            }))
                         }
-                    },
 
-                    VecDiff::Pop {} => {
-                        let index = Self::find_last_index(&animations).unwrap_throw();
-
-                        if Self::should_remove(&mut animations, cx, index) {
-                            Self::remove_index(&mut animations, index)
-
-                        } else {
-                            continue;
+                        VecDiff::InsertAt { index, value } => {
+                            let index = Self::find_index(&animations, index)
+                                .unwrap_or_else(|| animations.len());
+                            let state = Self::animated_state(*duration);
+                            let value = callback(
+                                value,
+                                AnimatedMapBroadcaster(state.animation.raw_clone()),
+                            );
+                            animations.insert(index, state);
+                            Poll::Ready(Some(VecDiff::InsertAt { index, value }))
                         }
-                    },
 
-                    // TODO maybe it should play remove animation for this ?
-                    VecDiff::Clear {} => {
-                        animations.clear();
-                        Poll::Ready(Some(VecDiff::Clear {}))
-                    },
-                },
+                        VecDiff::Push { value } => {
+                            let state = Self::animated_state(*duration);
+                            let value = callback(
+                                value,
+                                AnimatedMapBroadcaster(state.animation.raw_clone()),
+                            );
+                            animations.push(state);
+                            Poll::Ready(Some(VecDiff::Push { value }))
+                        }
+
+                        VecDiff::UpdateAt { index, value } => {
+                            let index = Self::find_index(&animations, index).unwrap();
+                            let state = {
+                                let state = &animations[index];
+                                AnimatedMapBroadcaster(state.animation.raw_clone())
+                            };
+                            let value = callback(value, state);
+                            Poll::Ready(Some(VecDiff::UpdateAt { index, value }))
+                        }
+
+                        // TODO test this
+                        // TODO should this be treated as a removal + insertion ?
+                        VecDiff::Move {
+                            old_index,
+                            new_index,
+                        } => {
+                            let old_index = Self::find_index(&animations, old_index).unwrap();
+
+                            let state = animations.remove(old_index);
+
+                            let new_index = Self::find_index(&animations, new_index)
+                                .unwrap_or_else(|| animations.len());
+
+                            animations.insert(new_index, state);
+
+                            Poll::Ready(Some(VecDiff::Move {
+                                old_index,
+                                new_index,
+                            }))
+                        }
+
+                        VecDiff::RemoveAt { index } => {
+                            let index = Self::find_index(&animations, index).unwrap();
+
+                            if Self::should_remove(&mut animations, cx, index) {
+                                Self::remove_index(&mut animations, index)
+                            } else {
+                                continue;
+                            }
+                        }
+
+                        VecDiff::Pop {} => {
+                            let index = Self::find_last_index(&animations).unwrap();
+
+                            if Self::should_remove(&mut animations, cx, index) {
+                                Self::remove_index(&mut animations, index)
+                            } else {
+                                continue;
+                            }
+                        }
+
+                        // TODO maybe it should play remove animation for this ?
+                        VecDiff::Clear {} => {
+                            animations.clear();
+                            Poll::Ready(Some(VecDiff::Clear {}))
+                        }
+                    }
+                }
                 Poll::Ready(None) => {
                     signal.set(None);
                     break;
-                },
+                }
                 Poll::Pending => {
                     is_done = false;
                     break;
-                },
+                }
             }
         }
 
@@ -437,26 +478,23 @@ impl<A, F, S> SignalVec for AnimatedMap<S, F>
             if let Some(ref mut future) = state.removing {
                 is_removing = true;
                 future.poll_unpin(cx).is_ready()
-
             } else {
                 false
             }
         });
 
         match index {
-            Some(index) => {
-                Self::remove_index(&mut animations, index)
-            },
-            None => if is_done && !is_removing {
-                Poll::Ready(None)
-
-            } else {
-                Poll::Pending
-            },
+            Some(index) => Self::remove_index(&mut animations, index),
+            None => {
+                if is_done && !is_removing {
+                    Poll::Ready(None)
+                } else {
+                    Poll::Pending
+                }
+            }
         }
     }
 }
-
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Percentage(f64);
@@ -477,12 +515,18 @@ impl Percentage {
     }
 
     #[inline]
-    pub fn map<F>(self, f: F) -> Self where F: FnOnce(f64) -> f64 {
+    pub fn map<F>(self, f: F) -> Self
+    where
+        F: FnOnce(f64) -> f64,
+    {
         Self::new(f(self.0))
     }
 
     #[inline]
-    pub fn map_unchecked<F>(self, f: F) -> Self where F: FnOnce(f64) -> f64 {
+    pub fn map_unchecked<F>(self, f: F) -> Self
+    where
+        F: FnOnce(f64) -> f64,
+    {
         Self::new_unchecked(f(self.0))
     }
 
@@ -506,7 +550,6 @@ impl Percentage {
     pub fn none_if(self, percentage: f64) -> Option<Self> {
         if self.0 == percentage {
             None
-
         } else {
             Some(self)
         }
@@ -517,7 +560,6 @@ impl Percentage {
 fn range_inclusive(percentage: f64, low: f64, high: f64) -> f64 {
     low + (percentage * (high - low))
 }
-
 
 /*pub struct MutableTimestamps<F> {
     callback: Arc<F>,
@@ -533,12 +575,12 @@ impl MutableTimestamps<F> where F: FnMut(f64) {
     }
 
     pub fn stop(&self) {
-        let mut lock = self.animating.lock().unwrap_throw();
+        let mut lock = self.animating.lock().unwrap();
         *lock = None;
     }
 
     pub fn start(&self) {
-        let mut lock = self.animating.lock().unwrap_throw();
+        let mut lock = self.animating.lock().unwrap();
 
         if let None = animating {
             let callback = self.callback.clone();
@@ -549,7 +591,6 @@ impl MutableTimestamps<F> where F: FnMut(f64) {
         }
     }
 }*/
-
 
 pub fn timestamps_absolute_difference() -> impl Signal<Item = Option<f64>> {
     let mut starting_time = None;
@@ -562,13 +603,14 @@ pub fn timestamps_absolute_difference() -> impl Signal<Item = Option<f64>> {
     })
 }
 
-
 pub fn timestamps_difference() -> impl Signal<Item = Option<f64>> {
     let mut previous_time = None;
 
     timestamps().map(move |current_time| {
         let diff = current_time.map(|current_time| {
-            previous_time.map(|previous_time| current_time - previous_time).unwrap_or(0.0)
+            previous_time
+                .map(|previous_time| current_time - previous_time)
+                .unwrap_or(0.0)
         });
 
         previous_time = current_time;
@@ -577,31 +619,30 @@ pub fn timestamps_difference() -> impl Signal<Item = Option<f64>> {
     })
 }
 
-
 pub struct OnTimestampDiff(DiscardOnDrop<CancelableFutureHandle>);
 
 impl OnTimestampDiff {
-    pub fn new<F>(mut callback: F) -> Self where F: FnMut(f64) + 'static {
-        OnTimestampDiff(spawn_future(
-            timestamps_absolute_difference()
-                .for_each(move |diff| {
-                    if let Some(diff) = diff {
-                        callback(diff);
-                    }
+    pub fn new<F>(mut callback: F) -> Self
+    where
+        F: FnMut(f64) + 'static,
+    {
+        OnTimestampDiff(spawn_future(timestamps_absolute_difference().for_each(
+            move |diff| {
+                if let Some(diff) = diff {
+                    callback(diff);
+                }
 
-                    ready(())
-                })
-        ))
+                ready(())
+            },
+        )))
     }
 }
 
 impl fmt::Debug for OnTimestampDiff {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.debug_tuple("OnTimestampDiff")
-            .finish()
+        fmt.debug_tuple("OnTimestampDiff").finish()
     }
 }
-
 
 #[derive(Debug)]
 pub struct MutableAnimationSignal(MutableSignal<Percentage>);
@@ -614,7 +655,6 @@ impl Signal for MutableAnimationSignal {
         self.0.poll_change_unpin(cx)
     }
 }
-
 
 // TODO verify that this is Sync and Send
 struct MutableAnimationState {
@@ -639,7 +679,7 @@ pub struct MutableAnimation {
 
 impl fmt::Debug for MutableAnimation {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let state = self.inner.state.lock().unwrap_throw();
+        let state = self.inner.state.lock().unwrap();
 
         fmt.debug_struct("MutableAnimation")
             .field("playing", &state.playing)
@@ -697,27 +737,27 @@ impl MutableAnimation {
 
                     let state = self.raw_clone();
 
-                    lock._animating = Some(OnTimestampDiff::new(move |diff| {
-                        let diff = diff / duration;
+                    lock._animating =
+                        Some(OnTimestampDiff::new(move |diff| {
+                            let diff = diff / duration;
 
-                        // TODO test the performance of set_neq
-                        if diff >= 1.0 {
-                            {
-                                let mut lock = state.inner.state.lock().unwrap_throw();
-                                Self::stop_animating(&mut lock);
+                            // TODO test the performance of set_neq
+                            if diff >= 1.0 {
+                                {
+                                    let mut lock = state.inner.state.lock().unwrap();
+                                    Self::stop_animating(&mut lock);
+                                }
+                                state.inner.value.set_neq(Percentage::new_unchecked(end));
+                            } else {
+                                state.inner.value.set_neq(Percentage::new_unchecked(
+                                    range_inclusive(diff, start, end),
+                                ));
                             }
-                            state.inner.value.set_neq(Percentage::new_unchecked(end));
-
-                        } else {
-                            state.inner.value.set_neq(Percentage::new_unchecked(range_inclusive(diff, start, end)));
-                        }
-                    }));
-
+                        }));
                 } else {
                     Self::stop_animating(lock);
                     self.inner.value.set_neq(Percentage::new_unchecked(end));
                 }
-
             } else {
                 // TODO is this necessary ?
                 Self::stop_animating(lock);
@@ -728,7 +768,7 @@ impl MutableAnimation {
     pub fn set_duration(&self, duration: f64) {
         debug_assert!(duration >= 0.0);
 
-        let mut lock = self.inner.state.lock().unwrap_throw();
+        let mut lock = self.inner.state.lock().unwrap();
 
         if lock.duration != duration {
             lock.duration = duration;
@@ -738,7 +778,7 @@ impl MutableAnimation {
 
     #[inline]
     pub fn pause(&self) {
-        let mut lock = self.inner.state.lock().unwrap_throw();
+        let mut lock = self.inner.state.lock().unwrap();
 
         if lock.playing {
             lock.playing = false;
@@ -748,7 +788,7 @@ impl MutableAnimation {
 
     #[inline]
     pub fn play(&self) {
-        let mut lock = self.inner.state.lock().unwrap_throw();
+        let mut lock = self.inner.state.lock().unwrap();
 
         if !lock.playing {
             lock.playing = true;
@@ -756,7 +796,11 @@ impl MutableAnimation {
         }
     }
 
-    fn _jump_to(mut lock: &mut MutableAnimationState, mutable: &Mutable<Percentage>, end: Percentage) {
+    fn _jump_to(
+        mut lock: &mut MutableAnimationState,
+        mutable: &Mutable<Percentage>,
+        end: Percentage,
+    ) {
         Self::stop_animating(&mut lock);
 
         lock.end = end;
@@ -765,18 +809,17 @@ impl MutableAnimation {
     }
 
     pub fn jump_to(&self, end: Percentage) {
-        let mut lock = self.inner.state.lock().unwrap_throw();
+        let mut lock = self.inner.state.lock().unwrap();
 
         Self::_jump_to(&mut lock, &self.inner.value, end);
     }
 
     pub fn animate_to(&self, end: Percentage) {
-        let mut lock = self.inner.state.lock().unwrap_throw();
+        let mut lock = self.inner.state.lock().unwrap();
 
         if lock.end != end {
             if lock.duration <= 0.0 {
                 Self::_jump_to(&mut lock, &self.inner.value, end);
-
             } else {
                 lock.end = end;
                 self.start_animating(&mut lock);
@@ -795,7 +838,6 @@ impl MutableAnimation {
     }
 }
 
-
 pub mod easing {
     use super::Percentage;
 
@@ -811,21 +853,25 @@ pub mod easing {
     }
 
     #[inline]
-    pub fn out<F>(p: Percentage, f: F) -> Percentage where F: FnOnce(Percentage) -> Percentage {
+    pub fn out<F>(p: Percentage, f: F) -> Percentage
+    where
+        F: FnOnce(Percentage) -> Percentage,
+    {
         f(p.invert()).invert()
     }
 
-    pub fn in_out<F>(p: Percentage, f: F) -> Percentage where F: FnOnce(Percentage) -> Percentage {
+    pub fn in_out<F>(p: Percentage, f: F) -> Percentage
+    where
+        F: FnOnce(Percentage) -> Percentage,
+    {
         p.map_unchecked(|p| {
             if p <= 0.5 {
                 f(Percentage::new_unchecked(p * 2.0)).into_f64() / 2.0
-
             } else {
                 1.0 - (f(Percentage::new_unchecked((1.0 - p) * 2.0)).into_f64() / 2.0)
             }
         })
     }
-
 
     /*pub struct Point {
         pub x: f64,
@@ -860,7 +906,6 @@ pub mod easing {
         (3.0 * a * p * p) + (2.0 * b * p) + c
     }*/
 
-
     const EPSILON: f64 = 1e-6;
 
     pub struct CubicBezier {
@@ -888,7 +933,14 @@ pub mod easing {
             let by = 3.0 * (y2 - y1) - cy;
             let ay = 1.0 - cy - by;
 
-            Self { ax, bx, cx, ay, by, cy }
+            Self {
+                ax,
+                bx,
+                cx,
+                ay,
+                by,
+                cy,
+            }
         }
 
         /*fn values(p: f64) -> (f64, f64, f64, f64) {
@@ -908,10 +960,8 @@ pub mod easing {
             p.map_unchecked(|p| {
                 if p == 0.0 {
                     0.0
-
                 } else if p == 1.0 {
                     1.0
-
                 } else {
                     self.y(self.get_t_for_x(p))
                 }
@@ -988,7 +1038,6 @@ pub mod easing {
 
                 if x > 0.0 {
                     end = t;
-
                 } else {
                     start = t;
                 }
@@ -1072,7 +1121,6 @@ pub mod easing {
         }*/
     }
 }
-
 
 /*cubic_bezier(t,
     Percentage::new(1.0),
