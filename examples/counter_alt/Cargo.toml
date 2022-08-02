@@ -1,0 +1,29 @@
+[package]
+name = "counter"
+version = "0.1.0"
+description = "Counter demo using dominator"
+authors = ["Pauan <pauanyu+github@pm.me>"]
+categories = ["wasm"]
+readme = "README.md"
+license = "MIT"
+edition = "2018"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3  # 3 => fast, s/z => small
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-O4"]  # O4 => fast, Oz/Os => small
+
+[lib]
+crate-type = ["cdylib"]
+
+[workspace]
+
+[dependencies]
+console_error_panic_hook = "0.1.6"
+dominator = { version = "0.5.18", path = "../../" }
+wasm-bindgen = "0.2.74"
+futures-signals = "0.3.20"
+once_cell = "1.7.2"

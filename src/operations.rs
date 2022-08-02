@@ -53,7 +53,7 @@ fn for_each_vec<A, B>(signal: A, mut callback: B) -> CancelableFutureHandle
 }
 
 
-pub(crate) fn insert_children_one(element: &Node, callbacks: &mut Callbacks, dom: &mut Dom) {
+pub(crate) fn insert_children_one(element: &Node, callbacks: &mut Callbacks, mut dom: Dom) {
     // TODO can this be made more efficient ?
     callbacks.after_insert.append(&mut dom.callbacks.after_insert);
     callbacks.after_remove.append(&mut dom.callbacks.after_remove);
@@ -62,10 +62,9 @@ pub(crate) fn insert_children_one(element: &Node, callbacks: &mut Callbacks, dom
 }
 
 #[inline]
-pub(crate) fn insert_children_iter<A: std::borrow::BorrowMut<Dom>, B: IntoIterator<Item = A>>(element: &Node, callbacks: &mut Callbacks, value: B) {
-    for mut dom in value {
-        let dom = std::borrow::BorrowMut::borrow_mut(&mut dom);
-        insert_children_one(element, callbacks, dom);
+pub(crate) fn insert_children_iter<A: Into<Dom>, B: IntoIterator<Item = A>>(element: &Node, callbacks: &mut Callbacks, value: B) {
+    for dom in value {
+        insert_children_one(element, callbacks, dom.into());
     }
 }
 
@@ -80,8 +79,9 @@ fn after_insert(is_inserted: bool, callbacks: &mut Callbacks) {
 
 
 #[inline]
-pub(crate) fn insert_child_signal<A>(element: Node, callbacks: &mut Callbacks, signal: A)
-    where A: Signal<Item = Option<Dom>> + 'static {
+pub(crate) fn insert_child_signal<A, D>(element: Node, callbacks: &mut Callbacks, signal: A)
+    where A: Signal<Item = Option<D>> + 'static, 
+    D: Into<Dom> {
 
     struct State {
         is_inserted: bool,
@@ -160,7 +160,7 @@ pub(crate) fn insert_child_signal<A>(element: Node, callbacks: &mut Callbacks, s
         state: state.clone(),
         signal: for_each(signal, move |child| {
             let mut state = state.borrow_mut();
-            state.after_remove(&element, &marker, child);
+            state.after_remove(&element, &marker, child.map(|d| d.into()));
         }),
     });
 }

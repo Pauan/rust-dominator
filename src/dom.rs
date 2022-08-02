@@ -1,5 +1,4 @@
 use std::pin::Pin;
-use std::borrow::BorrowMut;
 use std::convert::AsRef;
 use std::future::Future;
 use std::task::{Context, Poll};
@@ -110,7 +109,8 @@ impl Discard for DomHandle {
 
 #[inline]
 #[track_caller]
-pub fn append_dom(parent: &Node, mut dom: Dom) -> DomHandle {
+pub fn append_dom(parent: &Node, dom: impl Into<Dom>) -> DomHandle {
+    let mut dom = dom.into();
     bindings::append_child(&parent, &dom.element);
 
     dom.callbacks.trigger_after_insert();
@@ -226,6 +226,9 @@ pub fn text_signal<A, B>(value: B) -> Dom
 }
 
 
+pub fn el(name: &'static str) -> DomBuilder<HtmlElement> {
+    DomBuilder::<HtmlElement>::new_html(name)
+}
 // TODO better warning message for must_use
 #[must_use]
 #[derive(Debug)]
@@ -474,6 +477,14 @@ pub struct DomBuilder<A> {
     callbacks: Callbacks,
 }
 
+impl<A> From<DomBuilder<A>> for Dom 
+where A: Into<web_sys::Node>,
+{
+    fn from(d: DomBuilder<A>) -> Self {
+        d.into_dom()
+    }
+}
+
 impl<A> DomBuilder<A> where A: JsCast {
     #[track_caller]
     #[inline]
@@ -717,15 +728,16 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
 
     #[inline]
     #[track_caller]
-    pub fn child<B: BorrowMut<Dom>>(mut self, mut child: B) -> Self {
-        operations::insert_children_one(self.element.as_ref(), &mut self.callbacks, child.borrow_mut());
+    pub fn child<B: Into<Dom>>(mut self, child: B) -> Self {
+        operations::insert_children_one(self.element.as_ref(), &mut self.callbacks, child.into());
         self
     }
 
     #[inline]
     #[track_caller]
-    pub fn child_signal<B>(mut self, child: B) -> Self
-        where B: Signal<Item = Option<Dom>> + 'static {
+    pub fn child_signal<B, D>(mut self, child: B) -> Self
+        where B: Signal<Item = Option<D>> + 'static,
+        D: Into<Dom> {
 
         operations::insert_child_signal(self.element.as_ref().clone(), &mut self.callbacks, child);
         self
@@ -734,7 +746,7 @@ impl<A> DomBuilder<A> where A: AsRef<Node> {
     // TODO figure out how to make this owned rather than &mut
     #[inline]
     #[track_caller]
-    pub fn children<B: BorrowMut<Dom>, C: IntoIterator<Item = B>>(mut self, children: C) -> Self {
+    pub fn children<B: Into<Dom>, C: IntoIterator<Item = B>>(mut self, children: C) -> Self {
         operations::insert_children_iter(self.element.as_ref(), &mut self.callbacks, children);
         self
     }
@@ -1446,7 +1458,7 @@ mod tests {
     #[test]
     fn children_mut() {
         let _a: DomBuilder<HtmlElement> = DomBuilder::new_html("div")
-            .children(&mut [
+            .children([
                 DomBuilder::<HtmlElement>::new_html("div").into_dom(),
                 DomBuilder::<HtmlElement>::new_html("div").into_dom(),
                 DomBuilder::<HtmlElement>::new_html("div").into_dom(),
@@ -1565,7 +1577,7 @@ mod tests {
     fn shadow_root() {
         let _a = html!("div", {
             .shadow_root!(ShadowRootMode::Closed => {
-                .children(&mut [
+                .children([
                     html!("span")
                 ])
             })
