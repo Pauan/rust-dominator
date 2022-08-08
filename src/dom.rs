@@ -1286,8 +1286,8 @@ impl ClassBuilder {
     #[doc(hidden)]
     #[inline]
     #[track_caller]
-    pub fn __internal_new() -> Self {
-        let class_name = __internal::make_class_id();
+    pub fn __internal_new(name: Option<&str>) -> Self {
+        let class_name = __internal::make_class_id(name);
 
         Self {
             // TODO make this more efficient ?
@@ -1387,7 +1387,7 @@ pub mod __internal {
     pub use web_sys::SvgElement;
 
 
-    pub fn make_class_id() -> String {
+    pub fn make_class_id(name: Option<&str>) -> String {
         // TODO replace this with a global counter in JavaScript ?
         // TODO can this be made more efficient ?
         static CLASS_ID: AtomicU32 = AtomicU32::new(0);
@@ -1396,10 +1396,10 @@ pub mod __internal {
         // TODO should this be SeqCst ?
         let id = CLASS_ID.fetch_add(1, Ordering::Relaxed);
 
+        let name = name.unwrap_or("__class_");
         // TODO make this more efficient ?
-        format!("__class_{}__", id)
+        format!("{}_{}", name, id)
     }
-
 
     pub struct Pseudo<'a, A> {
         class_name: &'a str,
