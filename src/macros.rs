@@ -111,7 +111,7 @@ macro_rules! stylesheet {
 
 #[macro_export]
 macro_rules! class {
-    ($name:literal $($methods:tt)*) => {{
+    (#![prefix = $name:literal] $($methods:tt)*) => {{
         $crate::ClassBuilder::__internal_done($crate::apply_methods!($crate::ClassBuilder::__internal_new(Some($name)), { $($methods)* }))
     }};
     ($($methods:tt)*) => {{
