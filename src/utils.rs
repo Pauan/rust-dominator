@@ -145,6 +145,7 @@ impl<T> UnwrapJsExt<T> for Result<T, JsValue> {
                     Some(e) => {
                         panic!("{}", e.message());
                     },
+                    // TODO test this
                     None => {
                         panic!("{:?}", e);
                     },
@@ -163,6 +164,8 @@ impl<T> UnwrapJsExt<T> for Result<T, JsValue> {
 }
 
 
+// This needs to be a macro because #[track_caller] isn't supported in closures
+// https://github.com/rust-lang/rust/issues/87417
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __unwrap {
