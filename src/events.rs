@@ -420,6 +420,9 @@ static_event_impl!(Submit => "submit");
 make_event!(Resize => web_sys::UiEvent);
 static_event_impl!(Resize => "resize");
 
+make_event!(SelectionChange => web_sys::Event);
+static_event_impl!(SelectionChange => "selectionchange");
+
 
 
 impl Input {
