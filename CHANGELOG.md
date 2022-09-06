@@ -1,3 +1,8 @@
+## 0.5.29 - (2022-09-05)
+* Improves runtime error messages.
+* Adds in new `#![prefix = "foo"]` syntax for `class!`. This is used to give a name to the class, for debugging purposes.
+* Adding in new `SelectionChange` event.
+
 ## 0.5.28 - (2022-07-16)
 * Fixing the incorrect behavior of MouseEnter and MouseLeave events.
 
