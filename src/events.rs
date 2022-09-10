@@ -411,6 +411,9 @@ static_event_impl!(Wheel => "wheel");
 make_event!(Load => web_sys::Event);
 static_event_impl!(Load => "load");
 
+make_event!(Error => web_sys::Event);
+static_event_impl!(Error => "error");
+
 make_event!(Scroll => web_sys::Event);
 static_event_impl!(Scroll => "scroll");
 
