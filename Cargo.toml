@@ -31,6 +31,7 @@ gloo-events = "0.1.2"
 [dependencies.web-sys]
 version = "0.3.22"
 features = [
+    "AnimationEvent",
     "CharacterData",
     "Comment",
     "CssRule",
@@ -55,9 +56,8 @@ features = [
     "HtmlTextAreaElement",
     "KeyboardEvent",
     "Location",
+    "MessageEvent",
     "MouseEvent",
-    "AnimationEvent",
-    "WheelEvent",
     "Node",
     "PointerEvent",
     "ShadowRoot",
@@ -70,6 +70,7 @@ features = [
     "TouchEvent",
     "TouchList",
     "UiEvent",
+    "WheelEvent",
     "Window",
 ]
 

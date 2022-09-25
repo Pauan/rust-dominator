@@ -1,6 +1,6 @@
 use crate::traits::StaticEvent;
 use crate::EventOptions;
-use wasm_bindgen::JsCast;
+use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{EventTarget, HtmlInputElement, HtmlTextAreaElement, TouchList, Touch};
 
 
@@ -250,6 +250,15 @@ macro_rules! make_wheel_event {
     };
 }
 
+macro_rules! make_message_event {
+    ($name:ident) => {
+        make_event!($name => web_sys::MessageEvent);
+
+        impl $name {
+            #[inline] pub fn data(&self) -> JsValue { self.event.data() }
+        }
+    };
+}
 
 make_mouse_event!(Click => web_sys::MouseEvent);
 static_event_impl!(Click => "click");
@@ -406,6 +415,10 @@ static_event_impl!(AnimationEnd => "animationend");
 
 make_wheel_event!(Wheel);
 static_event_impl!(Wheel => "wheel");
+
+
+make_message_event!(Message);
+static_event_impl!(Message => "message");
 
 
 make_event!(Load => web_sys::Event);
