@@ -183,12 +183,16 @@ impl Signal for IsWindowLoaded {
 }
 
 // TODO this should be moved into gloo
+/// `Signal` which says whether the window is fully loaded or not.
+///
+/// This is the same as the [DOM `load` event](https://developer.mozilla.org/en-US/docs/Web/API/Window/load_event).
 #[inline]
 pub fn is_window_loaded() -> impl Signal<Item = bool> {
     IsWindowLoaded::Initial {}
 }
 
 
+/// This is returned by the [`window_size`] function.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WindowSize {
     pub width: f64,
@@ -220,6 +224,10 @@ impl Signal for WindowSizeSignal {
     }
 }
 
+// TODO should this be moved into gloo ?
+/// `Signal` which gives the current width / height of the window.
+///
+/// When the window is resized, it will automatically update with the new size.
 pub fn window_size() -> impl Signal<Item = WindowSize> {
     let (sender, receiver) = channel(WindowSize::new());
 
