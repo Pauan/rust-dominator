@@ -121,6 +121,27 @@ impl<A, C> AsStr for RefFn<A, str, C> where C: Fn(&A) -> &str {
 }
 
 
+#[derive(Debug)]
+pub(crate) struct MapMultiStr<A, F> where F: Fn(&str) -> String {
+    multi_str: A,
+    callback: F,
+}
+
+impl<A, F> MapMultiStr<A, F> where F: Fn(&str) -> String {
+    pub(crate) fn new(multi_str: A, callback: F) -> Self {
+        Self { multi_str, callback }
+    }
+}
+
+impl<M, T> MultiStr for MapMultiStr<M, T> where M: MultiStr, T: Fn(&str) -> String {
+    fn find_map<A, F>(&self, mut f: F) -> Option<A> where F: FnMut(&str) -> Option<A> {
+        self.multi_str.find_map(|x| {
+            f(&(self.callback)(x))
+        })
+    }
+}
+
+
 pub trait MultiStr {
     fn find_map<A, F>(&self, f: F) -> Option<A> where F: FnMut(&str) -> Option<A>;
 

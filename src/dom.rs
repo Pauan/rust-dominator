@@ -11,7 +11,7 @@ use futures_util::FutureExt;
 use futures_channel::oneshot;
 use discard::{Discard, DiscardOnDrop};
 use wasm_bindgen::{JsValue, UnwrapThrowExt, JsCast, intern};
-use web_sys::{HtmlElement, Node, EventTarget, Element, CssStyleSheet, CssStyleDeclaration, ShadowRoot, ShadowRootMode, ShadowRootInit, Text};
+use web_sys::{HtmlElement, Node, EventTarget, Element, CssRule, CssStyleRule, CssStyleSheet, CssStyleDeclaration, ShadowRoot, ShadowRootMode, ShadowRootInit, Text};
 
 use crate::bindings;
 use crate::bindings::WINDOW;
@@ -1218,32 +1218,25 @@ pub struct StylesheetBuilder {
 
 // TODO remove the CssStyleRule when this is discarded
 impl StylesheetBuilder {
-    // TODO should this inline ?
-    #[doc(hidden)]
-    #[inline]
-    pub fn __internal_new<A>(selector: A) -> Self where A: MultiStr {
+    fn __internal_rules<A>(rules: &A) -> CssRule where A: MultiStr {
         // TODO can this be made faster ?
         // TODO somehow share this safely between threads ?
         thread_local! {
             static STYLESHEET: CssStyleSheet = bindings::create_stylesheet();
         }
 
-        fn try_make(stylesheet: &CssStyleSheet, selector: &str, selectors: &mut Vec<String>) -> Option<CssStyleDeclaration> {
-            // TODO maybe intern the selector ?
-            if let Ok(declaration) = bindings::make_style_rule(stylesheet, selector) {
-                Some(declaration.style())
+        STYLESHEET.with(move |stylesheet| {
+            let mut failed = vec![];
 
-            } else {
-                selectors.push(String::from(selector));
-                None
-            }
-        }
+            let okay = rules.find_map(|rule| {
+                // TODO maybe intern the rule ?
+                if let Ok(declaration) = bindings::make_rule(stylesheet, rule) {
+                    Some(declaration)
 
-        let element = STYLESHEET.with(move |stylesheet| {
-            let mut selectors = vec![];
-
-            let okay = selector.find_map(|selector| {
-                try_make(stylesheet, selector, &mut selectors)
+                } else {
+                    failed.push(String::from(rule));
+                    None
+                }
             });
 
             if let Some(okay) = okay {
@@ -1251,14 +1244,26 @@ impl StylesheetBuilder {
 
             } else {
                 // TODO maybe make this configurable
-                panic!("selectors are incorrect:\n  {}", selectors.join("\n  "));
+                panic!("selectors are incorrect:\n  {}", failed.join("\n  "));
             }
-        });
+        })
+    }
+
+    #[doc(hidden)]
+    #[inline]
+    pub fn __internal_stylesheet<A>(rules: A) -> Self where A: MultiStr {
+        let element = Self::__internal_rules(&rules).unchecked_into::<CssStyleRule>();
 
         Self {
-            element,
+            element: element.style(),
             callbacks: Callbacks::new(),
         }
+    }
+
+    #[doc(hidden)]
+    #[inline]
+    pub fn __internal_new<A>(rules: A) -> Self where A: MultiStr {
+        Self::__internal_stylesheet(MapMultiStr::new(rules, |rule| format!("{} {{}}", rule)))
     }
 
     #[inline]
@@ -1357,7 +1362,7 @@ impl ClassBuilder {
 
         Self {
             // TODO make this more efficient ?
-            stylesheet: StylesheetBuilder::__internal_new(&format!(".{}", class_name)),
+            stylesheet: StylesheetBuilder::__internal_stylesheet(&format!(".{} {{}}", class_name)),
             class_name,
         }
     }
@@ -1466,6 +1471,7 @@ pub mod __internal {
         // TODO make this more efficient ?
         format!("{}_{}", name, id)
     }
+
 
     pub struct Pseudo<'a, A> {
         class_name: &'a str,

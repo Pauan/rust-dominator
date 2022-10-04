@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::{JsCast, intern};
 use js_sys::Reflect;
-use web_sys::{HtmlElement, Element, Node, Window, History, Document, Text, Comment, DomTokenList, CssStyleSheet, CssStyleDeclaration, HtmlStyleElement, CssStyleRule};
+use web_sys::{HtmlElement, Element, Node, Window, History, Document, Text, Comment, DomTokenList, CssStyleSheet, CssStyleDeclaration, HtmlStyleElement, CssRule};
 use crate::utils::UnwrapJsExt;
 
 
@@ -53,13 +53,13 @@ pub(crate) fn create_stylesheet() -> CssStyleSheet {
 }
 
 #[track_caller]
-pub(crate) fn make_style_rule(sheet: &CssStyleSheet, selector: &str) -> Result<CssStyleRule, JsValue> {
+pub(crate) fn make_rule(sheet: &CssStyleSheet, rule: &str) -> Result<CssRule, JsValue> {
     let rules = sheet.css_rules().unwrap_js();
     let length = rules.length();
     // TODO don't return u32 ?
-    sheet.insert_rule_with_index(&format!("{}{{}}", selector), length)?;
+    sheet.insert_rule_with_index(rule, length)?;
     // TODO use dyn_into ?
-    Ok(rules.get(length).unwrap_throw().unchecked_into())
+    Ok(rules.get(length).unwrap_throw())
 }
 
 
