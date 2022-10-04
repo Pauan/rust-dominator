@@ -9,6 +9,7 @@ use crate::dom::EventOptions;
 use crate::traits::StaticEvent;
 
 
+#[derive(Debug)]
 pub(crate) struct EventListener(Option<gloo_events::EventListener>);
 
 // TODO should these inline ?

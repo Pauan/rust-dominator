@@ -5,7 +5,7 @@ use std::future::Future;
 use std::task::{Context, Poll};
 
 use once_cell::sync::Lazy;
-use futures_signals::signal::{Signal, not};
+use futures_signals::signal::{Signal, not, channel, Receiver};
 use futures_signals::signal_vec::SignalVec;
 use futures_util::FutureExt;
 use futures_channel::oneshot;
@@ -14,6 +14,7 @@ use wasm_bindgen::{JsValue, UnwrapThrowExt, JsCast, intern};
 use web_sys::{HtmlElement, Node, EventTarget, Element, CssStyleSheet, CssStyleDeclaration, ShadowRoot, ShadowRootMode, ShadowRootInit, Text};
 
 use crate::bindings;
+use crate::bindings::WINDOW;
 use crate::callbacks::Callbacks;
 use crate::traits::*;
 use crate::operations;
@@ -151,9 +152,14 @@ impl Signal for IsWindowLoaded {
 
                     *self = IsWindowLoaded::Pending {
                         receiver,
-                        _event: EventListener::once(&bindings::window_event_target(), "load", move |_| {
-                            // TODO test this
-                            sender.send(Some(true)).unwrap_throw();
+                        _event: WINDOW.with(|window| {
+                            EventListener::once(window, "load", move |_| {
+                                // TODO test this
+                                crate::__unwrap!(
+                                    sender.send(Some(true)),
+                                    _e => panic!("Invalid is_window_loaded() state"),
+                                )
+                            })
                         }),
                     };
 
@@ -180,6 +186,56 @@ impl Signal for IsWindowLoaded {
 #[inline]
 pub fn is_window_loaded() -> impl Signal<Item = bool> {
     IsWindowLoaded::Initial {}
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WindowSize {
+    pub width: f64,
+    pub height: f64,
+}
+
+impl WindowSize {
+    fn new() -> Self {
+        WINDOW.with(|window| {
+            let width = window.inner_width().unwrap_throw().as_f64().unwrap_throw();
+            let height = window.inner_height().unwrap_throw().as_f64().unwrap_throw();
+
+            Self { width, height }
+        })
+    }
+}
+
+#[derive(Debug)]
+struct WindowSizeSignal {
+    _listener: EventListener,
+    receiver: Receiver<WindowSize>,
+}
+
+impl Signal for WindowSizeSignal {
+    type Item = WindowSize;
+
+    fn poll_change(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+        Pin::new(&mut self.receiver).poll_change(cx)
+    }
+}
+
+pub fn window_size() -> impl Signal<Item = WindowSize> {
+    let (sender, receiver) = channel(WindowSize::new());
+
+    let listener = WINDOW.with(|window| {
+        on(window, &EventOptions::default(), move |_: crate::events::Resize| {
+            crate::__unwrap!(
+                sender.send(WindowSize::new()),
+                _e => panic!("Invalid window_size() state"),
+            )
+        })
+    });
+
+    WindowSizeSignal {
+        _listener: listener,
+        receiver,
+    }
 }
 
 
@@ -519,7 +575,9 @@ impl<A> DomBuilder<A> {
     pub fn global_event_with_options<T, F>(mut self, options: &EventOptions, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        Self::_event(&mut self.callbacks, &bindings::window_event_target(), options, listener);
+        WINDOW.with(|window| {
+            Self::_event(&mut self.callbacks, window, options, listener);
+        });
         self
     }
 

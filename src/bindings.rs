@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::{JsCast, intern};
 use js_sys::Reflect;
-use web_sys::{HtmlElement, Element, Node, Window, History, Document, Text, Comment, DomTokenList, CssStyleSheet, CssStyleDeclaration, HtmlStyleElement, CssStyleRule, EventTarget};
+use web_sys::{HtmlElement, Element, Node, Window, History, Document, Text, Comment, DomTokenList, CssStyleSheet, CssStyleDeclaration, HtmlStyleElement, CssStyleRule};
 use crate::utils::UnwrapJsExt;
 
 
@@ -14,14 +14,9 @@ pub(crate) fn set_property(obj: &JsValue, name: &str, value: &JsValue) {
 
 
 thread_local! {
-    static WINDOW: Window = web_sys::window().unwrap_throw();
+    pub static WINDOW: Window = web_sys::window().unwrap_throw();
     static DOCUMENT: Document = WINDOW.with(|w| w.document().unwrap_throw());
     static HISTORY: History = WINDOW.with(|w| w.history().unwrap_js());
-}
-
-pub(crate) fn window_event_target() -> EventTarget {
-    // TODO avoid the clone somehow ?
-    WINDOW.with(|w| w.clone().into())
 }
 
 pub(crate) fn body() -> HtmlElement {
