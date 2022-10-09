@@ -12,9 +12,11 @@ mod bindings;
 mod callbacks;
 mod operations;
 mod dom;
+mod fragment;
 
 pub use web_sys::ShadowRootMode;
 pub use dom::*;
+pub use fragment::*;
 pub mod traits;
 pub mod animation;
 pub mod routing;

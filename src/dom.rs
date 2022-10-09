@@ -17,6 +17,7 @@ use crate::bindings;
 use crate::bindings::WINDOW;
 use crate::callbacks::Callbacks;
 use crate::traits::*;
+use crate::fragment::{Fragment, FragmentBuilder};
 use crate::operations;
 use crate::operations::{for_each, spawn_future};
 use crate::utils::{EventListener, on, UnwrapJsExt, ValueDiscard, FnDiscard};
@@ -533,6 +534,7 @@ impl Default for EventOptions {
 
 // TODO better warning message for must_use
 #[must_use]
+#[derive(Debug)]
 pub struct DomBuilder<A> {
     element: A,
     callbacks: Callbacks,
@@ -614,6 +616,7 @@ impl<A> DomBuilder<A> {
     }
 
 
+    // TODO experiment with giving the closure &Self instead, to make it impossible to return a different element
     #[inline]
     pub fn apply<F>(self, f: F) -> Self where F: FnOnce(Self) -> Self {
         f(self)
@@ -762,6 +765,27 @@ impl<A> DomBuilder<A> where A: AsRef<EventTarget> {
 }
 
 impl<A> DomBuilder<A> where A: AsRef<Node> {
+    /// Inserts the [`Fragment`] into this [`DomBuilder`].
+    ///
+    /// See the documentation for [`fragment`] for more details.
+    #[inline]
+    #[track_caller]
+    pub fn fragment<F>(self, fragment: &F) -> Self where F: Fragment {
+        let FragmentBuilder(DomBuilder { callbacks, .. }) = {
+            let element: &Node = self.element.as_ref();
+
+            fragment.apply(FragmentBuilder(DomBuilder {
+                element,
+                callbacks: self.callbacks,
+            }))
+        };
+
+        Self {
+            element: self.element,
+            callbacks,
+        }
+    }
+
     #[inline]
     #[track_caller]
     pub fn text(self, value: &str) -> Self {
@@ -1451,6 +1475,7 @@ impl ClassBuilder {
 #[doc(hidden)]
 pub mod __internal {
     use std::sync::atomic::{AtomicU32, Ordering};
+    use crate::fragment::{Fragment, FragmentBuilder, BoxFragment};
     use crate::traits::MultiStr;
 
 
@@ -1492,6 +1517,27 @@ pub mod __internal {
                 f(&format!(".{}{}", self.class_name, x))
             })
         }
+    }
+
+
+    #[derive(Debug)]
+    struct FnFragment<F>(F);
+
+    impl<F> Fragment for FnFragment<F> where F: Fn(FragmentBuilder<'_>) -> FragmentBuilder<'_> {
+        #[inline]
+        fn apply<'a>(&self, dom: FragmentBuilder<'a>) -> FragmentBuilder<'a> {
+            (self.0)(dom)
+        }
+    }
+
+    #[inline]
+    pub fn fragment<F>(f: F) -> impl Fragment where F: Fn(FragmentBuilder<'_>) -> FragmentBuilder<'_> {
+        FnFragment(f)
+    }
+
+    #[inline]
+    pub fn box_fragment<F>(f: F) -> BoxFragment where F: Fn(FragmentBuilder<'_>) -> FragmentBuilder<'_> + Send + Sync + 'static {
+        Box::new(FnFragment(f))
     }
 }
 
