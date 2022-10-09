@@ -1,3 +1,7 @@
+## 0.5.31 - (2022-10-09)
+* Adding in `window_size()` function.
+* Adding in fragments.
+
 ## 0.5.30 - (2022-09-09)
 * Adding in `error` event.
 
