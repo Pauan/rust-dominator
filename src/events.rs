@@ -1,7 +1,7 @@
 use crate::traits::StaticEvent;
 use crate::EventOptions;
 use wasm_bindgen::JsCast;
-use web_sys::{EventTarget, HtmlInputElement, HtmlTextAreaElement, TouchList, Touch};
+use web_sys::{EventTarget, HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement, TouchList, Touch};
 
 
 #[cfg(feature = "nightly")]
@@ -462,8 +462,28 @@ impl Change {
             _ => None,
         }
     }
-}
 
+    /// Useful to retrive the value from a change event on compatible HTML
+    /// elements such as a HTML Input Element or a HTML Select Element.
+    ///
+    /// Refer: https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/change_event#select_element
+    pub fn value(&self) -> Option<String> {
+        // HTML Select Element triggers a Change event when selecting an option
+        if let Some(target) = self.dyn_target::<HtmlSelectElement>() {
+            let value = target.value();
+
+            return Some(value);
+        }
+
+        let target = self.dyn_target::<HtmlInputElement>()?;
+        let value = target.value();
+
+        match target.type_().as_str() {
+            "email" | "password" | "search" | "tel" | "text" | "url" => Some(value),
+            _ => None,
+        }
+    }
+}
 
 make_touch_event!(TouchCancel);
 static_event_impl!(TouchCancel => "touchcancel");
