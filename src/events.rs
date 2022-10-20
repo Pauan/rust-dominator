@@ -451,7 +451,6 @@ impl Input {
 make_event!(Change => web_sys::Event);
 static_event_impl!(Change => "change");
 
-// TODO add in a value method as well, the same as Input::value
 impl Change {
     // https://developer.mozilla.org/en-US/docs/Web/API/HTMLInputElement
     pub fn checked(&self) -> Option<bool> {
