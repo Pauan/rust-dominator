@@ -151,20 +151,17 @@ pub(crate) fn insert_child_before(parent: &Node, child: &Node, other: &Node) {
 }
 
 #[track_caller]
-pub(crate) fn replace_child(parent: &Node, child: &Node, other: &Node) {
-    // TODO don't return Node ?
-    parent.replace_child(child, other).unwrap_js();
+pub(crate) fn replace_child(parent: &Node, new: &Node, old: &Node) {
+    parent.replace_child(new, old).unwrap_js();
 }
 
 #[track_caller]
 pub(crate) fn append_child(parent: &Node, child: &Node) {
-    // TODO don't return Node ?
     parent.append_child(child).unwrap_js();
 }
 
 #[track_caller]
 pub(crate) fn remove_child(parent: &Node, child: &Node) {
-    // TODO don't return Node ?
     parent.remove_child(child).unwrap_js();
 }
 
