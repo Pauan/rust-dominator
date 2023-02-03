@@ -101,6 +101,27 @@ pub struct DomHandle {
     dom: Dom,
 }
 
+impl DomHandle {
+    /// Initializes the state after inserting a [`Dom`] into the real DOM.
+    ///
+    /// You shouldn't normally use this, use [`append_dom`] instead.
+    ///
+    /// But in some very rare situations you might want to manually
+    /// control where the [`Dom`] is inserted.
+    #[inline]
+    pub(crate) fn new(parent: &Node, mut dom: Dom) -> Self {
+        dom.callbacks.trigger_after_insert();
+
+        // This prevents it from triggering after_remove
+        dom.callbacks.leak();
+
+        Self {
+            parent: parent.clone(),
+            dom,
+        }
+    }
+}
+
 impl Discard for DomHandle {
     #[inline]
     #[track_caller]
@@ -110,20 +131,28 @@ impl Discard for DomHandle {
     }
 }
 
+
+/// Appends a [`Dom`] into the real DOM.
+///
+/// When the [`DomHandle`] is discarded using `handle.discard()` it
+/// will remove the [`Dom`] from the DOM and it will clean up the
+/// internal [`Dom`] state.
+///
+/// If you never call `handle.discard()` then it will leak memory
+/// forever. This is normally what you want for a top-level [`Dom`].
 #[inline]
 #[track_caller]
-pub fn append_dom(parent: &Node, mut dom: Dom) -> DomHandle {
+pub fn append_dom(parent: &Node, dom: Dom) -> DomHandle {
     bindings::append_child(&parent, &dom.element);
+    DomHandle::new(parent, dom)
+}
 
-    dom.callbacks.trigger_after_insert();
-
-    // This prevents it from triggering after_remove
-    dom.callbacks.leak();
-
-    DomHandle {
-        parent: parent.clone(),
-        dom,
-    }
+/// The same as [`append_dom`] except it replaces an existing DOM node.
+#[inline]
+#[track_caller]
+pub fn replace_dom(parent: &Node, old_node: &Node, dom: Dom) -> DomHandle {
+    bindings::replace_child(&parent, &dom.element, old_node);
+    DomHandle::new(parent, dom)
 }
 
 

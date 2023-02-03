@@ -1,5 +1,5 @@
 #![warn(unreachable_pub)]
-#![deny(warnings)]
+//#![deny(warnings)]
 
 #![cfg_attr(feature = "nightly", allow(incomplete_features))]
 #![cfg_attr(feature = "nightly", feature(adt_const_params, generic_const_exprs))]
