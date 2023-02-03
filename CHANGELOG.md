@@ -1,3 +1,6 @@
+## 0.5.32 - (2023-02-03)
+* Adding in `replace_dom` function.
+
 ## 0.5.31 - (2022-10-09)
 * Adding in `window_size()` function.
 * Adding in fragments.
