@@ -8,6 +8,16 @@ macro_rules! apply_methods {
         let this = $name!(this, $($args)*);
         $crate::apply_methods!(this, { $($rest)* })
     }};
+    ($this:expr, { .$name:ident! { $($args:tt)* } $($rest:tt)* }) => {{
+        let this = $this;
+        let this = $name! { this, $($args)* };
+        $crate::apply_methods!(this, { $($rest)* })
+    }};
+    ($this:expr, { .$name:ident![$($args:tt)*] $($rest:tt)* }) => {{
+        let this = $this;
+        let this = $name![this, $($args)*];
+        $crate::apply_methods!(this, { $($rest)* })
+    }};
     ($this:expr, { .$name:ident($($args:expr),*) $($rest:tt)* }) => {{
         let this = $this.$name($($args),*);
         $crate::apply_methods!(this, { $($rest)* })
