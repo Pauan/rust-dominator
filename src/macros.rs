@@ -1,31 +1,51 @@
+#[doc(hidden)]
 #[macro_export]
-macro_rules! apply_methods {
-    ($this:expr, {}) => {
+macro_rules! __internal_apply_methods_loop {
+    ((), $this:expr, {}) => {
         $this
     };
-    ($this:expr, { .$name:ident!($($args:tt)*) $($rest:tt)* }) => {{
-        let this = $this;
-        let this = $name!(this, $($args)*);
-        $crate::apply_methods!(this, { $($rest)* })
-    }};
-    ($this:expr, { .$name:ident! { $($args:tt)* } $($rest:tt)* }) => {{
-        let this = $this;
-        let this = $name! { this, $($args)* };
-        $crate::apply_methods!(this, { $($rest)* })
-    }};
-    ($this:expr, { .$name:ident![$($args:tt)*] $($rest:tt)* }) => {{
-        let this = $this;
-        let this = $name![this, $($args)*];
-        $crate::apply_methods!(this, { $($rest)* })
-    }};
-    ($this:expr, { .$name:ident($($args:expr),*) $($rest:tt)* }) => {{
+
+    ((), $this:expr, { . $name:ident ( $($args:expr),* ) $($rest:tt)* }) => {{
         let this = $this.$name($($args),*);
-        $crate::apply_methods!(this, { $($rest)* })
+        $crate::__internal_apply_methods_loop!((), this, { $($rest)* })
     }};
-    ($this:expr, { .$name:ident::<$($types:ty),*>($($args:expr),*) $($rest:tt)* }) => {{
+    ((), $this:expr, { . $name:ident :: < $($types:ty),* >( $($args:expr),* ) $($rest:tt)* }) => {{
         let this = $this.$name::<$($types),*>($($args),*);
-        $crate::apply_methods!(this, { $($rest)* })
+        $crate::__internal_apply_methods_loop!((), this, { $($rest)* })
     }};
+
+    ((), $this:expr, { . $name:ident $($rest:tt)* }) => {
+        $crate::__internal_apply_methods_loop!(($name), $this, { $($rest)* })
+    };
+    ((), $this:expr, { . :: $name:ident $($rest:tt)* }) => {
+        $crate::__internal_apply_methods_loop!((:: $name), $this, { $($rest)* })
+    };
+
+    (($($path:tt)+), $this:expr, { :: $name:ident $($rest:tt)* }) => {
+        $crate::__internal_apply_methods_loop!(($($path)+ :: $name), $this, { $($rest)* })
+    };
+    (($($path:tt)+), $this:expr, { ! ( $($args:tt)* ) $($rest:tt)* }) => {{
+        let this = $this;
+        let this = $($path)+!(this, $($args)*);
+        $crate::__internal_apply_methods_loop!((), this, { $($rest)* })
+    }};
+    (($($path:tt)+), $this:expr, { ! [ $($args:tt)* ] $($rest:tt)* }) => {{
+        let this = $this;
+        let this = $($path)+![this, $($args)*];
+        $crate::__internal_apply_methods_loop!((), this, { $($rest)* })
+    }};
+    (($($path:tt)+), $this:expr, { ! { $($args:tt)* } $($rest:tt)* }) => {{
+        let this = $this;
+        let this = $($path)+!{ this, $($args)* };
+        $crate::__internal_apply_methods_loop!((), this, { $($rest)* })
+    }};
+}
+
+#[macro_export]
+macro_rules! apply_methods {
+    ($($args:tt)*) => {
+        $crate::__internal_apply_methods_loop!((), $($args)*)
+    };
 }
 
 
