@@ -173,6 +173,14 @@ macro_rules! __internal_apply_methods_loop {
 ///     .my_crate::my_macro!(5, 10)
 /// })
 /// ```
+///
+/// Alternatively, if you are using the [`html!`](crate::html) or [`svg!`](crate::svg) macros then you can use the [`apply`](DomBuilder::apply) method:
+///
+/// ```rust
+/// html!("div", {
+///     .apply(|dom| $crate::my_macro!(dom, 5, 10))
+/// })
+/// ```
 #[macro_export]
 macro_rules! apply_methods {
     ($($args:tt)*) => {

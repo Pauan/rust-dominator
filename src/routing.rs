@@ -122,6 +122,8 @@ pub fn link<A, F>(url: A, f: F) -> Dom
 ///     .on_click_go_to_url!("/my-url/foo")
 /// })
 /// ```
+///
+/// Also see the [`link!`](crate::link) macro.
 #[macro_export]
 macro_rules! on_click_go_to_url {
     ($this:ident, $url:expr) => {{

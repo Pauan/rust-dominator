@@ -167,7 +167,10 @@ impl<'a> FragmentBuilder<'a> {
 /// }))
 /// ```
 ///
-/// ----
+/// If you need to store the fragment inside of a `struct` or `static` then
+/// you must use [`box_fragment!`] instead.
+///
+/// # Syntax
 ///
 /// There are three syntaxes for fragment:
 ///
@@ -205,11 +208,14 @@ macro_rules! fragment {
 
 /// The same as [`fragment!`] except it returns a [`BoxFragment`].
 ///
-/// A [`BoxFragment`] can be stored in a struct or static:
+/// A [`BoxFragment`] can be stored in a `struct` or `static`:
 ///
 /// ```rust
 /// static FOO: Lazy<BoxFragment> = Lazy::new(|| box_fragment!({ ... }));
 /// ```
+///
+/// [`fragment!`] is zero-cost, but `box_fragment!` is different: it has a performance cost,
+/// because it must heap-allocate the fragment and do dynamic dispatch.
 #[macro_export]
 macro_rules! box_fragment {
     () => {
