@@ -107,6 +107,21 @@ pub fn link<A, F>(url: A, f: F) -> Dom
 
 
 // TODO test this
+/// Changes an `<a>` element to work with routing.
+///
+/// Normally when the user clicks on an `<a>` element the browser will handle the URL
+/// routing.
+///
+/// But if you are creating a [Single Page Application](https://developer.mozilla.org/en-US/docs/Glossary/SPA) (SPA)
+/// then you want your app to always be in control of routing.
+///
+/// The `on_click_go_to_url!` macro disables the browser routing for the `<a>`, so your app remains in control of routing:
+///
+/// ```rust
+/// html!("a", {
+///     .on_click_go_to_url!("/my-url/foo")
+/// })
+/// ```
 #[macro_export]
 macro_rules! on_click_go_to_url {
     ($this:ident, $url:expr) => {{
@@ -119,7 +134,26 @@ macro_rules! on_click_go_to_url {
     }};
 }
 
+
 // TODO test this
+/// Creates an `<a>` element which works with routing.
+///
+/// Normally when the user clicks on an `<a>` element the browser will handle the URL
+/// routing.
+///
+/// But if you are creating a [Single Page Application](https://developer.mozilla.org/en-US/docs/Glossary/SPA) (SPA)
+/// then you want your app to always be in control of routing.
+///
+/// The `link!` macro creates an `<a>` element which disables browser routing, so your app remains in control of routing:
+///
+/// ```rust
+/// link!("/my-url/foo", {
+///     .class(...)
+///     .style(...)
+/// })
+/// ```
+///
+/// Also see the [`on_click_go_to_url!`] macro.
 #[macro_export]
 macro_rules! link {
     ($url:expr, { $($methods:tt)* }) => {{

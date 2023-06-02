@@ -22,6 +22,9 @@ use crate::operations;
 use crate::operations::{for_each, spawn_future};
 use crate::utils::{EventListener, on, UnwrapJsExt, ValueDiscard, FnDiscard};
 
+#[cfg(doc)]
+use crate::fragment;
+
 
 pub struct RefFn<A, B, C> where B: ?Sized, C: Fn(&A) -> &B {
     value: A,
@@ -796,7 +799,7 @@ impl<A> DomBuilder<A> where A: AsRef<EventTarget> {
 impl<A> DomBuilder<A> where A: AsRef<Node> {
     /// Inserts the [`Fragment`] into this [`DomBuilder`].
     ///
-    /// See the documentation for [`fragment`] for more details.
+    /// See the documentation for [`fragment!`] for more details.
     #[inline]
     #[track_caller]
     pub fn fragment<F>(self, fragment: &F) -> Self where F: Fragment {

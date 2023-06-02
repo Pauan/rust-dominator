@@ -8,10 +8,13 @@ use web_sys::Node;
 use crate::dom::{Dom, DomBuilder};
 use crate::traits::*;
 
+#[cfg(doc)]
+use crate::{fragment, box_fragment};
+
 
 /// A fragment is a collection of children which can be inserted into a [`DomBuilder`].
 ///
-/// See the documentation for [`fragment`] for more details.
+/// See the documentation for [`fragment!`] for more details.
 pub trait Fragment {
     fn apply<'a>(&self, dom: FragmentBuilder<'a>) -> FragmentBuilder<'a>;
 }
@@ -45,12 +48,12 @@ impl<A> Fragment for Arc<A> where A: Fragment + ?Sized {
 }
 
 
-/// A boxed [`Fragment`]. See the documentation for [`box_fragment`] for more details.
+/// A boxed [`Fragment`]. See the documentation for [`box_fragment!`] for more details.
 pub type BoxFragment = Box<dyn Fragment + Send + Sync>;
 
 
 // TODO better warning message for must_use
-/// This is used by the [`fragment`] and [`box_fragment`] macros.
+/// This is used by the [`fragment!`] and [`box_fragment!`] macros.
 #[must_use]
 #[derive(Debug)]
 pub struct FragmentBuilder<'a>(pub(crate) DomBuilder<&'a Node>);
@@ -200,7 +203,7 @@ macro_rules! fragment {
 }
 
 
-/// The same as [`fragment`] except it returns a [`BoxFragment`].
+/// The same as [`fragment!`] except it returns a [`BoxFragment`].
 ///
 /// A [`BoxFragment`] can be stored in a struct or static:
 ///
