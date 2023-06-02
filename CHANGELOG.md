@@ -1,3 +1,6 @@
+## 0.5.33 - (2023-06-02)
+* The `apply_methods!` macro now works with macro paths, like `.path::to::foo!()`
+
 ## 0.5.32 - (2023-02-03)
 * Adding in `replace_dom` function.
 
