@@ -284,7 +284,7 @@ macro_rules! with_cfg {
 ///
 /// The first argument is the [shadow root mode](https://developer.mozilla.org/en-US/docs/Web/API/ShadowRoot/mode) ([`ShadowRootMode::Open`](web_sys::ShadowRootMode::Open) or [`ShadowRootMode::Closed`](web_sys::ShadowRootMode::Closed)).
 ///
-/// The second argument is a block of method calls. Inside of the block you can use [`DomBuilder`] methods:
+/// The second argument is a block of method calls. Inside of the block you can use [`DomBuilder<web_sys::ShadowRoot>`] methods:
 ///
 /// ```rust
 /// use web_sys::ShadowRootMode;
@@ -315,7 +315,7 @@ macro_rules! shadow_root {
 ///
 /// The first argument is the [HTML tag](https://developer.mozilla.org/en-US/docs/Web/HTML/Element), and the second argument is a block of method calls.
 ///
-/// Inside of the block you can use [`DomBuilder`] methods:
+/// Inside of the block you can use [`DomBuilder<web_sys::HtmlElement>`] methods:
 ///
 /// ```rust
 /// html!("div", {
@@ -348,7 +348,7 @@ macro_rules! html {
 ///
 /// The first argument is the [SVG tag](https://developer.mozilla.org/en-US/docs/Web/SVG/Element), and the second argument is a block of method calls.
 ///
-/// Inside of the block you can use [`DomBuilder`] methods:
+/// Inside of the block you can use [`DomBuilder<web_sys::SvgElement>`] methods:
 ///
 /// ```rust
 /// svg!("line", {
@@ -589,4 +589,76 @@ macro_rules! __internal_clone_split {
 #[macro_export]
 macro_rules! clone {
     ($($input:tt)*) => { $crate::__internal_clone_split!((), $($input)*) };
+}
+
+
+/// A convenient shorthand for multiple `.attr(...)` calls.
+///
+/// Instead of writing this...
+///
+/// ```rust
+/// html!("div", {
+///     .attr("foo", "bar")
+///     .attr("qux", "corge")
+///     .attr("yes", "no")
+/// })
+/// ```
+///
+/// ...you can instead write this:
+///
+/// ```rust
+/// html!("div", {
+///     .attrs! {
+///         foo: "bar",
+///         qux: "corge",
+///         yes: "no",
+///     }
+/// })
+/// ```
+#[macro_export]
+macro_rules! attrs {
+    ($this:ident, $($name:ident: $value:expr),*,) => {
+        $crate::attrs!($this, $($name: $value),*)
+    };
+    ($this:ident, $($name:ident: $value:expr),*) => {
+        $crate::apply_methods!($this, {
+            $(.attr(::std::stringify!($name), $value))*
+        })
+    };
+}
+
+
+/// A convenient shorthand for multiple `.prop(...)` calls.
+///
+/// Instead of writing this...
+///
+/// ```rust
+/// html!("div", {
+///     .prop("foo", "bar")
+///     .prop("qux", "corge")
+///     .prop("yes", "no")
+/// })
+/// ```
+///
+/// ...you can instead write this:
+///
+/// ```rust
+/// html!("div", {
+///     .props! {
+///         foo: "bar",
+///         qux: "corge",
+///         yes: "no",
+///     }
+/// })
+/// ```
+#[macro_export]
+macro_rules! props {
+    ($this:ident, $($name:ident: $value:expr),*,) => {
+        $crate::props!($this, $($name: $value),*)
+    };
+    ($this:ident, $($name:ident: $value:expr),*) => {
+        $crate::apply_methods!($this, {
+            $(.prop(::std::stringify!($name), $value))*
+        })
+    };
 }

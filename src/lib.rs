@@ -1,5 +1,7 @@
 #![warn(unreachable_pub)]
 //#![deny(warnings)]
+#![deny(rustdoc::broken_intra_doc_links)]
+#![deny(rustdoc::private_intra_doc_links)]
 
 #![cfg_attr(feature = "nightly", allow(incomplete_features))]
 #![cfg_attr(feature = "nightly", feature(adt_const_params, generic_const_exprs))]
