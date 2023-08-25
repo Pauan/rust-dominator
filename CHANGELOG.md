@@ -1,3 +1,6 @@
+## 0.5.34 - (2023-08-24)
+* Adding in new `attrs!`, `props!`, and `styles!` macros which are shorthands for `.attr` / `.prop` / `.style` respectively.
+
 ## 0.5.33 - (2023-06-02)
 * The `apply_methods!` macro now works with macro paths, like `.path::to::foo!()`
 
