@@ -512,7 +512,7 @@ macro_rules! class {
 ///
 /// ```rust
 /// class! {
-///     .pseudo(":hover", {
+///     .pseudo!(":hover", {
 ///         .style("color", "green")
 ///         .style("background-color", "blue")
 ///         .style_signal("width", ...)
@@ -528,7 +528,7 @@ macro_rules! class {
 ///
 /// ```rust
 /// class! {
-///     .pseudo([":any-link", ":-webkit-any-link"], {
+///     .pseudo!([":any-link", ":-webkit-any-link"], {
 ///         ...
 ///     })
 /// }
@@ -592,6 +592,31 @@ macro_rules! clone {
 }
 
 
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __internal_process_keys {
+    ($this:ident, (), ($($accum:tt)*), $call:ident) => {
+        $crate::$call!($this, $($accum)*)
+    };
+
+    ($this:ident, ($key:ident: $value:expr, $($rest:tt)*), ($($accum:tt)*), $call:ident) => {
+        $crate::__internal_process_keys!($this, ($($rest)*), ($($accum)* ::std::stringify!($key) => $value,), $call)
+    };
+
+    ($this:ident, ($key:ident: $value:expr), ($($accum:tt)*), $call:ident) => {
+        $crate::__internal_process_keys!($this, (), ($($accum)* ::std::stringify!($key) => $value,), $call)
+    };
+
+    ($this:ident, ($key:literal: $value:expr, $($rest:tt)*), ($($accum:tt)*), $call:ident) => {
+        $crate::__internal_process_keys!($this, ($($rest)*), ($($accum)* $key => $value,), $call)
+    };
+
+    ($this:ident, ($key:literal: $value:expr), ($($accum:tt)*), $call:ident) => {
+        $crate::__internal_process_keys!($this, (), ($($accum)* $key => $value,), $call)
+    };
+}
+
+
 /// A convenient shorthand for multiple `.attr(...)` calls.
 ///
 /// Instead of writing this...
@@ -615,14 +640,30 @@ macro_rules! clone {
 ///     }
 /// })
 /// ```
+///
+/// You can also use string literals as keys:
+///
+/// ```rust
+/// html!("div", {
+///     .attrs! {
+///         foo: "bar",
+///         "aria-label": "Qux",
+///     }
+/// })
+/// ```
 #[macro_export]
 macro_rules! attrs {
-    ($this:ident, $($name:ident: $value:expr),*,) => {
-        $crate::attrs!($this, $($name: $value),*)
+    ($this:ident, $($rest:tt)*) => {
+        $crate::__internal_process_keys!($this, ($($rest)*), (), __internal_attrs)
     };
-    ($this:ident, $($name:ident: $value:expr),*) => {
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __internal_attrs {
+    ($this:ident, $($name:expr => $value:expr,)*) => {
         $crate::apply_methods!($this, {
-            $(.attr(::std::stringify!($name), $value))*
+            $(.attr($name, $value))*
         })
     };
 }
@@ -651,14 +692,82 @@ macro_rules! attrs {
 ///     }
 /// })
 /// ```
+///
+/// You can also use string literals as keys:
+///
+/// ```rust
+/// html!("div", {
+///     .props! {
+///         foo: "bar",
+///         "qux-corge": "Qux",
+///     }
+/// })
+/// ```
 #[macro_export]
 macro_rules! props {
-    ($this:ident, $($name:ident: $value:expr),*,) => {
-        $crate::props!($this, $($name: $value),*)
+    ($this:ident, $($rest:tt)*) => {
+        $crate::__internal_process_keys!($this, ($($rest)*), (), __internal_props)
     };
-    ($this:ident, $($name:ident: $value:expr),*) => {
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __internal_props {
+    ($this:ident, $($name:expr => $value:expr,)*) => {
         $crate::apply_methods!($this, {
-            $(.prop(::std::stringify!($name), $value))*
+            $(.prop($name, $value))*
+        })
+    };
+}
+
+
+/// A convenient shorthand for multiple `.style(...)` calls.
+///
+/// Instead of writing this...
+///
+/// ```rust
+/// html!("div", {
+///     .style("display", "flex")
+///     .style("color", "red")
+///     .style("opacity", "0")
+/// })
+/// ```
+///
+/// ...you can instead write this:
+///
+/// ```rust
+/// html!("div", {
+///     .styles! {
+///         display: "flex",
+///         color: "red",
+///         opacity: "0",
+///     }
+/// })
+/// ```
+///
+/// You can also use string literals as keys:
+///
+/// ```rust
+/// html!("div", {
+///     .styles! {
+///         color: "red",
+///         "background-color": "green",
+///     }
+/// })
+/// ```
+#[macro_export]
+macro_rules! styles {
+    ($this:ident, $($rest:tt)*) => {
+        $crate::__internal_process_keys!($this, ($($rest)*), (), __internal_styles)
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __internal_styles {
+    ($this:ident, $($name:expr => $value:expr,)*) => {
+        $crate::apply_methods!($this, {
+            $(.style($name, $value))*
         })
     };
 }
