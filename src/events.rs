@@ -417,6 +417,9 @@ static_event_impl!(Error => "error");
 make_event!(Scroll => web_sys::Event);
 static_event_impl!(Scroll => "scroll");
 
+make_event!(ScrollEnd => web_sys::Event);
+static_event_impl!(ScrollEnd => "scrollend");
+
 make_event!(Submit => web_sys::Event);
 static_event_impl!(Submit => "submit");
 
