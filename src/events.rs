@@ -1,8 +1,7 @@
 use crate::traits::StaticEvent;
 use crate::EventOptions;
 use wasm_bindgen::JsCast;
-use web_sys::{EventTarget, HtmlInputElement, HtmlTextAreaElement, TouchList, Touch};
-
+use web_sys::{EventTarget, HtmlInputElement, HtmlTextAreaElement, Touch, TouchList};
 
 #[cfg(feature = "nightly")]
 pub struct Event<const NAME: &'static str, T> {
@@ -10,7 +9,10 @@ pub struct Event<const NAME: &'static str, T> {
 }
 
 #[cfg(feature = "nightly")]
-impl<T, const NAME: &'static str> StaticEvent for Event<NAME, T> where T: JsCast {
+impl<T, const NAME: &'static str> StaticEvent for Event<NAME, T>
+where
+    T: JsCast,
+{
     const EVENT_TYPE: &'static str = NAME;
 
     #[inline]
@@ -28,17 +30,28 @@ impl<T, const NAME: &'static str> StaticEvent for Event<NAME, T> where T: JsCast
 // TODO code duplication
 // TODO implement the rest of the methods
 #[cfg(feature = "nightly")]
-impl<T, const NAME: &'static str> Event<NAME, T> where T: AsRef<web_sys::Event> {
-    #[inline] pub fn prevent_default(&self) { self.event.as_ref().prevent_default(); }
-
-    #[inline] pub fn target(&self) -> Option<EventTarget> { self.event.as_ref().target() }
+impl<T, const NAME: &'static str> Event<NAME, T>
+where
+    T: AsRef<web_sys::Event>,
+{
+    #[inline]
+    pub fn prevent_default(&self) {
+        self.event.as_ref().prevent_default();
+    }
 
     #[inline]
-    pub fn dyn_target<A>(&self) -> Option<A> where A: JsCast {
+    pub fn target(&self) -> Option<EventTarget> {
+        self.event.as_ref().target()
+    }
+
+    #[inline]
+    pub fn dyn_target<A>(&self) -> Option<A>
+    where
+        A: JsCast,
+    {
         self.target()?.dyn_into().ok()
     }
 }
-
 
 macro_rules! static_event_impl {
     ($name:ident => $type:literal) => {
@@ -63,16 +76,31 @@ macro_rules! make_event {
         }
 
         impl $name {
-            #[inline] pub fn prevent_default(&self) { self.event.prevent_default(); }
-
-            #[inline] pub fn stop_propagation(&self) { self.event.stop_propagation(); }
-
-            #[inline] pub fn stop_immediate_propagation(&self) { self.event.stop_immediate_propagation(); }
-
-            #[inline] pub fn target(&self) -> Option<EventTarget> { self.event.target() }
+            #[inline]
+            pub fn prevent_default(&self) {
+                self.event.prevent_default();
+            }
 
             #[inline]
-            pub fn dyn_target<A>(&self) -> Option<A> where A: JsCast {
+            pub fn stop_propagation(&self) {
+                self.event.stop_propagation();
+            }
+
+            #[inline]
+            pub fn stop_immediate_propagation(&self) {
+                self.event.stop_immediate_propagation();
+            }
+
+            #[inline]
+            pub fn target(&self) -> Option<EventTarget> {
+                self.event.target()
+            }
+
+            #[inline]
+            pub fn dyn_target<A>(&self) -> Option<A>
+            where
+                A: JsCast,
+            {
                 self.target()?.dyn_into().ok()
             }
         }
@@ -250,7 +278,6 @@ macro_rules! make_wheel_event {
     };
 }
 
-
 make_mouse_event!(Click => web_sys::MouseEvent);
 static_event_impl!(Click => "click");
 
@@ -262,7 +289,6 @@ static_event_impl!(MouseUp => "mouseup");
 
 make_mouse_event!(MouseMove => web_sys::MouseEvent);
 static_event_impl!(MouseMove => "mousemove");
-
 
 make_mouse_event!(MouseEnter => web_sys::MouseEvent);
 make_mouse_event!(MouseLeave => web_sys::MouseEvent);
@@ -304,7 +330,6 @@ impl StaticEvent for MouseLeave {
         }
     }
 }
-
 
 make_mouse_event!(DoubleClick => web_sys::MouseEvent);
 static_event_impl!(DoubleClick => "dblclick");
@@ -348,7 +373,6 @@ static_event_impl!(KeyDown => "keydown");
 make_keyboard_event!(KeyUp);
 static_event_impl!(KeyUp => "keyup");
 
-
 make_focus_event!(Focus);
 static_event_impl!(Focus => "focus");
 
@@ -360,7 +384,6 @@ static_event_impl!(FocusIn => "focusin");
 
 make_focus_event!(FocusOut);
 static_event_impl!(FocusOut => "focusout");
-
 
 make_drag_event!(DragStart);
 static_event_impl!(DragStart => "dragstart");
@@ -383,13 +406,11 @@ static_event_impl!(DragLeave => "dragleave");
 make_drag_event!(Drop);
 static_event_impl!(Drop => "drop");
 
-
 make_input_event!(Input);
 static_event_impl!(Input => "input");
 
 make_input_event!(BeforeInput);
 static_event_impl!(BeforeInput => "beforeinput");
-
 
 make_animation_event!(AnimationStart);
 static_event_impl!(AnimationStart => "animationstart");
@@ -403,10 +424,8 @@ static_event_impl!(AnimationCancel => "animationcancel");
 make_animation_event!(AnimationEnd);
 static_event_impl!(AnimationEnd => "animationend");
 
-
 make_wheel_event!(Wheel);
 static_event_impl!(Wheel => "wheel");
-
 
 make_event!(Load => web_sys::Event);
 static_event_impl!(Load => "load");
@@ -426,8 +445,6 @@ static_event_impl!(Resize => "resize");
 make_event!(SelectionChange => web_sys::Event);
 static_event_impl!(SelectionChange => "selectionchange");
 
-
-
 impl Input {
     // TODO should this work on other types as well ?
     #[deprecated(since = "0.5.19", note = "Use with_node instead")]
@@ -437,16 +454,13 @@ impl Input {
         if let Some(target) = target.dyn_ref::<HtmlInputElement>() {
             // TODO check the <input> element's type ?
             Some(target.value())
-
-        } else if let Some(target) = target.dyn_ref::<HtmlTextAreaElement>() {
-            Some(target.value())
-
         } else {
-            None
+            target
+                .dyn_ref::<HtmlTextAreaElement>()
+                .map(|target| target.value())
         }
     }
 }
-
 
 make_event!(Change => web_sys::Event);
 static_event_impl!(Change => "change");
@@ -464,7 +478,6 @@ impl Change {
     }
 }
 
-
 make_touch_event!(TouchCancel);
 static_event_impl!(TouchCancel => "touchcancel");
 
@@ -476,7 +489,6 @@ static_event_impl!(TouchMove => "touchmove");
 
 make_touch_event!(TouchStart);
 static_event_impl!(TouchStart => "touchstart");
-
 
 #[derive(Debug)]
 struct TouchListIter {
