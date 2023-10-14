@@ -139,10 +139,14 @@ impl<'a> FragmentBuilder<'a> {
 ///
 /// You can then insert the fragment into a [`DomBuilder`]:
 ///
-/// ```no_compile
+/// ```no_run
+/// # use dominator::{html, fragment};
+/// # fn test() -> dominator::Dom {
+/// # let x = fragment!();
 /// html!("div", {
 ///     .fragment(&x)
 /// })
+/// # }
 /// ```
 ///
 /// The fragment is inlined, so it is exactly the same as if you had written this,
@@ -183,7 +187,9 @@ impl<'a> FragmentBuilder<'a> {
 ///
 /// When returning a fragment from a function, you will usually need to use the `move` syntax:
 ///
-/// ```no_compile
+/// ```rust
+/// # use dominator::{fragment, Fragment};
+/// # fn some_string() -> String { "".to_string() }
 /// fn my_fragment() -> impl Fragment {
 ///     let x = some_string();
 ///

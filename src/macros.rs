@@ -214,7 +214,9 @@ macro_rules! __internal_builder {
 /// Sometimes you need to access the real DOM node, for example to call
 /// DOM methods. You can use `with_node!` to do that:
 ///
-/// ```no_compile
+/// ```no_run
+/// # use dominator::{html, with_node, events};
+/// # fn test() -> dominator::Dom {
 /// html!("input" => web_sys::HtmlInputElement, {
 ///     .with_node!(element => {
 ///         .event(move |_: events::Input| {
@@ -224,6 +226,7 @@ macro_rules! __internal_builder {
 ///         })
 ///     })
 /// })
+/// # }
 /// ```
 #[macro_export]
 macro_rules! with_node {
@@ -579,12 +582,16 @@ macro_rules! __internal_clone_split {
 ///
 /// You can achieve the same thing by using the `clone!` macro instead:
 ///
-/// ```no_compile
+/// ```no_run
+/// # use dominator::{html, events, clone};
+/// # fn test() -> dominator::Dom {
+/// # let (app, state, other_state) = (true, true, true);
 /// html!("div", {
 ///     .event(clone!(app, state, other_state => move |_: events::Click| {
 ///         // Use app, state, and other_state
 ///     }))
 /// })
+/// # }
 /// ```
 #[macro_export]
 macro_rules! clone {
@@ -621,17 +628,22 @@ macro_rules! __internal_process_keys {
 ///
 /// Instead of writing this...
 ///
-/// ```no_compile
+/// ```no_run
+/// # use dominator::html;
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .attr("foo", "bar")
 ///     .attr("qux", "corge")
 ///     .attr("yes", "no")
 /// })
+/// # }
 /// ```
 ///
 /// ...you can instead write this:
 ///
-/// ```no_compile
+/// ```no_run
+/// # use dominator::{attrs, html};
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .attrs! {
 ///         foo: "bar",
@@ -639,17 +651,21 @@ macro_rules! __internal_process_keys {
 ///         yes: "no",
 ///     }
 /// })
+/// # }
 /// ```
 ///
 /// You can also use string literals as keys:
 ///
-/// ```no_compile
+/// ```no_run
+/// # use dominator::{attrs, html};
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .attrs! {
 ///         foo: "bar",
 ///         "aria-label": "Qux",
 ///     }
 /// })
+/// # }
 /// ```
 #[macro_export]
 macro_rules! attrs {
@@ -673,17 +689,22 @@ macro_rules! __internal_attrs {
 ///
 /// Instead of writing this...
 ///
-/// ```no_compile
+/// ```no_run
+/// # use dominator::html;
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .prop("foo", "bar")
 ///     .prop("qux", "corge")
 ///     .prop("yes", "no")
 /// })
+/// # }
 /// ```
 ///
 /// ...you can instead write this:
 ///
-/// ```no_compile
+/// ```no_run
+/// # use dominator::{html, props};
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .props! {
 ///         foo: "bar",
@@ -691,17 +712,21 @@ macro_rules! __internal_attrs {
 ///         yes: "no",
 ///     }
 /// })
+/// # }
 /// ```
 ///
 /// You can also use string literals as keys:
 ///
-/// ```no_compile
+/// ```no_run
+/// # use dominator::{html, props};
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .props! {
 ///         foo: "bar",
 ///         "qux-corge": "Qux",
 ///     }
 /// })
+/// # }
 /// ```
 #[macro_export]
 macro_rules! props {
@@ -725,17 +750,22 @@ macro_rules! __internal_props {
 ///
 /// Instead of writing this...
 ///
-/// ```no_compile
+/// ```no_run
+/// # use dominator::html;
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .style("display", "flex")
 ///     .style("color", "red")
 ///     .style("opacity", "0")
 /// })
+/// # }
 /// ```
 ///
 /// ...you can instead write this:
 ///
-/// ```no_compile
+/// ```no_run
+/// # use dominator::{html, styles};
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .styles! {
 ///         display: "flex",
@@ -743,17 +773,21 @@ macro_rules! __internal_props {
 ///         opacity: "0",
 ///     }
 /// })
+/// # }
 /// ```
 ///
 /// You can also use string literals as keys:
 ///
-/// ```no_compile
+/// ```no_run
+/// # use dominator::{html, styles};
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .styles! {
 ///         color: "red",
 ///         "background-color": "green",
 ///     }
 /// })
+/// # }
 /// ```
 #[macro_export]
 macro_rules! styles {
