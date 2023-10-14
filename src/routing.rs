@@ -117,7 +117,7 @@ pub fn link<A, F>(url: A, f: F) -> Dom
 ///
 /// The `on_click_go_to_url!` macro disables the browser routing for the `<a>`, so your app remains in control of routing:
 ///
-/// ```rust
+/// ```no_compile
 /// html!("a", {
 ///     .on_click_go_to_url!("/my-url/foo")
 /// })
@@ -148,7 +148,7 @@ macro_rules! on_click_go_to_url {
 ///
 /// The `link!` macro creates an `<a>` element which disables browser routing, so your app remains in control of routing:
 ///
-/// ```rust
+/// ```no_compile
 /// link!("/my-url/foo", {
 ///     .class(...)
 ///     .style(...)

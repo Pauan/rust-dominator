@@ -129,7 +129,7 @@ impl<'a> FragmentBuilder<'a> {
 ///
 /// A fragment is a collection of children, you can use all of the methods in [`FragmentBuilder`]:
 ///
-/// ```rust
+/// ```no_compile
 /// let x = fragment!({
 ///     .text("foo")
 ///     .child(html!("div", { ... }))
@@ -139,7 +139,7 @@ impl<'a> FragmentBuilder<'a> {
 ///
 /// You can then insert the fragment into a [`DomBuilder`]:
 ///
-/// ```rust
+/// ```no_compile
 /// html!("div", {
 ///     .fragment(&x)
 /// })
@@ -148,7 +148,7 @@ impl<'a> FragmentBuilder<'a> {
 /// The fragment is inlined, so it is exactly the same as if you had written this,
 /// there is no performance cost:
 ///
-/// ```rust
+/// ```no_compile
 /// html!("div", {
 ///     .text("foo")
 ///     .child(html!("div", ...))
@@ -161,7 +161,7 @@ impl<'a> FragmentBuilder<'a> {
 ///
 /// Fragments are very useful for passing children into another component:
 ///
-/// ```rust
+/// ```no_compile
 /// Foo::render(&state.foo, fragment!({
 ///     .text("Hello!")
 /// }))
@@ -183,7 +183,7 @@ impl<'a> FragmentBuilder<'a> {
 ///
 /// When returning a fragment from a function, you will usually need to use the `move` syntax:
 ///
-/// ```rust
+/// ```no_compile
 /// fn my_fragment() -> impl Fragment {
 ///     let x = some_string();
 ///
@@ -210,7 +210,7 @@ macro_rules! fragment {
 ///
 /// A [`BoxFragment`] can be stored in a `struct` or `static`:
 ///
-/// ```rust
+/// ```no_compile
 /// static FOO: Lazy<BoxFragment> = Lazy::new(|| box_fragment!({ ... }));
 /// ```
 ///

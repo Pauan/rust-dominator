@@ -25,3 +25,5 @@ jobs:
       run: cargo build --all-targets --target wasm32-unknown-unknown
     - name: Doc
       run: cargo doc --no-deps --target wasm32-unknown-unknown
+    - name: Doc test
+      run: cargo test --doc
