@@ -60,6 +60,7 @@ pub fn url() -> ReadOnlyMutable<String> {
 }
 
 
+/// Update the current route by adding a new entry to the history.
 // TODO if URL hasn't been created yet, don't create it
 #[inline]
 #[track_caller]
@@ -70,6 +71,19 @@ pub fn go_to_url(new_url: &str) {
     change_url(&URL.value);
 }
 
+/// Update the current route by replacing the history.
+/// Use this very sparingly as this break the back button.
+///
+/// To let the user go back to the current route, use [`go_to_url`] instead.
+// TODO if URL hasn't been created yet, don't create it
+#[inline]
+#[track_caller]
+pub fn replace_url(new_url: &str) {
+    // TODO intern ?
+    bindings::replace_url(new_url);
+
+    change_url(&URL.value);
+}
 
 #[deprecated(since = "0.5.1", note = "Use the on_click_go_to_url macro instead")]
 #[inline]
