@@ -49,7 +49,7 @@ macro_rules! __internal_apply_methods_loop {
 ///
 /// Normally you would chain method calls like this:
 ///
-/// ```rust
+/// ```no_compile
 /// foo
 ///     .bar()
 ///     .qux(5)
@@ -58,7 +58,7 @@ macro_rules! __internal_apply_methods_loop {
 ///
 /// But with `apply_methods!` you can instead do this:
 ///
-/// ```rust
+/// ```no_compile
 /// apply_methods!(foo, {
 ///     .bar()
 ///     .qux(5)
@@ -69,7 +69,7 @@ macro_rules! __internal_apply_methods_loop {
 /// In addition to looking nicer, it has another benefit, which is
 /// that it supports macros:
 ///
-/// ```rust
+/// ```no_compile
 /// apply_methods!(foo, {
 ///     .bar!()
 ///     .qux!(5)
@@ -80,13 +80,13 @@ macro_rules! __internal_apply_methods_loop {
 /// If you didn't use `apply_methods!` then you would have to write
 /// this instead, which is a lot less readable:
 ///
-/// ```rust
+/// ```no_compile
 /// corge!(qux!(bar!(foo), 5), "yes", "no")
 /// ```
 ///
 /// It also supports macro paths:
 ///
-/// ```rust
+/// ```no_compile
 /// apply_methods!(foo, {
 ///     .some_crate::bar!()
 ///     .other_crate::qux!(5)
@@ -96,7 +96,7 @@ macro_rules! __internal_apply_methods_loop {
 ///
 /// And it supports specifying the type for method calls:
 ///
-/// ```rust
+/// ```no_compile
 /// apply_methods!(foo, {
 ///     .bar::<String>()
 ///     .qux::<i32, i32>(5)
@@ -109,7 +109,7 @@ macro_rules! __internal_apply_methods_loop {
 /// When using macros inside of `apply_methods!`, the object is
 /// always passed as the first argument to the macro:
 ///
-/// ```rust
+/// ```no_compile
 /// macro_rules! my_macro {
 ///     ($this:ident, $first:expr, $second:expr) => {
 ///         ...
@@ -141,7 +141,7 @@ macro_rules! __internal_apply_methods_loop {
 ///
 /// And the macro can have whatever syntax it wants, because it's a macro:
 ///
-/// ```rust
+/// ```no_compile
 /// apply_methods!(foo, {
 ///     .my_macro!(5; 10 => 15)
 ///
@@ -158,7 +158,7 @@ macro_rules! __internal_apply_methods_loop {
 ///
 /// Rust has a limitation where you cannot use `$crate` inside of macros, which means this does not work:
 ///
-/// ```rust
+/// ```no_compile
 /// apply_methods!(foo, {
 ///     .$crate::my_macro!(5, 10)
 /// })
@@ -166,7 +166,7 @@ macro_rules! __internal_apply_methods_loop {
 ///
 /// Instead you can workaround that by doing this:
 ///
-/// ```rust
+/// ```no_compile
 /// extern crate self as my_crate;
 ///
 /// apply_methods!(foo, {
@@ -176,7 +176,7 @@ macro_rules! __internal_apply_methods_loop {
 ///
 /// Alternatively, if you are using the [`html!`](crate::html) or [`svg!`](crate::svg) macros then you can use the [`apply`](DomBuilder::apply) method:
 ///
-/// ```rust
+/// ```no_compile
 /// html!("div", {
 ///     .apply(|dom| $crate::my_macro!(dom, 5, 10))
 /// })
@@ -214,7 +214,9 @@ macro_rules! __internal_builder {
 /// Sometimes you need to access the real DOM node, for example to call
 /// DOM methods. You can use `with_node!` to do that:
 ///
-/// ```rust
+/// ```no_run
+/// # use dominator::{html, with_node, events};
+/// # fn test() -> dominator::Dom {
 /// html!("input" => web_sys::HtmlInputElement, {
 ///     .with_node!(element => {
 ///         .event(move |_: events::Input| {
@@ -224,6 +226,7 @@ macro_rules! __internal_builder {
 ///         })
 ///     })
 /// })
+/// # }
 /// ```
 #[macro_export]
 macro_rules! with_node {
@@ -240,7 +243,7 @@ macro_rules! with_node {
 ///
 /// For example, you might have some client-only code, and some server-only code. So you can do this:
 ///
-/// ```rust
+/// ```no_compile
 /// html!("div", {
 ///     // This runs on both the client and server
 ///     .class("both")
@@ -286,7 +289,7 @@ macro_rules! with_cfg {
 ///
 /// The second argument is a block of method calls. Inside of the block you can use [`DomBuilder<web_sys::ShadowRoot>`] methods:
 ///
-/// ```rust
+/// ```no_compile
 /// use web_sys::ShadowRootMode;
 ///
 /// html!("div", {
@@ -317,7 +320,7 @@ macro_rules! shadow_root {
 ///
 /// Inside of the block you can use [`DomBuilder<web_sys::HtmlElement>`] methods:
 ///
-/// ```rust
+/// ```no_compile
 /// html!("div", {
 ///     .class("foo")
 ///     .style("color", "green")
@@ -329,7 +332,7 @@ macro_rules! shadow_root {
 ///
 /// You can also specify the static type of the HTML element:
 ///
-/// ```rust
+/// ```no_compile
 /// html!("div" => web_sys::HtmlDivElement, {
 ///     ...
 /// })
@@ -350,7 +353,7 @@ macro_rules! html {
 ///
 /// Inside of the block you can use [`DomBuilder<web_sys::SvgElement>`] methods:
 ///
-/// ```rust
+/// ```no_compile
 /// svg!("line", {
 ///     .class("foo")
 ///     .attr("x1", "5")
@@ -362,7 +365,7 @@ macro_rules! html {
 ///
 /// You can also specify the static type of the SVG element:
 ///
-/// ```rust
+/// ```no_compile
 /// html!("line" => web_sys::SvgLineElement, {
 ///     ...
 /// })
@@ -385,7 +388,7 @@ macro_rules! svg {
 ///
 /// Inside of the block you can use [`DomBuilder`] methods:
 ///
-/// ```rust
+/// ```no_compile
 /// dom_builder!(my_dom_node, {
 ///     .class("foo")
 ///     .style("color", "green")
@@ -413,7 +416,7 @@ macro_rules! dom_builder {
 ///
 /// Inside of the block you can use [`StylesheetBuilder`] methods:
 ///
-/// ```rust
+/// ```no_compile
 /// stylesheet!("div.foo > span:nth-child(5):hover", {
 ///     .style("color", "green")
 ///     .style("background-color", "blue")
@@ -446,7 +449,7 @@ macro_rules! stylesheet {
 ///
 /// The `class!` macro accepts a block of method calls. Inside of the block you can use [`ClassBuilder`] methods:
 ///
-/// ```rust
+/// ```no_compile
 /// class! {
 ///     .style("color", "green")
 ///     .style("background-color", "blue")
@@ -459,7 +462,7 @@ macro_rules! stylesheet {
 /// The `class!` macro returns a `String`, which is a unique class name. You can then assign that class
 /// name to a [`DomBuilder`]:
 ///
-/// ```rust
+/// ```no_compile
 /// use once_cell::sync::Lazy;
 ///
 /// // This uses a `static` so that it only creates the `class!` a single time.
@@ -484,7 +487,7 @@ macro_rules! stylesheet {
 ///
 /// But you can use `pub` to export it so it can be used by other modules:
 ///
-/// ```rust
+/// ```no_compile
 /// pub static MY_CLASS: Lazy<String> = Lazy::new(|| class! {
 ///     ...
 /// });
@@ -510,7 +513,7 @@ macro_rules! class {
 ///
 /// The second argument is a block of method calls. Inside of the block you can use [`ClassBuilder`] methods:
 ///
-/// ```rust
+/// ```no_compile
 /// class! {
 ///     .pseudo!(":hover", {
 ///         .style("color", "green")
@@ -526,7 +529,7 @@ macro_rules! class {
 ///
 /// This is useful for using browser prefixes:
 ///
-/// ```rust
+/// ```no_compile
 /// class! {
 ///     .pseudo!([":any-link", ":-webkit-any-link"], {
 ///         ...
@@ -565,7 +568,7 @@ macro_rules! __internal_clone_split {
 ///
 /// When you use event listeners, you often need to [`clone`](std::clone::Clone::clone) some state:
 ///
-/// ```rust
+/// ```no_compile
 /// let app = app.clone();
 /// let state = state.clone();
 /// let other_state = other_state.clone();
@@ -579,12 +582,16 @@ macro_rules! __internal_clone_split {
 ///
 /// You can achieve the same thing by using the `clone!` macro instead:
 ///
-/// ```rust
+/// ```no_run
+/// # use dominator::{html, events, clone};
+/// # fn test() -> dominator::Dom {
+/// # let (app, state, other_state) = (true, true, true);
 /// html!("div", {
 ///     .event(clone!(app, state, other_state => move |_: events::Click| {
 ///         // Use app, state, and other_state
 ///     }))
 /// })
+/// # }
 /// ```
 #[macro_export]
 macro_rules! clone {
@@ -621,17 +628,22 @@ macro_rules! __internal_process_keys {
 ///
 /// Instead of writing this...
 ///
-/// ```rust
+/// ```no_run
+/// # use dominator::html;
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .attr("foo", "bar")
 ///     .attr("qux", "corge")
 ///     .attr("yes", "no")
 /// })
+/// # }
 /// ```
 ///
 /// ...you can instead write this:
 ///
-/// ```rust
+/// ```no_run
+/// # use dominator::{attrs, html};
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .attrs! {
 ///         foo: "bar",
@@ -639,17 +651,21 @@ macro_rules! __internal_process_keys {
 ///         yes: "no",
 ///     }
 /// })
+/// # }
 /// ```
 ///
 /// You can also use string literals as keys:
 ///
-/// ```rust
+/// ```no_run
+/// # use dominator::{attrs, html};
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .attrs! {
 ///         foo: "bar",
 ///         "aria-label": "Qux",
 ///     }
 /// })
+/// # }
 /// ```
 #[macro_export]
 macro_rules! attrs {
@@ -673,17 +689,22 @@ macro_rules! __internal_attrs {
 ///
 /// Instead of writing this...
 ///
-/// ```rust
+/// ```no_run
+/// # use dominator::html;
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .prop("foo", "bar")
 ///     .prop("qux", "corge")
 ///     .prop("yes", "no")
 /// })
+/// # }
 /// ```
 ///
 /// ...you can instead write this:
 ///
-/// ```rust
+/// ```no_run
+/// # use dominator::{html, props};
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .props! {
 ///         foo: "bar",
@@ -691,17 +712,21 @@ macro_rules! __internal_attrs {
 ///         yes: "no",
 ///     }
 /// })
+/// # }
 /// ```
 ///
 /// You can also use string literals as keys:
 ///
-/// ```rust
+/// ```no_run
+/// # use dominator::{html, props};
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .props! {
 ///         foo: "bar",
 ///         "qux-corge": "Qux",
 ///     }
 /// })
+/// # }
 /// ```
 #[macro_export]
 macro_rules! props {
@@ -725,17 +750,22 @@ macro_rules! __internal_props {
 ///
 /// Instead of writing this...
 ///
-/// ```rust
+/// ```no_run
+/// # use dominator::html;
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .style("display", "flex")
 ///     .style("color", "red")
 ///     .style("opacity", "0")
 /// })
+/// # }
 /// ```
 ///
 /// ...you can instead write this:
 ///
-/// ```rust
+/// ```no_run
+/// # use dominator::{html, styles};
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .styles! {
 ///         display: "flex",
@@ -743,17 +773,21 @@ macro_rules! __internal_props {
 ///         opacity: "0",
 ///     }
 /// })
+/// # }
 /// ```
 ///
 /// You can also use string literals as keys:
 ///
-/// ```rust
+/// ```no_run
+/// # use dominator::{html, styles};
+/// # fn test() -> dominator::Dom {
 /// html!("div", {
 ///     .styles! {
 ///         color: "red",
 ///         "background-color": "green",
 ///     }
 /// })
+/// # }
 /// ```
 #[macro_export]
 macro_rules! styles {
