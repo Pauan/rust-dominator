@@ -15,7 +15,7 @@ use crate::events;
 fn change_url(mutable: &Mutable<String>) {
     let mut lock = mutable.lock_mut();
 
-    let new_url = String::from(bindings::current_url());
+    let new_url = bindings::current_url();
 
     // TODO helper method for this
     // TODO can this be made more efficient ?
@@ -32,7 +32,7 @@ struct CurrentUrl {
 impl CurrentUrl {
     fn new() -> Self {
         // TODO can this be made more efficient ?
-        let value = Mutable::new(String::from(bindings::current_url()));
+        let value = Mutable::new(bindings::current_url());
 
         // TODO clean this up somehow ?
         let _ = WINDOW.with(|window| {
@@ -51,7 +51,7 @@ impl CurrentUrl {
 }
 
 
-static URL: Lazy<CurrentUrl> = Lazy::new(|| CurrentUrl::new());
+static URL: Lazy<CurrentUrl> = Lazy::new(CurrentUrl::new);
 
 
 #[inline]

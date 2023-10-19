@@ -1,4 +1,3 @@
-use std;
 use discard::Discard;
 
 

@@ -113,7 +113,7 @@ pub(crate) fn insert_child_signal<A>(element: Node, callbacks: &mut Callbacks, s
         // TODO verify that this will drop `child`
         fn after_remove(&mut self, element: &Node, marker: &Node, child: Option<Dom>) {
             if let Some(old_child) = self.child.take() {
-                bindings::remove_child(&element, &old_child.element);
+                bindings::remove_child(element, &old_child.element);
 
                 old_child.callbacks.discard();
             }
