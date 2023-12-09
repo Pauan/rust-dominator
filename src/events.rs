@@ -430,6 +430,18 @@ make_event!(SelectionChange => web_sys::Event);
 static_event_impl!(SelectionChange => "selectionchange");
 
 
+make_event!(TransitionCancel => web_sys::Event);
+static_event_impl!(TransitionCancel => "transitioncancel");
+
+make_event!(TransitionEnd => web_sys::Event);
+static_event_impl!(TransitionEnd => "transitionend");
+
+make_event!(TransitionRun => web_sys::Event);
+static_event_impl!(TransitionRun => "transitionrun");
+
+make_event!(TransitionStart => web_sys::Event);
+static_event_impl!(TransitionStart => "transitionstart");
+
 
 impl Input {
     // TODO should this work on other types as well ?
