@@ -430,6 +430,30 @@ make_event!(SelectionChange => web_sys::Event);
 static_event_impl!(SelectionChange => "selectionchange");
 
 
+macro_rules! make_transition_event {
+    ($name:ident) => {
+        make_event!($name => web_sys::TransitionEvent);
+
+        impl $name {
+            #[inline] pub fn property_name(&self) -> String { self.event.property_name() }
+            #[inline] pub fn elapsed_time(&self) -> f32 { self.event.elapsed_time() }
+            #[inline] pub fn pseudo_element(&self) -> String { self.event.pseudo_element() }
+        }
+    };
+}
+
+make_transition_event!(TransitionCancel);
+static_event_impl!(TransitionCancel => "transitioncancel");
+
+make_transition_event!(TransitionEnd);
+static_event_impl!(TransitionEnd => "transitionend");
+
+make_transition_event!(TransitionRun);
+static_event_impl!(TransitionRun => "transitionrun");
+
+make_transition_event!(TransitionStart);
+static_event_impl!(TransitionStart => "transitionstart");
+
 
 impl Input {
     // TODO should this work on other types as well ?
