@@ -1,4 +1,4 @@
-## 0.5.35 - (2023-06-30)
+## 0.5.35 - (2024-06-30)
 * Adding in `stylesheet_raw`, `StylesheetBuilder::raw` and `ClassBuilder::raw` functions.
 * Adding in `routing::replace_url` function.
 * Adding in `events::ScrollEnd` event.
