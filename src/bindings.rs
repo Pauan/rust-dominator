@@ -39,6 +39,7 @@ pub(crate) fn go_to_url(url: &str) {
     });
 }
 
+#[track_caller]
 pub(crate) fn replace_url(url: &str) {
     HISTORY.with(|h| {
         h.replace_state_with_url(&JsValue::NULL, "", Some(url)).unwrap_js();
