@@ -39,7 +39,6 @@ pub(crate) fn go_to_url(url: &str) {
     });
 }
 
-#[track_caller]
 pub(crate) fn replace_url(url: &str) {
     HISTORY.with(|h| {
         h.replace_state_with_url(&JsValue::NULL, "", Some(url)).unwrap_js();
@@ -47,12 +46,17 @@ pub(crate) fn replace_url(url: &str) {
 }
 
 #[track_caller]
-pub(crate) fn create_stylesheet() -> CssStyleSheet {
+pub(crate) fn create_stylesheet(css: Option<&str>) -> CssStyleSheet {
     DOCUMENT.with(|document| {
         // TODO use createElementNS ?
         // TODO use dyn_into ?
         let e: HtmlStyleElement = document.create_element("style").unwrap_js().unchecked_into();
         e.set_type("text/css");
+
+        if let Some(css) = css {
+            e.set_text_content(Some(css));
+        }
+
         append_child(&document.head().unwrap_throw(), &e);
         // TODO use dyn_into ?
         e.sheet().unwrap_throw().unchecked_into()
@@ -149,6 +153,11 @@ pub(crate) fn remove_style(style: &CssStyleDeclaration, name: &str) {
 pub(crate) fn set_style(style: &CssStyleDeclaration, name: &str, value: &str, important: bool) {
     let priority = if important { intern("important") } else { intern("") };
     style.set_property_with_priority(name, value, priority).unwrap_js();
+}
+
+#[track_caller]
+pub(crate) fn append_raw(style: &CssStyleDeclaration, css: &str) {
+    style.set_css_text(&(style.css_text() + css));
 }
 
 #[track_caller]

@@ -1265,6 +1265,43 @@ impl<A> DomBuilder<A> where A: AsRef<HtmlElement> {
 }
 
 
+/// Creates a raw global CSS stylesheet.
+///
+/// This accepts a single argument, which is a string containing CSS code.
+///
+/// The CSS is injected into the global scope, exactly the same as if you had
+/// imported a `.css` file.
+///
+/// It is recommended to use [`stylesheet!`] instead, because it has some additional
+/// features and safety checking.
+///
+/// But if you need to copy some existing CSS into dominator, then you can use
+/// `stylesheet_raw`.
+///
+/// # Example
+///
+/// ```rust
+/// stylesheet_raw(r#"
+///     div.foo > span:nth-child(5):hover {
+///         color: green;
+///         background-color: blue;
+///     }
+///
+///     @media only screen and (max-width: 500px) {
+///         .some-class {
+///             background-color: red;
+///         }
+///     }
+/// "#);
+/// ```
+#[inline]
+pub fn stylesheet_raw<A>(css: A) where A: AsStr {
+    css.with_str(|css| {
+        bindings::create_stylesheet(Some(css));
+    });
+}
+
+
 // TODO better warning message for must_use
 #[must_use]
 pub struct StylesheetBuilder {
@@ -1278,7 +1315,7 @@ impl StylesheetBuilder {
         // TODO can this be made faster ?
         // TODO somehow share this safely between threads ?
         thread_local! {
-            static STYLESHEET: CssStyleSheet = bindings::create_stylesheet();
+            static STYLESHEET: CssStyleSheet = bindings::create_stylesheet(None);
         }
 
         STYLESHEET.with(move |stylesheet| {
@@ -1389,6 +1426,34 @@ impl StylesheetBuilder {
         self
     }
 
+    /// Appends raw CSS code into the stylesheet.
+    ///
+    /// It is recommended to use the various `.style` methods instead.
+    ///
+    /// However, `.raw` is useful if you need to copy some existing CSS
+    /// into dominator.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// stylesheet!(".foo", {
+    ///     .raw(r#"
+    ///         background-color: green;
+    ///         width: 50px;
+    ///         position: absolute;
+    ///     "#)
+    /// })
+    /// ```
+    #[inline]
+    #[track_caller]
+    pub fn raw<B>(self, css: B) -> Self where B: AsStr {
+        css.with_str(|css| {
+            bindings::append_raw(&self.element, css);
+        });
+
+        self
+    }
+
     // TODO return a Handle
     #[inline]
     #[track_caller]
@@ -1490,6 +1555,31 @@ impl ClassBuilder {
               E: Signal<Item = D> + 'static {
 
         self.stylesheet = self.stylesheet.style_unchecked_signal(name, value);
+        self
+    }
+
+    /// Appends raw CSS code into the class.
+    ///
+    /// It is recommended to use the various `.style` methods instead.
+    ///
+    /// However, `.raw` is useful if you need to copy some existing CSS
+    /// into dominator.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// class! {
+    ///     .raw(r#"
+    ///         background-color: green;
+    ///         width: 50px;
+    ///         position: absolute;
+    ///     "#)
+    /// }
+    /// ```
+    #[inline]
+    #[track_caller]
+    pub fn raw<B>(mut self, css: B) -> Self where B: AsStr {
+        self.stylesheet = self.stylesheet.raw(css);
         self
     }
 
