@@ -1,3 +1,8 @@
+## 0.5.35 - (2023-06-30)
+* Adding in `stylesheet_raw`, `StylesheetBuilder::raw` and `ClassBuilder::raw` functions.
+* Adding in `routing::replace_url` function.
+* Adding in `events::ScrollEnd` event.
+
 ## 0.5.34 - (2023-08-24)
 * Adding in new `attrs!`, `props!`, and `styles!` macros which are shorthands for `.attr` / `.prop` / `.style` respectively.
 
