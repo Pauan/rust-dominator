@@ -68,7 +68,7 @@ impl AsStr for String {
 
     #[inline]
     fn with_str<A, F>(&self, f: F) -> A where F: FnOnce(&str) -> A {
-        f(&self)
+        f(self)
     }
 }
 
@@ -99,12 +99,12 @@ impl<'a> AsStr for &'a str {
 impl<'a> AsStr for Cow<'a, str> {
     #[inline]
     fn as_str(&self) -> &str {
-        &*self
+        self
     }
 
     #[inline]
     fn with_str<A, F>(&self, f: F) -> A where F: FnOnce(&str) -> A {
-        f(&*self)
+        f(self)
     }
 }
 

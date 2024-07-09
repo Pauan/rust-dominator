@@ -146,7 +146,7 @@ impl Discard for DomHandle {
 #[inline]
 #[track_caller]
 pub fn append_dom(parent: &Node, dom: Dom) -> DomHandle {
-    bindings::append_child(&parent, &dom.element);
+    bindings::append_child(parent, &dom.element);
     DomHandle::new(parent, dom)
 }
 
@@ -154,7 +154,7 @@ pub fn append_dom(parent: &Node, dom: Dom) -> DomHandle {
 #[inline]
 #[track_caller]
 pub fn replace_dom(parent: &Node, old_node: &Node, dom: Dom) -> DomHandle {
-    bindings::replace_child(&parent, &dom.element, old_node);
+    bindings::replace_child(parent, &dom.element, old_node);
     DomHandle::new(parent, dom)
 }
 
@@ -318,7 +318,7 @@ pub fn text_signal<A, B>(value: B) -> Dom
 
     Dom {
         element: element.into(),
-        callbacks: callbacks,
+        callbacks,
     }
 }
 
@@ -419,14 +419,14 @@ fn set_style<A, B>(style: &CssStyleDeclaration, name: &A, value: B, important: b
 
     // TODO track_caller
     fn try_set_style(style: &CssStyleDeclaration, names: &mut Vec<String>, values: &mut Vec<String>, name: &str, value: &str, important: bool) -> Option<()> {
-        assert!(value != "");
+        assert!(!value.is_empty());
 
         // TODO handle browser prefixes ?
         bindings::remove_style(style, name);
 
         bindings::set_style(style, name, value, important);
 
-        let is_changed = bindings::get_style(style, name) != "";
+        let is_changed = !bindings::get_style(style, name).is_empty();
 
         if is_changed {
             Some(())
@@ -443,15 +443,13 @@ fn set_style<A, B>(style: &CssStyleDeclaration, name: &A, value: B, important: b
 
         value.find_map(|value| {
             // TODO should this intern ?
-            try_set_style(style, &mut names, &mut values, &name, &value, important)
+            try_set_style(style, &mut names, &mut values, name, value, important)
         })
     });
 
-    if let None = okay {
-        if cfg!(debug_assertions) {
-            // TODO maybe make this configurable
-            panic!("style is incorrect:\n  names: {}\n  values: {}", names.join(", "), values.join(", "));
-        }
+    if okay.is_none() && cfg!(debug_assertions) {
+        // TODO maybe make this configurable
+        panic!("style is incorrect:\n  names: {}\n  values: {}", names.join(", "), values.join(", "));
     }
 }
 
@@ -521,7 +519,7 @@ fn set_property<A, B, C>(element: &A, name: &B, value: C) where A: AsRef<JsValue
 }
 
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct EventOptions {
     pub bubbles: bool,
     pub preventable: bool,
@@ -553,16 +551,6 @@ impl EventOptions {
         }
     }
 }
-
-impl Default for EventOptions {
-    fn default() -> Self {
-        Self {
-            bubbles: false,
-            preventable: false,
-        }
-    }
-}
-
 
 // TODO better warning message for must_use
 #[must_use]
@@ -774,7 +762,7 @@ impl<A> DomBuilder<A> where A: AsRef<EventTarget> {
     pub fn event_with_options<T, F>(mut self, options: &EventOptions, listener: F) -> Self
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        Self::_event(&mut self.callbacks, &self.element.as_ref(), options, listener);
+        Self::_event(&mut self.callbacks, self.element.as_ref(), options, listener);
         self
     }
 
@@ -886,7 +874,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         let element = self.element.as_ref();
 
         name.each(|name| {
-            bindings::set_attribute(element, intern(name), &value);
+            bindings::set_attribute(element, intern(name), value);
         });
 
         self
@@ -906,7 +894,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         let namespace: &str = intern(namespace);
 
         name.each(|name| {
-            bindings::set_attribute_ns(element, &namespace, intern(name), &value);
+            bindings::set_attribute_ns(element, namespace, intern(name), value);
         });
 
         self
@@ -959,7 +947,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
                 Some(value) => {
                     value.with_str(|value| {
                         name.each(|name| {
-                            bindings::set_attribute(element, intern(name), &value);
+                            bindings::set_attribute(element, intern(name), value);
                         });
                     });
                 },
@@ -1014,7 +1002,7 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
                     value.with_str(|value| {
                         name.each(|name| {
                             // TODO should this intern the value ?
-                            bindings::set_attribute_ns(element, &namespace, intern(name), &value);
+                            bindings::set_attribute_ns(element, &namespace, intern(name), value);
                         });
                     });
                 },
@@ -1072,14 +1060,12 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
                     });
                 }
 
-            } else {
-                if is_set {
-                    is_set = false;
+            } else if is_set {
+                is_set = false;
 
-                    name.each(|name| {
-                        bindings::remove_class(&element, intern(name));
-                    });
-                }
+                name.each(|name| {
+                    bindings::remove_class(&element, intern(name));
+                });
             }
         }));
     }
@@ -1483,7 +1469,7 @@ impl ClassBuilder {
 
         Self {
             // TODO make this more efficient ?
-            stylesheet: StylesheetBuilder::__internal_stylesheet(&format!(".{} {{}}", class_name)),
+            stylesheet: StylesheetBuilder::__internal_stylesheet(format!(".{} {{}}", class_name)),
             class_name,
         }
     }
@@ -1772,7 +1758,7 @@ mod tests {
             .style("foo".to_owned(), "bar".to_owned())
             .style_signal("foo".to_owned(), always("bar".to_owned()))
 
-            .style(&"foo".to_owned(), &"bar".to_owned())
+            .style("foo".to_owned(), "bar".to_owned())
             //.style(Box::new("foo".to_owned()), Box::new("bar".to_owned()))
             //.style_signal(Box::new("foo".to_owned()), always(Box::new("bar".to_owned())))
 
