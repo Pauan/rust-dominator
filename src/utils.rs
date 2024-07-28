@@ -10,12 +10,12 @@ use crate::traits::StaticEvent;
 
 
 #[derive(Debug)]
-pub(crate) struct EventListener(Option<gloo_events::EventListener>);
+pub(crate) struct EventListener(Option<gloo_events::EventListener>, bool);
 
 // TODO should these inline ?
 impl EventListener {
     #[inline]
-    pub(crate) fn new<N, F>(elem: &EventTarget, name: N, options: &EventOptions, callback: F) -> Self
+    pub(crate) fn new<N, F>(elem: &EventTarget, name: N, options: &EventOptions, callback: F, forget_on_drop: bool) -> Self
         where N: Into<Cow<'static, str>>,
               F: FnMut(&Event) + 'static {
 
@@ -32,7 +32,7 @@ impl EventListener {
             name,
             options.into_gloo(),
             callback,
-        )))
+        )), forget_on_drop)
     }
 
     #[inline]
@@ -56,16 +56,17 @@ impl EventListener {
                 preventable: false,
             }.into_gloo(),
             callback,
-        )))
+        )), true)
     }
 }
 
 impl Drop for EventListener {
     #[inline]
     fn drop(&mut self) {
-        if let Some(listener) = self.0.take() {
-            // TODO can this be made more optimal ?
-            listener.forget();
+        if self.1 {
+            if let Some(listener) = self.0.take() {
+                listener.forget();
+            }
         }
     }
 }
@@ -80,12 +81,12 @@ impl Discard for EventListener {
 
 
 #[inline]
-pub(crate) fn on<E, F>(element: &EventTarget, options: &EventOptions, mut callback: F) -> EventListener
+pub(crate) fn on<E, F>(element: &EventTarget, options: &EventOptions, mut callback: F, forget_on_drop: bool) -> EventListener
     where E: StaticEvent,
           F: FnMut(E) + 'static {
     EventListener::new(element, E::EVENT_TYPE, options, move |e| {
         callback(E::unchecked_from_event(e.clone()));
-    })
+    }, forget_on_drop)
 }
 
 

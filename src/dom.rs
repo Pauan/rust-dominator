@@ -262,6 +262,12 @@ impl Signal for WindowSizeSignal {
 ///
 /// When the window is resized, it will automatically update with the new size.
 pub fn window_size() -> impl Signal<Item = WindowSize> {
+    window_size_ext(true)
+}
+
+/// Same as `window_size()`, but allows setting `forget_on_drop`.
+/// if `forget_on_drop` is true, the event listener will be cancelled when dropped
+pub fn window_size_ext(forget_on_drop: bool) -> impl Signal<Item = WindowSize> {
     let (sender, receiver) = channel(WindowSize::new());
 
     let listener = WINDOW.with(|window| {
@@ -270,7 +276,7 @@ pub fn window_size() -> impl Signal<Item = WindowSize> {
                 sender.send(WindowSize::new()),
                 _e => panic!("Invalid window_size() state"),
             )
-        })
+        }, forget_on_drop)
     });
 
     WindowSizeSignal {
@@ -278,7 +284,6 @@ pub fn window_size() -> impl Signal<Item = WindowSize> {
         receiver,
     }
 }
-
 
 // TODO should this intern ?
 #[inline]
@@ -608,7 +613,7 @@ impl<A> DomBuilder<A> {
     fn _event<T, F>(callbacks: &mut Callbacks, element: &EventTarget, options: &EventOptions, listener: F)
         where T: StaticEvent,
               F: FnMut(T) + 'static {
-        callbacks.after_remove(on(element, options, listener));
+        callbacks.after_remove(on(element, options, listener, true));
     }
 
     // TODO add this to the StylesheetBuilder and ClassBuilder too

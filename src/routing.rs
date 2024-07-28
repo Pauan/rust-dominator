@@ -41,7 +41,7 @@ impl CurrentUrl {
                 move |_| {
                     change_url(&value);
                 }
-            })
+            }, true)
         });
 
         Self {
