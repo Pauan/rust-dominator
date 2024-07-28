@@ -1,12 +1,91 @@
 use std::borrow::Cow;
+use std::cell::{Cell, RefCell};
 use std::mem::ManuallyDrop;
 
 use wasm_bindgen::{JsValue, UnwrapThrowExt, intern};
-use discard::Discard;
+use discard::{Discard, DiscardOnDrop};
 use web_sys::{EventTarget, Event};
+use futures_signals::signal::Mutable;
 
 use crate::dom::EventOptions;
 use crate::traits::StaticEvent;
+
+
+pub(crate) struct RefCounter<A> {
+    // Holds the data which is kept alive as long as `counter` is greater than 0
+    data: RefCell<Option<A>>,
+
+    // Used for ref-counting
+    counter: Cell<usize>,
+}
+
+impl<A> RefCounter<A> {
+    pub(crate) fn new() -> Self {
+        Self {
+            data: RefCell::new(None),
+            counter: Cell::new(0),
+        }
+    }
+
+    /// Decrements the ref count, cleaning up the data if the count is 0
+    pub(crate) fn decrement(&self) {
+        let counter = self.counter.get().checked_sub(1).unwrap();
+
+        self.counter.set(counter);
+
+        // No more listeners
+        if counter == 0 {
+            let _ = self.data.replace(None);
+        }
+    }
+
+    /// Initializes the [`RefCounter`] and increments the ref count.
+    ///
+    /// If the [`RefCounter`] hasn't been initialized, it is initialized with the `FnOnce` closure.
+    ///
+    /// Regardless of whether it is initialized, it increments the ref count.
+    pub(crate) fn increment<F>(&self, f: F) where F: FnOnce() -> A {
+        {
+            let mut lock = self.data.borrow_mut();
+
+            if lock.is_none() {
+                *lock = Some(f());
+            }
+        }
+
+        let counter = self.counter.get().checked_add(1).unwrap();
+        self.counter.set(counter);
+    }
+}
+
+
+pub(crate) struct MutableListener<A> {
+    mutable: Mutable<A>,
+    counter: RefCounter<DiscardOnDrop<EventListener>>,
+}
+
+impl<A> MutableListener<A> {
+    pub(crate) fn new(value: A) -> Self {
+        Self {
+            mutable: Mutable::new(value),
+            counter: RefCounter::new(),
+        }
+    }
+
+    pub(crate) fn as_mutable(&self) -> &Mutable<A> {
+        &self.mutable
+    }
+
+    pub(crate) fn increment<F>(&self, f: F) where F: FnOnce(&Mutable<A>) -> EventListener {
+        self.counter.increment(|| {
+            DiscardOnDrop::new(f(&self.mutable))
+        });
+    }
+
+    pub(crate) fn decrement(&self) {
+        self.counter.decrement();
+    }
+}
 
 
 #[derive(Debug)]

@@ -1,13 +1,12 @@
 use std::borrow::Cow;
 
 use web_sys::{EventTarget, HtmlElement};
-use once_cell::sync::Lazy;
 use futures_signals::signal::{Mutable, ReadOnlyMutable};
 
 use crate::bindings;
 use crate::bindings::WINDOW;
 use crate::dom::{Dom, DomBuilder, EventOptions};
-use crate::utils::EventListener;
+use crate::utils::{EventListener, MutableListener};
 use crate::events;
 
 
@@ -25,64 +24,55 @@ fn change_url(mutable: &Mutable<String>) {
 }
 
 
-struct CurrentUrl {
-    value: Mutable<String>,
+thread_local! {
+    // TODO can this be made more efficient ?
+    static CURRENT_URL: MutableListener<String> = MutableListener::new(String::from(bindings::current_url()));
 }
 
-impl CurrentUrl {
-    fn new() -> Self {
-        // TODO can this be made more efficient ?
-        let value = Mutable::new(String::from(bindings::current_url()));
+fn with_url<A, F>(f: F) -> A where F: FnOnce(&Mutable<String>) -> A {
+    CURRENT_URL.with(|url| {
+        // TODO this needs to call decrement to clean up the listener
+        url.increment(|url| {
+            let url = url.clone();
 
-        // TODO clean this up somehow ?
-        let _ = WINDOW.with(|window| {
-            EventListener::new(window, "popstate", &EventOptions::default(), {
-                let value = value.clone();
-                move |_| {
-                    change_url(&value);
-                }
+            WINDOW.with(move |window| {
+                EventListener::new(window, "popstate", &EventOptions::default(), move |_| {
+                    change_url(&url);
+                })
             })
         });
 
-        Self {
-            value,
-        }
-    }
+        f(url.as_mutable())
+    })
 }
 
 
-static URL: Lazy<CurrentUrl> = Lazy::new(|| CurrentUrl::new());
-
-
-#[inline]
 pub fn url() -> ReadOnlyMutable<String> {
-    URL.value.read_only()
+    with_url(|mutable| mutable.read_only())
 }
 
 
 /// Update the current route by adding a new entry to the history.
-// TODO if URL hasn't been created yet, don't create it
 #[inline]
 #[track_caller]
 pub fn go_to_url(new_url: &str) {
     // TODO intern ?
     bindings::go_to_url(new_url);
 
-    change_url(&URL.value);
+    with_url(change_url);
 }
 
 /// Update the current route by replacing the history.
 /// Use this very sparingly as this break the back button.
 ///
 /// To let the user go back to the current route, use [`go_to_url`] instead.
-// TODO if URL hasn't been created yet, don't create it
 #[inline]
 #[track_caller]
 pub fn replace_url(new_url: &str) {
     // TODO intern ?
     bindings::replace_url(new_url);
 
-    change_url(&URL.value);
+    with_url(change_url);
 }
 
 #[deprecated(since = "0.5.1", note = "Use the on_click_go_to_url macro instead")]

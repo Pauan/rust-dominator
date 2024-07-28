@@ -5,7 +5,7 @@ use std::future::Future;
 use std::task::{Context, Poll};
 
 use once_cell::sync::Lazy;
-use futures_signals::signal::{Signal, not, channel, Receiver};
+use futures_signals::signal::{Signal, MutableSignal, not};
 use futures_signals::signal_vec::SignalVec;
 use futures_util::FutureExt;
 use futures_channel::oneshot;
@@ -20,7 +20,7 @@ use crate::traits::*;
 use crate::fragment::{Fragment, FragmentBuilder};
 use crate::operations;
 use crate::operations::{for_each, spawn_future};
-use crate::utils::{EventListener, on, UnwrapJsExt, ValueDiscard, FnDiscard};
+use crate::utils::{EventListener, on, MutableListener, UnwrapJsExt, ValueDiscard, FnDiscard};
 
 #[cfg(doc)]
 use crate::fragment;
@@ -159,12 +159,12 @@ pub fn replace_dom(parent: &Node, old_node: &Node, dom: Dom) -> DomHandle {
 }
 
 
-// TODO use must_use ?
+#[must_use = "Signals do nothing unless polled"]
 enum IsWindowLoaded {
     Initial {},
     Pending {
         receiver: oneshot::Receiver<Option<bool>>,
-        _event: EventListener,
+        _event: DiscardOnDrop<EventListener>,
     },
     Done {},
 }
@@ -185,7 +185,7 @@ impl Signal for IsWindowLoaded {
 
                     *self = IsWindowLoaded::Pending {
                         receiver,
-                        _event: WINDOW.with(|window| {
+                        _event: DiscardOnDrop::new(WINDOW.with(|window| {
                             EventListener::once(window, "load", move |_| {
                                 // TODO test this
                                 crate::__unwrap!(
@@ -193,7 +193,7 @@ impl Signal for IsWindowLoaded {
                                     _e => panic!("Invalid is_window_loaded() state"),
                                 )
                             })
-                        }),
+                        })),
                     };
 
                     Poll::Ready(Some(false))
@@ -243,40 +243,55 @@ impl WindowSize {
     }
 }
 
+
+thread_local! {
+    static WINDOW_SIZE: MutableListener<WindowSize> = MutableListener::new(WindowSize::new());
+}
+
+
 #[derive(Debug)]
+#[must_use = "Signals do nothing unless polled"]
 struct WindowSizeSignal {
-    _listener: EventListener,
-    receiver: Receiver<WindowSize>,
+    signal: MutableSignal<WindowSize>,
 }
 
 impl Signal for WindowSizeSignal {
     type Item = WindowSize;
 
+    #[inline]
     fn poll_change(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        Pin::new(&mut self.receiver).poll_change(cx)
+        Pin::new(&mut self.signal).poll_change(cx)
     }
 }
 
-// TODO should this be moved into gloo ?
+impl Drop for WindowSizeSignal {
+    fn drop(&mut self) {
+        WINDOW_SIZE.with(|size| {
+            size.decrement();
+        });
+    }
+}
+
+
 /// `Signal` which gives the current width / height of the window.
 ///
 /// When the window is resized, it will automatically update with the new size.
 pub fn window_size() -> impl Signal<Item = WindowSize> {
-    let (sender, receiver) = channel(WindowSize::new());
+    let signal = WINDOW_SIZE.with(|size| {
+        size.increment(|size| {
+            let size = size.clone();
 
-    let listener = WINDOW.with(|window| {
-        on(window, &EventOptions::default(), move |_: crate::events::Resize| {
-            crate::__unwrap!(
-                sender.send(WindowSize::new()),
-                _e => panic!("Invalid window_size() state"),
-            )
-        })
+            WINDOW.with(move |window| {
+                on(window, &EventOptions::default(), move |_: crate::events::Resize| {
+                    size.set_neq(WindowSize::new());
+                })
+            })
+        });
+
+        size.as_mutable().signal()
     });
 
-    WindowSizeSignal {
-        _listener: listener,
-        receiver,
-    }
+    WindowSizeSignal { signal }
 }
 
 
