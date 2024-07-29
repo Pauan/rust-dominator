@@ -6,7 +6,7 @@ use futures_signals::signal::{Mutable, ReadOnlyMutable};
 use crate::bindings;
 use crate::bindings::WINDOW;
 use crate::dom::{Dom, DomBuilder, EventOptions};
-use crate::utils::{EventListener, MutableListener};
+use crate::utils::{EventListener, RefCounter, MutableListener};
 use crate::events;
 
 
@@ -25,30 +25,42 @@ fn change_url(mutable: &Mutable<String>) {
 
 
 thread_local! {
-    // TODO can this be made more efficient ?
-    static CURRENT_URL: MutableListener<String> = MutableListener::new(String::from(bindings::current_url()));
+    static CURRENT_URL: RefCounter<MutableListener<String>> = RefCounter::new();
 }
 
-fn with_url<A, F>(f: F) -> A where F: FnOnce(&Mutable<String>) -> A {
+
+// If the CURRENT_URL is initialized, then run the function `f`
+fn try_url<F>(f: F) where F: FnOnce(&Mutable<String>) {
     CURRENT_URL.with(|url| {
-        // TODO this needs to call decrement to clean up the listener
-        url.increment(|url| {
-            let url = url.clone();
-
-            WINDOW.with(move |window| {
-                EventListener::new(window, "popstate", &EventOptions::default(), move |_| {
-                    change_url(&url);
-                })
-            })
-        });
-
-        f(url.as_mutable())
+        if let Some(url) = &*url.try_borrow() {
+            f(url.as_mutable());
+        }
     })
 }
 
 
 pub fn url() -> ReadOnlyMutable<String> {
-    with_url(|mutable| mutable.read_only())
+    CURRENT_URL.with(|url| {
+        // TODO this needs to call decrement to clean up the listener
+        let url = url.increment(|| {
+            // TODO can this be made more efficient ?
+            let url = Mutable::new(String::from(bindings::current_url()));
+
+            let listener = {
+                let url = url.clone();
+
+                WINDOW.with(move |window| {
+                    EventListener::new(window, "popstate", &EventOptions::default(), move |_| {
+                        change_url(&url);
+                    })
+                })
+            };
+
+            MutableListener::new(url, listener)
+        });
+
+        url.as_mutable().read_only()
+    })
 }
 
 
@@ -59,7 +71,7 @@ pub fn go_to_url(new_url: &str) {
     // TODO intern ?
     bindings::go_to_url(new_url);
 
-    with_url(change_url);
+    try_url(change_url);
 }
 
 /// Update the current route by replacing the history.
@@ -72,7 +84,7 @@ pub fn replace_url(new_url: &str) {
     // TODO intern ?
     bindings::replace_url(new_url);
 
-    with_url(change_url);
+    try_url(change_url);
 }
 
 #[deprecated(since = "0.5.1", note = "Use the on_click_go_to_url macro instead")]

@@ -5,7 +5,7 @@ use std::future::Future;
 use std::task::{Context, Poll};
 
 use once_cell::sync::Lazy;
-use futures_signals::signal::{Signal, MutableSignal, not};
+use futures_signals::signal::{Signal, Mutable, MutableSignal, not};
 use futures_signals::signal_vec::SignalVec;
 use futures_util::FutureExt;
 use futures_channel::oneshot;
@@ -20,7 +20,7 @@ use crate::traits::*;
 use crate::fragment::{Fragment, FragmentBuilder};
 use crate::operations;
 use crate::operations::{for_each, spawn_future};
-use crate::utils::{EventListener, on, MutableListener, UnwrapJsExt, ValueDiscard, FnDiscard};
+use crate::utils::{EventListener, on, RefCounter, MutableListener, UnwrapJsExt, ValueDiscard, FnDiscard};
 
 #[cfg(doc)]
 use crate::fragment;
@@ -245,7 +245,7 @@ impl WindowSize {
 
 
 thread_local! {
-    static WINDOW_SIZE: MutableListener<WindowSize> = MutableListener::new(WindowSize::new());
+    static WINDOW_SIZE: RefCounter<MutableListener<WindowSize>> = RefCounter::new();
 }
 
 
@@ -278,14 +278,20 @@ impl Drop for WindowSizeSignal {
 /// When the window is resized, it will automatically update with the new size.
 pub fn window_size() -> impl Signal<Item = WindowSize> {
     let signal = WINDOW_SIZE.with(|size| {
-        size.increment(|size| {
-            let size = size.clone();
+        let size = size.increment(|| {
+            let size = Mutable::new(WindowSize::new());
 
-            WINDOW.with(move |window| {
-                on(window, &EventOptions::default(), move |_: crate::events::Resize| {
-                    size.set_neq(WindowSize::new());
+            let listener = {
+                let size = size.clone();
+
+                WINDOW.with(move |window| {
+                    on(window, &EventOptions::default(), move |_: crate::events::Resize| {
+                        size.set_neq(WindowSize::new());
+                    })
                 })
-            })
+            };
+
+            MutableListener::new(size, listener)
         });
 
         size.as_mutable().signal()
