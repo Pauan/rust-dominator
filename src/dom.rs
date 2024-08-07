@@ -946,7 +946,17 @@ impl<A> DomBuilder<A> where A: AsRef<Element> {
         let classes = self.element.as_ref().class_list();
 
         name.each(|name| {
-            bindings::add_class(&classes, intern(name));
+            // avoids adding an empty class and panicking
+            if !name.is_empty() {
+                bindings::add_class(&classes, intern(name));
+            }
+            else {
+                // warn in console
+                gloo_console::warn!(format!("Empty class detected in element ({}).", self.element.as_ref().tag_name().to_ascii_lowercase()));
+
+                // looks like track_caller won't help us here?
+                // gloo_console::warn!("Empty class near: {}", std::panic::Location::caller().to_string());
+            }
         });
 
         self
