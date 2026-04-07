@@ -88,33 +88,41 @@ pub enum MouseButton {
     Button5,
 }
 
+#[allow(unexpected_cfgs)]
+#[cfg(web_sys_unstable_apis)]
+type MouseEventValue = f64;
+
+#[allow(unexpected_cfgs)]
+#[cfg(not(web_sys_unstable_apis))]
+type MouseEventValue = i32;
+
 macro_rules! make_mouse_event {
     ($name:ident => $event:path) => {
         make_event!($name => $event);
 
         impl $name {
-            #[inline] pub fn x(&self) -> mouse_event_value_ty!() { self.event.client_x() }
-            #[inline] pub fn y(&self) -> mouse_event_value_ty!() { self.event.client_y() }
+            #[inline] pub fn x(&self) -> MouseEventValue { self.event.client_x() }
+            #[inline] pub fn y(&self) -> MouseEventValue { self.event.client_y() }
 
             #[inline] pub fn movement_x(&self) -> i32 { self.event.movement_x() }
             #[inline] pub fn movement_y(&self) -> i32 { self.event.movement_y() }
 
-            #[inline] pub fn offset_x(&self) -> mouse_event_value_ty!() { self.event.offset_x() }
-            #[inline] pub fn offset_y(&self) -> mouse_event_value_ty!() { self.event.offset_y() }
+            #[inline] pub fn offset_x(&self) -> MouseEventValue { self.event.offset_x() }
+            #[inline] pub fn offset_y(&self) -> MouseEventValue { self.event.offset_y() }
 
-            #[inline] pub fn page_x(&self) -> mouse_event_value_ty!() { self.event.page_x() }
-            #[inline] pub fn page_y(&self) -> mouse_event_value_ty!() { self.event.page_y() }
+            #[inline] pub fn page_x(&self) -> MouseEventValue { self.event.page_x() }
+            #[inline] pub fn page_y(&self) -> MouseEventValue { self.event.page_y() }
 
-            #[inline] pub fn screen_x(&self) -> mouse_event_value_ty!() { self.event.screen_x() }
-            #[inline] pub fn screen_y(&self) -> mouse_event_value_ty!() { self.event.screen_y() }
+            #[inline] pub fn screen_x(&self) -> MouseEventValue { self.event.screen_x() }
+            #[inline] pub fn screen_y(&self) -> MouseEventValue { self.event.screen_y() }
 
             #[inline] pub fn ctrl_key(&self) -> bool { self.event.ctrl_key() || self.event.meta_key() }
             #[inline] pub fn shift_key(&self) -> bool { self.event.shift_key() }
             #[inline] pub fn alt_key(&self) -> bool { self.event.alt_key() }
 
             // TODO maybe deprecate these ?
-            #[inline] pub fn mouse_x(&self) -> mouse_event_value_ty!() { self.event.client_x() }
-            #[inline] pub fn mouse_y(&self) -> mouse_event_value_ty!() { self.event.client_y() }
+            #[inline] pub fn mouse_x(&self) -> MouseEventValue { self.event.client_x() }
+            #[inline] pub fn mouse_y(&self) -> MouseEventValue { self.event.client_y() }
 
             pub fn button(&self) -> MouseButton {
                 match self.event.button() {
@@ -128,18 +136,6 @@ macro_rules! make_mouse_event {
             }
         }
     };
-}
-
-#[allow(unexpected_cfgs)]
-#[cfg(web_sys_unstable_apis)]
-macro_rules! mouse_event_value_ty {
-    () => { f64 };
-}
-
-#[allow(unexpected_cfgs)]
-#[cfg(not(web_sys_unstable_apis))]
-macro_rules! mouse_event_value_ty {
-    () => { i32 };
 }
 
 macro_rules! make_pointer_event {
