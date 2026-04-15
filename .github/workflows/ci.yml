@@ -1,0 +1,29 @@
+# Copied from https://github.com/rustwasm/wasm-bindgen/blob/main/.github/workflows/main.yml
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: rustup update --no-self-update stable && rustup default stable
+    - run: rustup target add wasm32-unknown-unknown
+    - name: Build
+      run: cargo build --all-targets --target wasm32-unknown-unknown
+    - name: Doc
+      run: cargo doc --no-deps --target wasm32-unknown-unknown
+    - name: Doc test
+      run: cargo test --doc
